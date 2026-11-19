@@ -63,10 +63,11 @@ describe.skipIf(!CHROMIUM)("Calls is a tab (MC-3, browser, demo mode)", () => {
     await page.locator("body").press("7");
     await expect.poll(() => hash(page)).toMatch(/^#\/code/);
 
-    // A call nobody has read, its setup opened: neither count moves.
+    // A call nobody has read, its setup opened: neither count moves. (MC-5: one with no client on its row asks first.)
     await go(page, "#/calls");
-    await rows(page).filter({ hasText: "Northwind data model review" }).first().click();
-    await page.getByRole("region", { name: /^Review Northwind data model review/ }).waitFor();
+    await page.locator("[data-calls-fold='no-transcript'] > .link-btn").click();
+    await page.locator("[data-call-row]").filter({ hasText: "Proposal review with Jordan" }).first().click();
+    await page.getByRole("region", { name: /^Review Proposal review with Jordan/ }).waitFor();
     await expect(callsTab(page).locator(".count").textContent()).resolves.toBe("1");
     await expect(page.locator(".topbar .view-tab").filter({ hasText: /^Inbox/ }).locator(".count").textContent()).resolves.toBe(inboxBefore);
 
@@ -169,7 +170,7 @@ describe.skipIf(!CHROMIUM)("Calls is a tab (MC-3, browser, demo mode)", () => {
     // The calls with no transcript are folded at the end, with their count.
     await expect.poll(() => page.locator("[data-calls-fold='no-transcript'] > .link-btn").textContent(), { timeout: 30_000 }).toMatch(/^\s*\d+ calls with no transcript$/);
     // Closed shows one line each with what came of it; it's in the address.
-    const count = async (f: string) => Number(await page.locator(`[data-calls-filter="${f}"] .seg-count`).textContent());
+    const count = async (f: string) => Number((await page.locator(`[data-calls-filter="${f}"] .seg-count`).allTextContents())[0] ?? 0);
     await page.locator('[data-calls-filter="closed"]').click();
     await expect.poll(() => hash(page)).toMatch(/[?&]show=closed/);
     const closed = page.locator("[data-section='closed'] [data-call-row]");
@@ -198,12 +199,12 @@ describe.skipIf(!CHROMIUM)("Calls is a tab (MC-3, browser, demo mode)", () => {
     await page.locator('[data-calls-filter="open"]').click();
     await page.locator(".calls-chips .ib4-chip").first().click();
     // MC-2's details, still findable: Add a call, the registered client calls with when and how the transcript
-    // arrives, and the line about who sees the list.
+    // arrives, and (MC-5) who sees the list on the heading's hover.
     await expect(page.getByRole("button", { name: "Add a call" }).count()).resolves.toBe(1);
     const fold = page.locator('[data-calls-fold="client-calls"]');
     await fold.getByRole("button").click();
     await expect(fold.locator("[data-series]").first().textContent()).resolves.toMatch(/Northwind weekly status call.*Northwind · Weekly status call · .* · (Read from Teams after the call|Uploaded by a reviewer)Reviewed by /);
-    await expect(page.getByText(/Only you see the calls from your calendar/).count()).resolves.toBe(1);
+    await expect(page.locator("#calls-title").getAttribute("title")).resolves.toMatch(/Only you see the calls from your calendar/);
     expect(errors).toEqual([]);
     await page.close();
   }, T);
@@ -219,10 +220,12 @@ describe.skipIf(!CHROMIUM)("Calls is a tab (MC-3, browser, demo mode)", () => {
     const scroll = page.locator("[data-calls-list] .calls-scroll");
     await scroll.evaluate((el) => (el.scrollTop = 120));
     const before = await scroll.evaluate((el) => el.scrollTop);
-    const model = rows(page).filter({ hasText: "Northwind data model review" }).first();
+    // MC-5: a call with no client on its row ("Which client?") opens its setup; it's in the no-transcript fold.
+    await page.locator("[data-calls-fold='no-transcript'] > .link-btn").click();
+    const model = page.locator("[data-calls-list] [data-call-row]").filter({ hasText: "Proposal review with Jordan" }).first();
     actions.length = 0;
     await model.click();
-    const setup = page.getByRole("region", { name: /^Review Northwind data model review/ });
+    const setup = page.getByRole("region", { name: /^Review Proposal review with Jordan/ });
     await setup.waitFor();
     await expect(model.getAttribute("aria-current")).resolves.toBe("true");
     expect(Math.abs((await scroll.evaluate((el) => el.scrollTop)) - before)).toBeLessThan(400);
@@ -253,7 +256,7 @@ describe.skipIf(!CHROMIUM)("Calls is a tab (MC-3, browser, demo mode)", () => {
     // A registered call opens its page beside the list, with the list's filter left as it was.
     await page.locator('[data-calls-filter="closed"]').click();
     await page.locator("[data-section='closed'] [data-call-row]").first().click();
-    await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor({ timeout: 30_000 });
+    await page.getByRole("heading", { level: 2, name: /^Northwind weekly status call/ }).waitFor({ timeout: 30_000 });
     await expect.poll(() => hash(page)).toMatch(/^#\/calls\/\d+\?show=closed$/);
     await expect(page.locator('[data-calls-filter="closed"]').getAttribute("aria-pressed")).resolves.toBe("true");
     expect(errors).toEqual([]);
@@ -264,15 +267,17 @@ describe.skipIf(!CHROMIUM)("Calls is a tab (MC-3, browser, demo mode)", () => {
     const h = await demo();
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
     await go(page, "#/calls");
-    await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor({ timeout: 30_000 });
+    await page.getByRole("heading", { level: 2, name: /^Northwind weekly status call/ }).waitFor({ timeout: 30_000 });
     const wideBefore = await page.locator(".calls-beside").evaluate((el) => el.getBoundingClientRect().width);
-    await page.locator("[data-calls-hide]").click();
+    // MC-5: Hide the list is in the header's menu.
+    await page.getByRole("button", { name: "More for Calls" }).click();
+    await page.getByText("Hide the list", { exact: true }).click();
     await expect(page.locator("[data-calls-list]").count()).resolves.toBe(0);
     await expect.poll(() => page.evaluate(() => document.activeElement?.hasAttribute("data-calls-show"))).toBe(true);
     const wide = await page.locator(".calls-beside").evaluate((el) => el.getBoundingClientRect().width);
     expect(wide).toBeGreaterThan(wideBefore + 300);
     await page.reload();
-    await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor({ timeout: 30_000 });
+    await page.getByRole("heading", { level: 2, name: /^Northwind weekly status call/ }).waitFor({ timeout: 30_000 });
     await expect(page.locator("[data-calls-list]").count()).resolves.toBe(0);
     // Nothing of a call: no name, no id, no transcript words; only the fold, the filter and the tab's place.
     const names = (await call(page, "meeting.mine", {})).data.meetings.map((m: { name: string }) => m.name) as string[];
@@ -354,12 +359,13 @@ describe.skipIf(!CHROMIUM)("Calls is a tab (MC-3, browser, demo mode)", () => {
       await expect(page.locator(".calls-beside").count()).resolves.toBe(0);
       expect(await hash(page)).toMatch(/^#\/calls(\?|$)/);
       if (label === "phone") {
-        for (const b of await page.locator("[data-calls-list] [data-call-row], [data-calls-list] .calls-row-acts button, [data-calls-list] .calls-row-acts select, [data-calls-list] .calls-tick, [data-calls-list] .calls-filters .seg-btn, [data-calls-list] .calls-chips .ib4-chip, [data-calls-list] .calls-head-actions button").all())
+        // MC-5: a row is pressed anywhere on it (its button stretches over it), so the row is what is measured.
+        for (const b of await page.locator("[data-calls-list] li[data-row], [data-calls-list] .calls-row-acts button, [data-calls-list] .calls-row-acts select, [data-calls-list] .calls-tick, [data-calls-list] .calls-filters .seg-btn, [data-calls-list] .calls-chips .ib4-chip, [data-calls-list] .calls-head button").all())
           expect((await b.boundingBox())!.height, (await b.textContent()) ?? "").toBeGreaterThanOrEqual(44);
         await expect(page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).resolves.toBe(true);
       }
       await page.locator("[data-calls-list] [data-section='needs'] [data-call-row]").first().click();
-      await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor({ timeout: 30_000 });
+      await page.getByRole("heading", { level: 2, name: /^Northwind weekly status call/ }).waitFor({ timeout: 30_000 });
       await expect(page.locator("[data-calls-list]").count()).resolves.toBe(0);
       const back = page.locator("[data-calls-back]");
       if (label === "phone") expect((await back.boundingBox())!.height).toBeGreaterThanOrEqual(44);
@@ -367,8 +373,9 @@ describe.skipIf(!CHROMIUM)("Calls is a tab (MC-3, browser, demo mode)", () => {
       await rows(page).first().waitFor();
       await expect.poll(() => page.evaluate(() => document.activeElement?.closest("[data-section]")?.getAttribute("data-section"))).toBe("needs");
       // A call nobody has read: its setup is the second step too.
-      await rows(page).filter({ hasText: "Northwind data model review" }).first().click();
-      await page.getByRole("region", { name: /^Review Northwind data model review/ }).waitFor();
+      await page.locator("[data-calls-fold='no-transcript'] > .link-btn").click();
+      await page.locator("[data-calls-list] [data-call-row]").filter({ hasText: "Proposal review with Jordan" }).first().click();
+      await page.getByRole("region", { name: /^Review Proposal review with Jordan/ }).waitFor();
       await page.locator("[data-calls-back]").click();
       await rows(page).first().waitFor();
       // Back was the browser's own step: one more Back leaves Calls rather than reopening the call.

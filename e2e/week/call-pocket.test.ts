@@ -1,4 +1,4 @@
-// PK-1: a Pocket export as a call's transcript, in demo mode. The upload area takes a dropped file as well as the picker
+// PK-1: a Pocket export as a call's transcript, in demo mode. MC-5: A file's drop area takes a dropped file as well as the picker
 // (it shows itself while a file is dragged over the page; a drop anywhere else does nothing; several files say one at a
 // time; a call that already has a transcript asks before replacing it); a recording dated another day asks first; and
 // what came of it shows no time and names no speaker: the one note, numbered speakers, a promise Pocket didn't say whose.
@@ -20,7 +20,7 @@ async function openCall(page: Page): Promise<number> {
   const id = (await call(page, "meeting.mine", {})).data.occurrences[0].id as number;
   await page.evaluate((x) => (location.hash = x), `#/meetings/${id}`);
   await page.reload();
-  await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor({ timeout: 30_000 });
+  await page.getByRole("heading", { level: 2, name: /^Northwind weekly status call/ }).waitFor({ timeout: 30_000 });
   return id;
 }
 
@@ -33,12 +33,15 @@ describe.skipIf(!CHROMIUM)("a Pocket export on a call's page (browser, demo mode
   it("drop: the area shows itself, a stray drop does nothing, one file at a time, replacing asked first, the date asked, then no names or times", async () => {
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
     const id = await openCall(page);
-    // The call has a transcript: "No transcript this week" brings back the upload area (it still has one to replace).
+    // The call has a transcript: "No transcript this week" brings back the transcript choices (it still has one to
+    // replace). MC-5: A file is a drop area with the kinds in small type.
     await call(page, "meeting.no_transcript", { occurrenceId: id });
     await page.reload();
-    const area = page.locator(".mtg-upload");
+    await page.locator("[data-no-transcript]").waitFor({ timeout: 30_000 });
+    await page.locator("[data-no-transcript] [data-choice='file']").click();
+    const area = page.locator(".mtg-dropzone");
     await area.waitFor({ timeout: 30_000 });
-    await expect(area.textContent()).resolves.toContain("FocusTime takes a Teams transcript (.vtt or .docx) or a Pocket export (.zip or .pdf).");
+    await expect(area.textContent()).resolves.toBe("Drop a Teams transcript or a Pocket export, or choose a file.vtt or .docx from Teams, .zip or .pdf exported from Pocket");
     const uploads: string[] = [];
     page.on("request", (r) => r.url().includes("/api/meetings/upload") && uploads.push(r.url()));
 
@@ -47,11 +50,11 @@ describe.skipIf(!CHROMIUM)("a Pocket export on a call's page (browser, demo mode
     await expect.poll(() => area.evaluate((el) => el.classList.contains("dropping"))).toBe(true);
     await expect(area.textContent()).resolves.toContain("Drop the file here");
     // Dropped anywhere else: the page keeps the browser from opening it, and nothing is sent.
-    expect(await dropOn(page, ".mtg-view h2", [{ name: "x.zip", bytes: pocketZip() }])).toBe(true);
+    expect(await dropOn(page, "[data-call-head] h2", [{ name: "x.zip", bytes: pocketZip() }])).toBe(true);
     await expect.poll(() => area.evaluate((el) => el.classList.contains("dropping"))).toBe(false);
     expect(page.url()).toContain(`#/calls/${id}`);
     // Two files: one at a time.
-    await dropOn(page, ".mtg-upload", [{ name: "a.zip", bytes: pocketZip() }, { name: "b.zip", bytes: pocketZip() }]);
+    await dropOn(page, ".mtg-dropzone", [{ name: "a.zip", bytes: pocketZip() }, { name: "b.zip", bytes: pocketZip() }]);
     await expect.poll(() => area.textContent()).toContain("One file at a time");
     // After a drop on the area, it stops showing the dragging look (no dragleave comes after a drop).
     await expect.poll(() => area.evaluate((el) => el.classList.contains("dropping"))).toBe(false);
@@ -60,24 +63,26 @@ describe.skipIf(!CHROMIUM)("a Pocket export on a call's page (browser, demo mode
     // A drop onto a call with a transcript asks first, in the page's words for replacing; No leaves it as it was.
     const asked: string[] = [];
     page.once("dialog", (d) => (asked.push(d.message()), void d.dismiss()));
-    await dropOn(page, ".mtg-upload", [{ name: "x.zip", bytes: pocketZip("Nov 1, 2026") }]);
+    await dropOn(page, ".mtg-dropzone", [{ name: "x.zip", bytes: pocketZip("Nov 1, 2026") }]);
     await expect.poll(() => asked.length).toBe(1);
     expect(asked[0]).toContain("Replace this call's transcript? The open proposals are replaced");
     expect(uploads).toEqual([]);
 
     // Yes: a recording dated another day asks before anything is kept.
     page.once("dialog", (d) => void d.accept());
-    await dropOn(page, ".mtg-upload", [{ name: "x.zip", bytes: pocketZip("Nov 1, 2026") }]);
+    await dropOn(page, ".mtg-dropzone", [{ name: "x.zip", bytes: pocketZip("Nov 1, 2026") }]);
     const question = page.getByRole("alertdialog", { name: "The recording's date" });
     await question.waitFor({ timeout: 30_000 });
     await expect(question.textContent()).resolves.toContain("This Pocket recording is from Sun, Nov 1, 27:02 long. This call is Mon, Nov 2. Use it for this call?");
     await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute("role"))).toBe("alertdialog");
     await question.getByRole("button", { name: "Use it for this call" }).click();
 
-    // What came of it: the one note, numbered speakers, no times, a promise with no owner.
-    await page.getByText(NOTE).waitFor({ timeout: 30_000 });
-    expect(await page.getByText(NOTE).count()).toBe(1);
-    const quotes = await page.locator(".mtg-quotes .mtg-who").allTextContents();
+    // What came of it: the one note (MC-5: on the origin's hover), numbered speakers, no times, a promise with no owner.
+    await expect.poll(() => page.locator("[data-call-origin]").getAttribute("title"), { timeout: 30_000 }).toBe(NOTE);
+    await expect(page.locator("[data-call-origin]").textContent()).resolves.toBe("Pocket");
+    await page.locator(".mtg-p3 .mtg-who").first().waitFor({ timeout: 30_000 });
+    expect(await page.locator(".mtg-p3 .mtg-at").count()).toBe(0);
+    const quotes = await page.locator(".mtg-p3 .mtg-who").allTextContents();
     expect(quotes.length).toBeGreaterThan(0);
     expect(quotes.every((q) => /^Speaker \d+$/.test(q.trim()))).toBe(true);
     await expect(page.locator(".mtg-prop").filter({ hasText: "Share three sample statements" }).first().textContent()).resolves.toContain("Pocket didn't say who");
@@ -88,31 +93,34 @@ describe.skipIf(!CHROMIUM)("a Pocket export on a call's page (browser, demo mode
     await page.locator(".mtg-switch").getByRole("button", { name: /Transcript/ }).click();
     const lines = page.locator(".mtg-lines li");
     await lines.first().waitFor({ timeout: 30_000 });
-    expect(await page.getByText(NOTE).count()).toBe(1);
+    expect(await page.getByText(NOTE).count()).toBeLessThanOrEqual(1);
     expect(await page.locator(".mtg-line-at").count()).toBe(0);
     await expect(lines.first().textContent()).resolves.toMatch(/^Speaker 1\s*Morning everyone/);
     expect(errors).toEqual([]);
   }, T);
 
-  it("the button and the keyboard work as before; a drop on a call with a transcript goes to its actions", async () => {
+  it("MC-5: Upload a transcript from the call's menu, by keyboard; a drop on a call with a transcript asks to replace it", async () => {
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
     await openCall(page);
-    const input = page.locator(".mtg-actions input[type=file]");
-    // Keyboard: the file button is in the tab order and takes focus (the picker opens from it as before), and the
-    // picker's file is read.
-    await expect(input.evaluate((el: HTMLInputElement) => el.tabIndex >= 0 && !el.disabled)).resolves.toBe(true);
-    await expect.poll(async () => (await input.focus(), page.evaluate(() => (document.activeElement as HTMLInputElement | null)?.type))).toBe("file");
-    await expect(input.getAttribute("accept")).resolves.toContain(".zip");
-    await input.setInputFiles({ name: "export.zip", mimeType: "application/zip", buffer: Buffer.from(pocketZip()) });
-    await expect.poll(() => page.locator(".mtg-actions [role=status]").textContent(), { timeout: 30_000 }).toMatch(/^Read \d+ lines\./);
-    await page.getByText(NOTE).waitFor();
-    // With no upload area, the actions take the drop, and replacing is asked first.
+    // Keyboard: the menu button takes focus, Enter opens it, and Upload a transcript opens the file picker.
+    const more = page.getByRole("button", { name: "More for this call" });
+    await more.focus();
+    await page.keyboard.press("Enter");
+    const item = page.getByRole("menuitem", { name: /Upload a transcript/ });
+    await item.waitFor();
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), item.click()]);
+    await expect(page.locator("[data-call-file]").getAttribute("accept")).resolves.toContain(".zip");
+    // A file chosen on purpose from the menu replaces it with no second question (as the picker did before).
+    await chooser.setFiles({ name: "export.zip", mimeType: "application/zip", buffer: Buffer.from(pocketZip()) });
+    await expect.poll(() => page.locator(".mtg-run-line[role=status]").first().textContent(), { timeout: 30_000 }).toMatch(/^Read \d+ lines\./);
+    await expect.poll(() => page.locator("[data-call-origin]").getAttribute("title"), { timeout: 30_000 }).toBe(NOTE);
+    // While a file is dragged over it, the page shows it takes the drop to replace the transcript, asked first.
     await dragOver(page, [{ name: "x.zip", bytes: pocketZip() }]);
-    await expect.poll(() => page.locator(".mtg-actions.mtg-drop.dropping").count()).toBe(1);
-    await expect(page.locator(".mtg-actions").textContent()).resolves.toContain("Drop the file here to replace the transcript");
+    await expect.poll(() => page.locator(".mtg-drop-replace.dropping").count()).toBe(1);
+    await expect(page.locator(".mtg-drop-replace").textContent()).resolves.toContain("Drop the file here to replace the transcript");
     const asked: string[] = [];
     page.once("dialog", (d) => (asked.push(d.message()), void d.dismiss()));
-    await dropOn(page, ".mtg-actions", [{ name: "x.zip", bytes: pocketZip() }]);
+    await dropOn(page, ".mtg-drop-replace", [{ name: "x.zip", bytes: pocketZip() }]);
     await expect.poll(() => asked.length).toBe(1);
     expect(errors).toEqual([]);
   }, T);

@@ -132,7 +132,7 @@ async function setup(o: { allowAi?: boolean; pocketStatus?: number; recs?: Rec[]
     return r.data as T;
   };
   const keep = async () => data<{ occurrenceId: number }>(await act(ME, "meeting.call_start", { key: "ical-1", startAt: calendar[0]!.startAt, endAt: calendar[0]!.endAt, clientKey: "contoso" })).occurrenceId;
-  return { db, meetings, act, data, keep, logs, reqs, keyReads, providerCalls, hold, advance: (ms: number) => (nowMs += ms), connected, ports, secretsOf };
+  return { db, meetings, act, data, keep, calendar, logs, reqs, keyReads, providerCalls, hold, advance: (ms: number) => (nowMs += ms), connected, ports, secretsOf };
 }
 
 type List = { recordings: { id: string; startAt: string; endAt: string; minutes: number; title: string }[]; counts: { listed: number; kept: number; address: number; noRecorder: number; notRecordings: number; outside: number }; more: boolean; days: number; canSetAddress: boolean };
@@ -406,5 +406,38 @@ describe("PK-4: Hide a recording with no call", () => {
     expect(t.data<{ keys: string[] }>(await t.act(ME, "meeting.call_hides", {})).keys).toEqual(["pocket:r-lone"]);
     t.data(await t.act(ME, "meeting.call_unhide", { keys: ["pocket:r-lone"] }));
     expect(await t.db.conn.all("SELECT * FROM call_hides")).toEqual([]);
+  });
+});
+
+describe("MC-5: a call added by hand takes its time from any of my recordings", () => {
+  it("with move, a hand-added call with no transcript takes the recording's day, start and length; any other call still needs the recording to fit", async () => {
+    const t = await setup();
+    t.data(await t.act(ME, "meeting.pocket_list", {}));
+    // Added by hand at another time than the recording (Nov 10, 9:00 in the person's zone).
+    const { occurrenceId } = t.data<{ occurrenceId: number }>(await t.act(ME, "meeting.call_add", { name: "Carrier call", date: "2026-11-10", start: "09:00", minutes: 30, clientKey: "contoso" }));
+    // Without move it is refused as before: the recording doesn't fit the call's time.
+    expect(await t.act(ME, "meeting.pocket_bring", { recordingId: "r-lone", occurrenceId })).toMatchObject({ ok: false, status: 422, code: "pocket_not_this_call" });
+    expect(await t.act(ME, "meeting.pocket_bring", { recordingId: "r-lone", occurrenceId, move: "yes" })).toMatchObject({ ok: false, status: 400 });
+    // Pocket failing on the read leaves the call where it was: it moves only once the words are in.
+    const read = t.ports[ME]!.client.recording;
+    t.ports[ME]!.client.recording = async () => { throw new Error("pocket down"); };
+    expect(await t.act(ME, "meeting.pocket_bring", { recordingId: "r-lone", occurrenceId, move: true })).toMatchObject({ ok: false });
+    expect((await t.meetings.occurrence(occurrenceId))!.startAt).not.toBe("2026-11-08T12:00:00Z");
+    t.ports[ME]!.client.recording = read;
+    t.data(await t.act(ME, "meeting.pocket_bring", { recordingId: "r-lone", occurrenceId, move: true }));
+    const occ = (await t.meetings.occurrence(occurrenceId))!;
+    expect([occ.startAt, occ.endAt]).toEqual(["2026-11-08T12:00:00Z", "2026-11-08T12:20:00Z"]);
+    const series = (await t.meetings.series(occ.seriesId))!;
+    expect(series.minutes).toBe(20);
+    expect((await t.meetings.transcript(occurrenceId))!.map((l) => l.text)).toEqual(["Pallet labels look odd."]);
+    // Now it has a transcript: another recording can't move it again.
+    expect(await t.act(ME, "meeting.pocket_bring", { recordingId: "r-long", occurrenceId, move: true, replace: true })).toMatchObject({ ok: false, status: 422 });
+    // A calendar call never moves: the recording must still fit its time.
+    const cal = await t.keep();
+    expect(await t.act(ME, "meeting.pocket_bring", { recordingId: "r-lone", occurrenceId: cal, move: true })).toMatchObject({ ok: false, status: 422, code: "pocket_not_this_call" });
+    const calOcc = (await t.meetings.occurrence(cal))!;
+    expect(calOcc.startAt).toBe(t.calendar[0]!.startAt);
+    // Only a reviewer: a teammate can't reach my hand-added call at all.
+    expect(await t.act(MATE, "meeting.pocket_bring", { recordingId: "r-lone", occurrenceId, move: true })).toMatchObject({ ok: false });
   });
 });

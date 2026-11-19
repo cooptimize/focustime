@@ -1,13 +1,13 @@
-// PK-4 (from the product owner, Nov 18): two layout bugs from MC-4 on Calls, in demo mode. A Needs you row's state
-// sits on one line beside the client, or the whole state goes under it: never a word a line. Every state a Needs you
-// row can show is put in a real row and measured (the demo doesn't have a call in each). And Calls never makes the
+// PK-4 (from the product owner, Nov 18): two layout bugs from MC-4 on Calls, in demo mode. MC-5: a Needs you row's
+// line 1 ends with what is left or its one button, on one line, the name keeping room: every end a row can show is put
+// in a real row and measured (the demo doesn't have a call in each). And Calls never makes the
 // document scroll: only the list and the open call do, with the Pocket line and the filters at the list's head.
 // At 1280 x 720 and 1440 x 900, at Default and the largest Text size. Clock: Thu Nov 5, 2026 10:00 AM ET.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
 import { DEMO_POCKET_KEYS } from "../../sources/demo/pocket.ts";
-import { CALL_STATE } from "../../plan/call-words.ts";
+import { LIST_TEXT } from "../../plan/call-words.ts";
 
 const T = 300_000;
 const W = 30_000;
@@ -16,38 +16,28 @@ const call = (page: Page, action: string, input: unknown) =>
   page.evaluate(([a, i]) => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "" }, body: JSON.stringify({ action: a, input: i }) }).then((r) => r.json()), [action, input] as const) as Promise<{ ok: boolean }>;
 const go = (page: Page, x: string) => page.evaluate((v) => (location.hash = v), x);
 
-/** Every state a Needs you row can show in place of its progress. */
-const STATES = [CALL_STATE.upload, CALL_STATE.readFailed, CALL_STATE.aiFailed, CALL_STATE.review(12)];
+/** MC-5: everything line 1 of a Needs you row can end with: what is left, or its one button. */
+const ENDS = ["12 left", LIST_TEXT.addTranscript, LIST_TEXT.usePocket, LIST_TEXT.tryAgain];
 
-type Measure = { label: string; lines: number; width: number; longest: number; overflow: boolean };
+type Measure = { label: string; lines: number; overflow: boolean; nameWidth: number };
 
-/** Puts `label` in the first Needs you row (as its state, in place of its progress) and measures it. */
+/** Puts `label` at the end of the first Needs you row's line 1 (as its button, or its count) and measures it. */
 function measure(page: Page, label: string | null): Promise<Measure> {
   return page.evaluate((label) => {
     const row = document.querySelector<HTMLElement>(".calls-row.need-row")!;
-    const two = row.querySelector<HTMLElement>(".calls-row-two")!;
-    let el = two.querySelector<HTMLElement>(".calls-state, .calls-left")!;
+    const end = row.querySelector<HTMLElement>(".calls-row-end:not(.two)")!;
+    let el = end.firstElementChild as HTMLElement;
     if (label !== null) {
-      const s = document.createElement("span");
-      s.className = "calls-state needs";
+      const s = document.createElement(/left$/.test(label) ? "span" : "button");
+      s.className = /left$/.test(label) ? "calls-left" : "mini primary";
       s.textContent = label;
-      el.replaceWith(s);
+      end.replaceChildren(s);
       el = s;
     }
-    const text = el.textContent ?? "";
-    // The longest run that may not break: a word, or the whole progress ("3 left of 11" keeps to one line).
-    const runs = el.classList.contains("calls-left") ? [text] : text.split(/\s+/);
-    const probe = document.createElement("span");
-    probe.className = el.className;
-    probe.style.cssText = "position:absolute;visibility:hidden;white-space:nowrap;max-width:none";
-    two.appendChild(probe);
-    let longest = 0;
-    for (const r of runs) (probe.textContent = r), (longest = Math.max(longest, probe.getBoundingClientRect().width));
-    probe.remove();
     const lh = parseFloat(getComputedStyle(el).lineHeight) || parseFloat(getComputedStyle(el).fontSize) * 1.4;
-    const box = el.getBoundingClientRect();
+    const text = el.firstChild ? (() => { const r = document.createRange(); r.selectNodeContents(el); return r.getBoundingClientRect(); })() : el.getBoundingClientRect();
     const rowBox = row.getBoundingClientRect();
-    return { label: text, lines: Math.round(box.height / lh), width: box.width, longest, overflow: box.right > rowBox.right + 0.5 };
+    return { label: el.textContent ?? "", lines: Math.round(text.height / lh), overflow: el.getBoundingClientRect().right > rowBox.right + 0.5, nameWidth: row.querySelector(".calls-name")!.getBoundingClientRect().width };
   }, label);
 }
 
@@ -70,26 +60,27 @@ describe.skipIf(!CHROMIUM)("Calls' layout: Needs you states and a page that does
         await page.locator(".topbar").first().waitFor({ timeout: W });
         await go(page, "#/calls");
         await page.locator(".calls-row.need-row").first().waitFor({ timeout: W });
-        await expect.poll(() => page.locator("[data-pocket-line]").textContent(), { timeout: W }).toMatch(/Pocket checked at/);
+        await expect.poll(() => page.locator("[data-pocket-line]").textContent(), { timeout: W }).toMatch(/left out/);
         await page.locator("[data-pocket-set-address]").click();
         await page.locator("[data-pocket-address]").waitFor({ timeout: W });
 
         // The page itself never scrolls; the list does.
         const doc = await page.evaluate(() => ({ doc: document.scrollingElement!.scrollHeight, win: window.innerHeight, list: (() => { const s = document.querySelector<HTMLElement>(".calls-scroll")!; return { sh: s.scrollHeight, ch: s.clientHeight }; })() }));
         expect(doc.doc, `document ${doc.doc} vs window ${doc.win}`).toBeLessThanOrEqual(doc.win);
-        expect(doc.list.sh).toBeGreaterThan(doc.list.ch);
+        // MC-5: the list may now fit whole at 1440; when it doesn't, it is the list that scrolls.
+        expect(doc.list.sh).toBeGreaterThanOrEqual(doc.list.ch);
         await page.evaluate(() => window.scrollTo(0, 400));
         expect(await page.evaluate(() => window.scrollY)).toBe(0);
         const bar = await page.locator(".topbar").first().boundingBox();
         expect(bar!.y).toBe(0);
 
-        // Each Needs you state: at most two lines, never narrower than its longest word, inside its row.
+        // MC-5: each end of line 1 stays on one line inside its row, and the call's name keeps room beside it.
         const all = [await measure(page, null)];
-        for (const s of STATES) all.push(await measure(page, s));
+        for (const s of ENDS) all.push(await measure(page, s));
         for (const m of all) {
-          expect(m.lines, `${m.label}: ${m.lines} lines`).toBeLessThanOrEqual(2);
-          expect(m.width + 0.5, `${m.label}: ${m.width} wide, its longest run ${m.longest}`).toBeGreaterThanOrEqual(m.longest);
+          expect(m.lines, `${m.label}: ${m.lines} lines`).toBe(1);
           expect(m.overflow, `${m.label} runs out of its row`).toBe(false);
+          expect(m.nameWidth, `${m.label}: the name is ${m.nameWidth} wide`).toBeGreaterThan(80);
         }
         expect(errors).toEqual([]);
       }, T);
@@ -130,8 +121,8 @@ describe.skipIf(!CHROMIUM)("Calls with a long list of calendar calls (browser, d
       expect(await sizes()).toEqual({ doc: hgt, win: hgt, y: 0, bar: 0 });
       // Every screen-reader-only label on Calls is placed against a box inside the page, never the page itself.
       const loose = await page.evaluate(() =>
-        [...document.querySelectorAll(".calls-page .sr-only")].filter((e) => { const p = (e as HTMLElement).offsetParent; return !p || p === document.body || !p.closest(".calls-page"); }).length);
-      expect(loose).toBe(0);
+        [...document.querySelectorAll(".calls-page .sr-only")].filter((e) => { const p = (e as HTMLElement).offsetParent; return !p || p === document.body || !p.closest(".calls-page"); }).map((e) => `${e.parentElement?.className}: ${e.textContent}`));
+      expect(loose).toEqual([]);
       expect(errors).toEqual([]);
     }, T);
   }

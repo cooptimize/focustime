@@ -2,7 +2,8 @@
 // recordings on a pretend Pocket). Opening Calls marks a call without a press. On a key where my recordings are under an
 // address FocusTime doesn't know me by, next to someone else's and two with no recorder, nothing is kept and the line
 // says so in counts; Set my Pocket address refuses an address that isn't on the list and accepts mine, and my
-// recordings appear. Check Pocket again says when Pocket was checked. A list that fails is one quiet line, and the list
+// recordings appear. MC-5: Check Pocket is in the header's menu with when Pocket was checked; the line shows only when
+// there is something to do. A list that fails is one quiet line, and the list
 // and Teams' marks still show. At 390 x 844 the same, every control at least 44 px.
 // Clock: Thu Nov 5, 2026 10:00 AM ET.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -38,8 +39,9 @@ async function setAddress(page: Page) {
   await expect.poll(() => form.locator('[role="alert"]').textContent(), { timeout: W }).toBe("That address isn't the recorder on any recording Pocket just listed for your key. Type the address your Pocket account uses");
   await form.locator("input").fill(DEMO_POCKET_SOLO);
   await form.getByRole("button", { name: "Use this address" }).click();
-  await expect.poll(() => line(page).textContent(), { timeout: W }).toMatch(/^Pocket address saved\. Your recordings under it are listed now\. 4 of your recordings in the last 14 days\./);
-  await expect.poll(() => item(page, "Proposal review with Jordan").locator("[data-call-mark]").textContent(), { timeout: W }).toBe("Pocket recording");
+  // MC-5: the line says it once, then has nothing more to say (the counts are in Settings).
+  await expect.poll(() => line(page).textContent(), { timeout: W }).toMatch(/^Pocket address saved\. Your recordings under it are listed now\./);
+  await expect.poll(() => item(page, "Proposal review with Jordan").locator("[data-call-mark]").textContent(), { timeout: W }).toBe("Pocket");
   await expect(form.count()).resolves.toBe(0);
 }
 
@@ -52,17 +54,23 @@ describe.skipIf(!CHROMIUM)("PK-4: my Pocket recordings found by themselves (brow
   it("opening Calls marks a call without a press; Check Pocket again says when", async () => {
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
     await openCalls(page, "pk_demo_mine");
-    await expect.poll(() => item(page, "Proposal review with Jordan").locator("[data-call-mark]").textContent(), { timeout: W }).toBe("Pocket recording");
-    await expect.poll(() => line(page).textContent(), { timeout: W }).toMatch(/Pocket checked at 10:00 AM\.$/);
-    await page.locator("[data-pocket-get]").click();
-    await expect.poll(() => line(page).textContent(), { timeout: W }).toMatch(/^4 of your recordings in the last 14 days\. .*Pocket checked at 10:00 AM\.$/);
+    await expect.poll(() => item(page, "Proposal review with Jordan").locator("[data-call-mark]").textContent(), { timeout: W }).toBe("Pocket");
+    await expect(item(page, "Proposal review with Jordan").locator("[data-call-mark]").getAttribute("title")).resolves.toMatch(/Pocket recording/);
+    // MC-5: the line only says what there is to do (this key lists one recording under another address); Check Pocket
+    // is in the header's menu, with when it was last checked.
+    await expect(line(page).allTextContents()).resolves.toEqual(["1 Pocket recording was left out. Set my Pocket address"]);
+    await page.getByRole("button", { name: "More for Calls" }).click();
+    const check = page.getByRole("menuitem", { name: /Check Pocket/ });
+    await expect.poll(() => check.textContent(), { timeout: W }).toMatch(/Checked 10:00 AM/);
+    await check.click();
+    await expect.poll(() => item(page, "Proposal review with Jordan").locator("[data-call-mark]").textContent(), { timeout: W }).toBe("Pocket");
     expect(errors).toEqual([]);
   }, T);
 
   it("left out as someone else's until I set my Pocket address; then mine appear", async () => {
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
     await openCalls(page, DEMO_POCKET_KEYS.shared);
-    await expect.poll(() => line(page).textContent(), { timeout: W }).toBe("8 listed. 6 are under an address FocusTime doesn't know you by. 2 have no recorder. Pocket checked at 10:00 AM.");
+    await expect.poll(() => line(page).textContent(), { timeout: W }).toBe("6 Pocket recordings were left out. Set my Pocket address");
     await expect(page.locator("[data-call-mark='pocket']").count()).resolves.toBe(0);
     await setAddress(page);
     // Settings shows my address and the counts, numbers only.
@@ -78,8 +86,8 @@ describe.skipIf(!CHROMIUM)("PK-4: my Pocket recordings found by themselves (brow
   it("a list that fails is one quiet line; the list and Teams' marks still show", async () => {
     const { page } = await freshPage(h, { width: 1440, height: 900 });
     await openCalls(page, DEMO_POCKET_KEYS.flaky);
-    await expect.poll(() => page.locator("[data-pocket-failed]").textContent(), { timeout: W }).toBe("Pocket couldn't be checked just now. Check Pocket again");
-    await expect.poll(() => item(page, "Northwind data model review").locator("[data-call-mark]").textContent(), { timeout: W }).toBe("Transcript in Teams");
+    await expect.poll(() => page.locator("[data-pocket-failed]").textContent(), { timeout: W }).toBe("Pocket didn't answer. Check again");
+    await expect.poll(() => item(page, "Northwind data model review").locator("[data-call-mark]").textContent(), { timeout: W }).toBe("Teams");
     await expect(page.locator("[data-call-row]").count()).resolves.toBeGreaterThan(0);
     await expect(page.locator('[role="alert"]').count()).resolves.toBe(0);
   }, T);
@@ -88,8 +96,8 @@ describe.skipIf(!CHROMIUM)("PK-4: my Pocket recordings found by themselves (brow
     const page = await phonePage(h, 390);
     await page.setViewportSize({ width: 390, height: 844 });
     await openCalls(page, DEMO_POCKET_KEYS.shared);
-    await expect.poll(() => line(page).textContent(), { timeout: W }).toMatch(/^8 listed\./);
-    for (const sel of ["[data-pocket-get]", "[data-pocket-set-address]"]) expect((await page.locator(sel).boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    await expect.poll(() => line(page).textContent(), { timeout: W }).toMatch(/^6 Pocket recordings were left out\./);
+    for (const sel of ["[data-pocket-set-address]", "[data-calls-menu] button"]) expect((await page.locator(sel).boundingBox())!.height).toBeGreaterThanOrEqual(44);
     await page.locator("[data-pocket-set-address]").click();
     const form = page.locator("[data-pocket-address]");
     for (const el of [form.locator("input"), ...(await form.locator("button").all())]) expect((await el.boundingBox())!.height).toBeGreaterThanOrEqual(44);

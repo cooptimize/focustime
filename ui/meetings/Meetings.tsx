@@ -12,25 +12,24 @@
 // view, and a way from a transcript line back to its proposals. An attendee who isn't a reviewer can look, not act.
 // Below 900 px (and on the phone) the list and the call are two steps, with Back. Only the list's filter, its client and
 // whether the list is folded are kept in this browser; nothing of a call is.
-import { isFeatureTier } from "../../plan/needed.ts";
-import { BreakDownButton } from "../BreakDownPanel.tsx";
 import { openBreakDown } from "../menu.ts";
-import { TextBox } from "../TextBox.tsx";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent } from "react";
 import { ActionRefusal, call, uploadMeetingTranscript } from "../api.ts";
 import { useDevOpsWrite, type DevOpsChange } from "../DevOpsWrite.tsx";
 import type { OccurrenceView, OtherCallView, SeriesView } from "../../plan/meeting-views.ts";
 import type { CaptureClient } from "../../plan/capture.ts";
 import { lengthLabel, OTHER_CALL_DAYS, suggestClient } from "../../plan/calls.ts";
-import { callBatch, proposalWords, toReview, type Proposal, type Quote } from "../../plan/meetings.ts";
-import { rememberCallsList as remember, rememberedCallsList as remembered, requestFetch, takeFetch, takeRerun, takeReviewCall, type MineData } from "./calls.ts";
-import { CALL_ACTIONS, CALL_BAR, CALL_FILTERS, CALL_LIST, CALL_ROW, CALL_STATE, CALLS_TEXT, CHAT_NO_SPEAKERS, CLOSE_TEXT, FETCH_WORDS, POCKET_TEXT, rerunLine, SECTION_HEAD, TRANSCRIPT_TEXT, type CallFilter, type FetchOutcome, type ProposalCheck } from "../../plan/call-words.ts";
+import { callBatch, proposalWords, toReview, type Proposal } from "../../plan/meetings.ts";
+import { rememberCallsList as remember, rememberedCallsList as remembered, requestFetch, requestRerun, takeFetch, takeRerun, takeReviewCall, type MineData } from "./calls.ts";
+import { useMenu } from "../Menus.tsx";
+import type { MenuItem, MenuStep } from "../menu.ts";
+import { CALL_ACTIONS, CALL_BAR, CALL_FILTERS, CALL_LIST, CALL_ROW, CALL_STATE, CALLS_TEXT, ADD_TEXT, CHAT_NO_SPEAKERS, CLOSE_TEXT, FETCH_WORDS, LIST_TEXT, PAGE_TEXT, POCKET_TEXT, rerunLine, SECTION_HEAD, TRANSCRIPT_TEXT, type CallFilter, type FetchOutcome, type ProposalCheck } from "../../plan/call-words.ts";
 import { callRows, chipClients, closedAtOf, closedLine, closedList, outcomeOfCall, weekOf, filterCounts, firstToOpen, hiddenList, hiddenMissing, LIST_FILTERS, openList, otherRowKey, hideKeyOf, type CallHides, type CallRow, type CheckState, type Entry, type ListedRecording, type ListFilter, type SeriesEntry } from "../../plan/call-list.ts";
 import { ClosedRow, HiddenRow, NeedsRow, SeriesRow, TickBar, WeekRow, whenOf, type RowStatus } from "./CallsList.tsx";
 import { pocketRows } from "../../plan/call-list-pocket.ts";
-import { checkedLine, leftOutLine, POCKET_CALL_WORDS as PW, recordingLine, yoursLine } from "../../plan/pocket-words.ts";
+import { POCKET_CALL_WORDS as PW, recordingLine } from "../../plan/pocket-words.ts";
 import { PocketAddressForm } from "./PocketAddress.tsx";
-import { lengthWords, longerThanCall } from "../../plan/pocket-match.ts";
+import { goesWith, lengthWords, longerThanCall } from "../../plan/pocket-match.ts";
 import type { PocketView } from "../../actions/pocket-types.ts";
 import type { PocketListView as PocketList } from "../../actions/pocket-types.ts";
 import type { CallsAt } from "../nav.ts";
@@ -38,13 +37,14 @@ import { globalKeyAllowed, isTypingTarget, topOverlay } from "../keys.ts";
 import { useNarrow } from "../PanelShell.tsx";
 import { clientColor } from "../labels.ts";
 import { Icon } from "../icons.tsx";
-import { forgetCallOptions, GapFields, useNewOptions } from "./GapFields.tsx";
+import { forgetCallOptions, useNewOptions } from "./GapFields.tsx";
+import { opensItself, ProposalRow } from "./Proposal.tsx";
+import "./calls.css";
 
 type Review = { meeting: SeriesView; occurrence: OccurrenceView; proposals: Proposal[]; transcript: { lines: number; speakers: number } | null; /** MC-2: what was said (at most 5 lines); null before MC-2 or once the transcript is gone. */ summary?: string[] | null; /** PK-1: from a Pocket export: numbered speakers, no times. */ pocket?: boolean; /** MC-2b: brought in from a Pocket recording: by me, or by another reviewer. */ pocketFrom?: "mine" | "reviewer" | null; /** MC-2c: Teams gave a chat call's transcript without speaker names. */ noSpeakers?: boolean; canConfirm: boolean; canWrite: boolean; checks: Record<string, ProposalCheck> };
 
 const errText = (e: unknown) => (e instanceof ActionRefusal || e instanceof Error ? e.message : "Something went wrong");
 const dayLabel = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
-const NOTE: Record<"decision" | "next_step" | "status", string> = { decision: "Decision", next_step: "Next step", status: "Status" };
 const KINDS = ["gap", "commitment", "comment"] as const;
 
 type CallView = "transcript" | "upload";
@@ -78,10 +78,12 @@ export type CallsPageProps = {
   clients?: CaptureClient[];
   /** MC-2: the focus block's client a moment falls in, for the suggestion. */
   blockClientAt?: (iso: string) => string | null;
+  /** MC-5: now (the app's clock), for Add a call's start. */
+  nowMs?: number;
 };
 
 /** MC-3: the Calls tab: the list by day on the left, the open call (or its setup, or Add a call) beside it. */
-export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = false, undoable, clients = [], blockClientAt = () => null }: CallsPageProps) {
+export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = false, undoable, clients = [], blockClientAt = () => null, nowMs = Date.now() }: CallsPageProps) {
   const narrow = useNarrow() || phone;
   const [data, setData] = useState<MineData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -110,6 +112,10 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
   const [rowStatus, setRowStatus] = useState<Record<string, RowStatus>>({});
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const [chosen, setChosen] = useState<Record<string, string>>({});
+  // MC-5: tick boxes show only once Select calls is chosen in the header's menu.
+  const [selecting, setSelecting] = useState(false);
+  // MC-5: a recording chosen in Add a call for a listed call it fits (Review that call): chosen there to start.
+  const [startRec, setStartRec] = useState<{ key: string; id: string } | null>(null);
   const getPocket = useCallback(async () => {
     setPocketBusy(true);
     setPocketErr(null);
@@ -210,6 +216,14 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
   const suggest = useCallback((c: OtherCallView) => suggestClient(c.name, clients, blockClientAt(c.startAt), c.allHome), [clients, blockClientAt]);
   const rows = useMemo(() => (data ? callRows({ meetings: data.meetings, occurrences: data.occurrences, others: others?.calls ?? null, today, zone, addPocket: pocketRows(pocket?.recordings ?? null, zone), check, hides, suggest }) : []), [data, others, today, zone, pocket, check, hides, suggest]);
   const gone = useMemo(() => hiddenMissing(rows, hides), [rows, hides]);
+  // MC-5: my recordings from the list already held, newest first, that aren't yet a call's transcript (one that goes with
+  // a call that has a transcript is taken to be its), each with the listed call it fits.
+  const recChoices = useMemo<RecChoice[]>(() => {
+    const done = (data?.occurrences ?? []).filter((o) => o.hasTranscript);
+    return (pocket?.recordings ?? [])
+      .filter((x) => !done.some((o) => goesWith(spanOf(x), o)) && !hides?.keys.has(`pocket:${x.id}`))
+      .map((x) => ({ rec: x, fits: rows.find((r) => r.bucket !== "hidden" && r.pocket.some((p) => p.id === x.id)) ?? null }));
+  }, [pocket, data, rows, hides]);
   const goneCount = gone.keys.length + gone.series.length;
   const counts = useMemo(() => filterCounts(rows, client, goneCount, hides?.series), [rows, client, goneCount, hides]);
   const nameOfClient = useCallback((k: string) => clients.find((c) => c.clientKey === k)?.clientName ?? k, [clients]);
@@ -275,7 +289,7 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
     } catch {
       /* a convenience only */
     }
-    requestAnimationFrame(() => document.querySelector<HTMLElement>(on ? "[data-calls-show]" : "[data-calls-hide]")?.focus());
+    requestAnimationFrame(() => document.querySelector<HTMLElement>(on ? "[data-calls-show]" : "[data-calls-menu] button")?.focus());
   };
 
   // J and K move through the list and Enter opens (a row is a button), as in the Inbox; never while typing. Esc, when
@@ -371,7 +385,7 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
       // One call closed from the list: its closed page is what shows beside it, not the next call in line.
       if (ids.length === 1 && !narrow) go({ occurrence: ids[0]! }, true);
       const items = d.calls.flatMap((c) => c.skipped);
-      undoable?.(ids.length === 1 ? CLOSE_TEXT.closedOne : CLOSE_TEXT.closedMany(ids.length), async () => {
+      undoable?.(ids.length === 1 ? LIST_TEXT.skippedClosed(items.length) : LIST_TEXT.skippedClosedMany(ids.length, items.length), async () => {
         if (items.length) await call("meeting.unskip_all", { items });
         await loadMine();
         changed();
@@ -410,12 +424,21 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
   const tickedHide = tickedRows.filter((r) => !!hideKeyOf(r));
   const tickedClose = tickedRows.filter((r) => r.occurrenceId !== null && r.left?.open);
   const seriesTicked = (e: SeriesEntry) => e.rows.every((r) => ticked.has(r.key));
+  // MC-5: X skips all and closes at once; the app's own message says what it did, with Undo (no browser dialog).
   const askSkipAll = (r: CallRow) => {
     if (!r.occurrenceId || !r.left?.open) return;
-    const words = r.left.open === r.left.all ? CLOSE_TEXT.skipAllClose : CLOSE_TEXT.skipLastClose(r.left.open);
-    if (window.confirm(`${words}: ${r.name}? ${CLOSE_TEXT.skippedNone}`)) void skipAllCalls([r.occurrenceId]);
+    void skipAllCalls([r.occurrenceId]);
   };
-  // X: hides the row in focus, or on a call with proposals asks to skip all and close. Never while typing.
+  /** MC-5: Needs you's one button: the call's page with its transcript choice, or the failed pass tried again there. */
+  const rowAction = (r: CallRow, kind: "upload" | "pocket" | "retry") => {
+    if (!r.occurrenceId) return;
+    if (kind === "retry") requestRerun(r.occurrenceId);
+    setAdding(false);
+    setSetupKey(null);
+    fromList.current = narrow;
+    go({ occurrence: r.occurrenceId, ...(kind === "upload" ? { view: "upload" as const } : {}) });
+  };
+  // X: hides the row in focus, or on a call with proposals skips all and closes it (with Undo). Never while typing.
   const xRef = useRef<(k: string) => void>(() => {});
   xRef.current = (k: string) => {
     const r = rows.find((x) => x.key === k);
@@ -424,14 +447,14 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
     else if (r.other) hideRows([r]);
   };
   const weekRow = (r: CallRow, inSeries = false) => (
-    <WeekRow key={r.key} r={r} open={openKey === r.key} zone={zone} colors={colors} ticked={ticked.has(r.key)} onTick={(on) => tickRow(r.key, on)} onOpen={() => openRow(r)}
-      clients={clients} client={clientOn(r)} onClient={(k) => setChosen((x) => ({ ...x, [r.key]: k }))} onReview={() => void reviewRow(r)} onHide={() => hideRows([r])}
+    <WeekRow key={r.key} r={r} open={openKey === r.key} zone={zone} today={today} colors={colors} selecting={selecting} ticked={ticked.has(r.key)} onTick={(on) => tickRow(r.key, on)} onOpen={() => void reviewRow(r)}
+      clients={clients} client={clientOn(r)} onClient={(k) => setChosen((x) => ({ ...x, [r.key]: k }))} onHide={() => hideRows([r])}
       status={rowStatus[r.key] ?? null} onUpload={() => { const st = rowStatus[r.key]; if (st?.occurrenceId) go({ occurrence: st.occurrenceId, view: "upload" }); }} inSeries={inSeries} />
   );
   const entryRow = (e: Entry, label: string) => e.kind === "one" ? weekRow(e.row) : (
     <SeriesRow key={e.key} e={e} weekLabel={label} expanded={expanded.has(e.key)} onExpand={(on) => setExpanded((x) => { const n = new Set(x); if (on) n.add(e.key); else n.delete(e.key); return n; })}
       onHideEvery={() => void hideItems({ series: [e.seriesKey] }, CLOSE_TEXT.hiddenEvery(e.name))} onHideWeek={() => hideRows(e.rows)}
-      ticked={seriesTicked(e)} onTick={(on) => setTicked((t) => { const n = new Set(t); for (const r of e.rows) if (on) n.add(r.key); else n.delete(r.key); return n; })}>
+      selecting={selecting} ticked={seriesTicked(e)} onTick={(on) => setTicked((t) => { const n = new Set(t); for (const r of e.rows) if (on) n.add(r.key); else n.delete(r.key); return n; })}>
       {e.rows.map((r) => weekRow(r, true))}
     </SeriesRow>
   );
@@ -439,77 +462,81 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
   const hiddenRows = show === "hidden" ? hiddenList(rows, client) : [];
   const nothingHere = show === "open" ? !open.needs.length && !open.weeks.length && !open.foldCount : show === "closed" ? !closedRows.length : !hiddenRows.length && !goneCount;
 
+  // MC-5: the header's dots menu: Refresh, Check Pocket (with when it was last checked), Select calls, Hide the list.
+  const headMenu = useMenu((): MenuStep => ({
+    title: CALLS_TEXT.heading,
+    items: [
+      { id: "calls-refresh", label: LIST_TEXT.refresh, icon: "refresh", ...(checkInfo.busy ? { disabled: CLOSE_TEXT.reviewing } : {}), run: () => (void loadOthers(), void runCheck({ refresh: true }), pocketOn ? void getPocket() : undefined) },
+      ...(pocketOn ? [{ id: "calls-pocket", label: LIST_TEXT.checkPocket, icon: "mic" as const, ...(pocket ? { hint: LIST_TEXT.checkedAt(timeOf(pocket.at, zone)) } : {}), ...(pocketBusy ? { disabled: PW.getting } : {}), run: () => (setPocketNote(null), void getPocket()) }] : []),
+      { id: "calls-select", label: selecting ? LIST_TEXT.selectDone : LIST_TEXT.select, run: () => (setSelecting((x) => !x), setTicked(new Set())) },
+      ...(!twoStep ? [{ id: "calls-hide-list", label: LIST_TEXT.hideList, run: () => fold(true) }] : []),
+    ],
+  }));
   const list = (
     <section className="calls-list" aria-labelledby="calls-title" data-calls-list="" ref={listRef}>
       <header className="calls-head">
         <div className="calls-title">
-          <h1 id="calls-title">{CALLS_TEXT.heading}</h1>
-          <span className="muted">{CALL_LIST.sub}</span>
+          <h1 id="calls-title" title={LIST_TEXT.headingHint}>{CALLS_TEXT.heading}</h1>
         </div>
         <span className="calls-head-actions">
-          <button type="button" className="mini quiet" disabled={checkInfo.busy} onClick={() => (void loadOthers(), void runCheck({ refresh: true }), pocketOn ? void getPocket() : undefined)} data-calls-refresh="">{CLOSE_TEXT.refresh}</button>
-          <button type="button" className="mini" onClick={() => (setSetupKey(null), setAdding(true), at.occurrence ? go({ occurrence: null }) : undefined)} aria-expanded={adding}>{CALLS_TEXT.add}</button>
-          {!twoStep && (
-            <button type="button" className="mini quiet icon-only" data-calls-hide="" onClick={() => fold(true)} aria-label={CALL_LIST.hideList} title={CALL_LIST.hideList}>
-              <Icon name="back" />
-            </button>
-          )}
+          <button type="button" className="mini" onClick={() => (setSetupKey(null), setAdding(true), at.occurrence ? go({ occurrence: null }) : undefined)} aria-expanded={adding} data-calls-add="">{CALLS_TEXT.add}</button>
+          <span data-calls-menu="">{headMenu.button(LIST_TEXT.menu)}</span>
         </span>
       </header>
       {data && (
         <div className="seg calls-filters" role="group" aria-label="Show">
         {LIST_FILTERS.map((f) => (
-          <button key={f} type="button" className={`seg-btn${show === f ? " on" : ""}`} aria-pressed={show === f} title={CALL_LIST.filterHint[f]} onClick={() => setList(f, client)} data-calls-filter={f}>
-            {CALL_LIST.filters[f]} <span className="seg-count">{counts[f]}</span>
+          <button key={f} type="button" className={`seg-btn${show === f ? " on" : ""}`} aria-pressed={show === f} title={f === "hidden" ? `${CALL_LIST.filterHint[f]}. ${LIST_TEXT.hiddenHint}` : CALL_LIST.filterHint[f]} onClick={() => setList(f, client)} data-calls-filter={f}>
+            {CALL_LIST.filters[f]}{counts[f] > 0 && <> <span className="seg-count">{counts[f]}</span></>}
           </button>
         ))}
       </div>
       )}
       {data && chips.length > 1 && (
-        <div className="ib4-chips calls-chips" role="group" aria-label="Clients">
+        // MC-5: one row labelled Client: All, each client with its square, then No client only when some call has none.
+        <div className="ib4-chips calls-chips" role="group" aria-labelledby="calls-client-label">
+          <span id="calls-client-label" className="calls-chips-label">{LIST_TEXT.client}</span>
           <button type="button" className={`ib4-chip${client === null ? " on" : ""}`} aria-pressed={client === null} onClick={() => setList(show, null)}>
-            {CALL_LIST.allClients}
+            {LIST_TEXT.all}
           </button>
           {chips.map((c) => (
             <button key={c.key || "none"} type="button" className={`ib4-chip${client === c.key ? " on" : ""}${c.key ? "" : " ib4-chip-none"}`} aria-pressed={client === c.key} onClick={() => setList(show, client === c.key ? null : c.key)} style={c.key ? ({ "--c": clientColor(c.key, colors) } as CSSProperties) : undefined} data-chip={c.key ? undefined : "no-client"}>
-              {c.key && <span className="dot" aria-hidden="true" />}
-              {c.name}
+              {c.key && <span className="swatch calls-sq" aria-hidden="true" />}
+              {c.key ? c.name : LIST_TEXT.noClient}
             </button>
           ))}
         </div>
       )}
-      {data && pocketOn !== null && (
+      {data && pocketOn === false && (
+        <p className="calls-pocket muted" data-calls-pocket=""><a href="#/settings/connections/pocket">{LIST_TEXT.connect}</a></p>
+      )}
+      {data && pocketOn && (pocketErr || (pocket && (pocket.counts.address > 0 || pocket.more)) || addressOpen || pocketNote) && (
+        // MC-5: Pocket's one quiet line, only when there is something to do (its counts are in Settings › Connections › Pocket).
         <div className="calls-pocket" data-calls-pocket="">
-          {pocketOn ? (
-            <>
-              <button type="button" className="mini" disabled={pocketBusy} onClick={() => (setPocketNote(null), void getPocket())} data-pocket-get="">{pocketBusy ? PW.getting : PW.get}</button>
-              <span className="muted" role="status" data-pocket-line="">
-                {pocketNote ? `${pocketNote} ` : ""}
-                {pocket ? `${pocket.counts.kept || !leftOutLine(pocket.counts) ? `${yoursLine(pocket.recordings.length)} ` : ""}${leftOutLine(pocket.counts)}${leftOutLine(pocket.counts) ? " " : ""}${checkedLine(timeOf(pocket.at, zone))}` : pocketBusy ? PW.getting : ""}
-                {pocket?.more ? ` ${PW.more}` : ""}
-              </span>
-              {pocket?.canSetAddress && !addressOpen && (
-                <button type="button" className="mini" onClick={() => (setPocketNote(null), setAddressOpen(true))} data-pocket-set-address="">{PW.setAddress}</button>
-              )}
-              {addressOpen && (
-                <PocketAddressForm
-                  onCancel={() => setAddressOpen(false)}
-                  onSaved={() => (setAddressOpen(false), setPocketNote(PW.addressSaved), void getPocket())}
-                />
-              )}
-            </>
-          ) : (
-            <span className="muted">{PW.connectLine.slice(0, PW.connectLine.indexOf(PW.connectLink))}<a href="#/settings/connections/pocket">{PW.connectLink}</a>.</span>
+          {pocketErr ? (
+            <span className="muted" role="status" title={pocketErr} data-pocket-failed="">
+              {LIST_TEXT.pocketFailed} <button type="button" className="link-btn" disabled={pocketBusy} onClick={() => void getPocket()}>{LIST_TEXT.checkAgain}</button>
+            </span>
+          ) : pocket && pocket.counts.address > 0 && !addressOpen ? (
+            <span className="muted" role="status" data-pocket-line="">
+              {pocketNote ? `${pocketNote} ` : ""}{LIST_TEXT.leftOut(pocket.counts.address)}{" "}
+              {pocket.canSetAddress && <button type="button" className="link-btn" onClick={() => (setPocketNote(null), setAddressOpen(true))} data-pocket-set-address="">{LIST_TEXT.setAddress}</button>}
+            </span>
+          ) : pocketNote && !addressOpen ? (
+            <span className="muted" role="status" data-pocket-line="">{pocketNote}</span>
+          ) : null}
+          {/* Something to know: Pocket had more than FocusTime reads at once. */}
+          {!pocketErr && pocket?.more && !addressOpen && <span className="muted" role="status" data-pocket-more="">{PW.more}</span>}
+          {addressOpen && (
+            <PocketAddressForm
+              onCancel={() => setAddressOpen(false)}
+              onSaved={() => (setAddressOpen(false), setPocketNote(PW.addressSaved), void getPocket())}
+            />
           )}
         </div>
       )}
       <div className="calls-scroll">
         {missing && <p className="muted calls-note" role="status">{CALLS_TEXT.notFound}</p>}
-        {pocketOn && pocketErr && (
-          <p className="muted calls-note calls-check-line" role="status" title={pocketErr} data-pocket-failed="">
-            {PW.failedQuiet} <button type="button" className="link-btn" disabled={pocketBusy} onClick={() => void getPocket()}>{PW.get}</button>
-          </p>
-        )}
         {(error || othersErr) && (
           <p className="error-line calls-note" role="alert">
             {error ? (data ? error : CALL_LIST.failedMine) : CALL_LIST.failedOthers}{" "}
@@ -535,12 +562,12 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
           </p>
         )}
         {rowStatus._page?.error && <p className="error-line calls-note" role="alert">{rowStatus._page.error}</p>}
-        <TickBar hide={tickedHide.length} close={tickedClose.length} onHide={() => hideRows(tickedHide)} onClose={() => void skipAllCalls(tickedClose.map((r) => r.occurrenceId!))} onClear={() => setTicked(new Set())} />
+        {selecting && <TickBar hide={tickedHide.length} close={tickedClose.length} onHide={() => hideRows(tickedHide)} onClose={() => void skipAllCalls(tickedClose.map((r) => r.occurrenceId!))} onClear={() => setTicked(new Set())} onDone={() => (setSelecting(false), setTicked(new Set()))} />}
         {show === "open" && open.needs.length > 0 && (
           <section className="calls-day calls-needs" aria-labelledby="calls-needs" data-section="needs">
             <h2 id="calls-needs" className="calls-day-head">{CLOSE_TEXT.needs} <span className="calls-head-count">{open.needs.length}</span></h2>
-            <ul className="calls-rows">
-              {open.needs.map((r) => <NeedsRow key={r.key} r={r} open={openKey === r.key} zone={zone} colors={colors} ticked={ticked.has(r.key)} onTick={(on) => tickRow(r.key, on)} onOpen={() => openRow(r)} onSkipAll={() => void skipAllCalls([r.occurrenceId!])} />)}
+            <ul className="calls-rows calls-cards">
+              {open.needs.map((r) => <NeedsRow key={r.key} r={r} open={openKey === r.key} zone={zone} today={today} colors={colors} selecting={selecting} phone={phone} ticked={ticked.has(r.key)} onTick={(on) => tickRow(r.key, on)} onOpen={() => openRow(r)} onAction={(k) => rowAction(r, k)} onSkipAll={() => void skipAllCalls([r.occurrenceId!])} />)}
             </ul>
           </section>
         )}
@@ -555,13 +582,13 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
           </section>
         ))}
         {show === "open" && open.foldCount > 0 && (
-          <Fold id="no-transcript" title={CLOSE_TEXT.fold(open.foldCount)} sub={CLOSE_TEXT.foldSub}>
+          <Fold id="no-transcript" title={CLOSE_TEXT.fold(open.foldCount)} hint={LIST_TEXT.foldHint}>
             <ul className="calls-rows">{open.fold.map((e) => entryRow(e, ""))}</ul>
           </Fold>
         )}
         {show === "closed" && closedRows.length > 0 && (
           <ul className="calls-rows" data-section="closed">
-            {closedRows.map((r) => <ClosedRow key={r.key} r={r} open={openKey === r.key} zone={zone} colors={colors} onOpen={() => openRow(r)} />)}
+            {closedRows.map((r) => <ClosedRow key={r.key} r={r} open={openKey === r.key} zone={zone} today={today} colors={colors} onOpen={() => openRow(r)} />)}
           </ul>
         )}
         {show === "hidden" && (
@@ -573,7 +600,7 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
                   // A series hidden for every one is one row, at its newest call.
                   if (every && hiddenRows.findIndex((x) => x.seriesKey === r.seriesKey) !== i) return [];
                   const count = every ? hiddenRows.filter((x) => x.seriesKey === r.seriesKey).length : 1;
-                  return [<HiddenRow key={r.key} r={r} every={every} count={count} zone={zone} onPutBack={() => void putBack(every ? { series: [r.seriesKey!] } : { keys: [hideKeyOf(r)!] })} />];
+                  return [<HiddenRow key={r.key} r={r} every={every} count={count} zone={zone} today={today} onPutBack={() => void putBack(every ? { series: [r.seriesKey!] } : { keys: [hideKeyOf(r)!] })} />];
                 })}
               </ul>
             )}
@@ -582,12 +609,11 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
                 {CLOSE_TEXT.hiddenGone(goneCount)} <button type="button" className="link-btn" onClick={() => void putBack({ ...(gone.keys.length ? { keys: gone.keys } : {}), ...(gone.series.length ? { series: gone.series } : {}) })}>{CLOSE_TEXT.putBackAll}</button>
               </p>
             )}
-            <p className="muted calls-note">{CLOSE_TEXT.hiddenWhy}</p>
           </>
         )}
         {data && !othersErr && !others && <p className="muted calls-note" role="status">{CALL_LIST.loading}</p>}
         {data && (
-          <Fold id="client-calls" title={CALL_LIST.clientCalls(registered.length)} sub={CALL_LIST.clientCallsSub}>
+          <Fold id="client-calls" title={CALL_LIST.clientCalls(registered.length)} hint={CALL_LIST.clientCallsSub}>
             {registered.length === 0 && <p className="muted">{CALLS_TEXT.noClientCalls}</p>}
             <ul className="calls-series">
               {registered.map((m) => {
@@ -604,7 +630,6 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
             </ul>
           </Fold>
         )}
-        {others && <p className="muted calls-privacy">{CALL_LIST.privacy}</p>}
       </div>
     </section>
   );
@@ -613,11 +638,14 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
   if (adding)
     beside = (
       <div className="calls-beside-pad">
-        <AddCall clients={clients} today={today} onCancel={() => (setAdding(false), requestAnimationFrame(() => document.querySelector<HTMLElement>(".calls-head-actions .mini")?.focus()))} onAdded={(id) => (setAdding(false), changed(), go({ occurrence: id, view: "upload" }))} />
+        <AddCall clients={clients} today={today} nowMs={nowMs} zone={zone} pocketOn={pocketOn} recs={recChoices}
+          onCancel={() => (setAdding(false), requestAnimationFrame(() => document.querySelector<HTMLElement>("[data-calls-add]")?.focus()))}
+          onAdded={(id, file) => (setAdding(false), (uploadFor = file ? { occurrenceId: id, file } : null), changed(), go({ occurrence: id }))}
+          onReviewThat={(row, recId) => (setAdding(false), setStartRec({ key: row.key, id: recId }), openRow(row))} />
       </div>
     );
   else if (at.occurrence)
-    beside = <ReviewScreen key={`${at.occurrence}:${closedStamp}`} pocketRecs={rows.find((x) => x.occurrenceId === at.occurrence)?.pocket ?? []} zone={zone} quiet={openedByItself.current === at.occurrence} id={at.occurrence} view={at.view ?? null} line={at.line ?? null} filter={at.filter ?? null} focus={at.proposal ?? null} colors={colors} today={today} undoable={undoable} {...(twoStep ? { onBack: backToList } : {})} onPlace={(p) => go({ occurrence: at.occurrence, ...p })} onChanged={changed} />;
+    beside = <ReviewScreen key={`${at.occurrence}:${closedStamp}`} pocketRecs={rows.find((x) => x.occurrenceId === at.occurrence)?.pocket ?? []} anyRecs={recChoices.map((x) => x.rec)} phone={phone} startRec={startRec?.key === `o${at.occurrence}` ? startRec.id : null} pocketOn={pocketOn} people={rows.find((x) => x.occurrenceId === at.occurrence)?.people ?? null} zone={zone} quiet={openedByItself.current === at.occurrence} id={at.occurrence} view={at.view ?? null} line={at.line ?? null} filter={at.filter ?? null} focus={at.proposal ?? null} colors={colors} today={today} undoable={undoable} {...(twoStep ? { onBack: backToList } : {})} onPlace={(p) => go({ occurrence: at.occurrence, ...p })} onChanged={changed} />;
   else if (setupRow?.other)
     beside = (
       <div className="calls-beside-pad">
@@ -629,6 +657,7 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
           suggested={clientOn(setupRow)}
           zone={zone}
           pocket={setupRow.pocket}
+          startRec={startRec?.key === setupRow.key ? startRec.id : null}
           onCancel={backToList}
           onStarted={(id, then) => {
             setSetupKey(null);
@@ -696,16 +725,15 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
 const pick = (a: CallsAt): Omit<CallsAt, "occurrence" | "show" | "client"> => ({ ...(a.view ? { view: a.view } : {}), ...(a.line ? { line: a.line } : {}), ...(a.filter ? { filter: a.filter } : {}), ...(a.proposal ? { proposal: a.proposal } : {}) });
 
 /** A fold at the list's foot (the Inbox's and the call page's own: a link button with its count, the body under it). */
-function Fold({ id, title, sub, children }: { id: string; title: string; sub: string; children: React.ReactNode }) {
+function Fold({ id, title, hint, children }: { id: string; title: string; /** MC-5: what the line under it said, now on its hover. */ hint: string; children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="calls-fold" data-calls-fold={id}>
-      <button type="button" className="link-btn" aria-expanded={open} aria-controls={`calls-fold-${id}`} onClick={() => setOpen((o) => !o)}>
+      <button type="button" className="link-btn" aria-expanded={open} aria-controls={`calls-fold-${id}`} title={hint} onClick={() => setOpen((o) => !o)}>
         <Icon name={open ? "open" : "closed"} /> {title}
       </button>
       {open && (
         <div id={`calls-fold-${id}`} className="calls-fold-body">
-          <p className="muted">{sub}</p>
           {children}
         </div>
       )}
@@ -742,10 +770,10 @@ function ClientPick({ clients, value, suggested, onChange, id }: { clients: Capt
  * MC-2: the setup a call that isn't registered opens with: which client it is about (FocusTime suggests, I choose; one
  * client) and where its transcript comes from. Nothing is kept and nothing goes to AI until Continue.
  */
-function CallSetup({ call: c, clients, suggested, zone, pocket = [], onCancel, onStarted }: { call: OtherCallView; clients: CaptureClient[]; suggested: string | null; zone: string; /** MC-2b: my Pocket recordings that go with it. */ pocket?: ListedRecording[]; onCancel: () => void; onStarted: (occurrenceId: number, then: "teams" | "upload" | "none") => void }) {
+function CallSetup({ call: c, clients, suggested, zone, pocket = [], startRec = null, onCancel, onStarted }: { call: OtherCallView; clients: CaptureClient[]; suggested: string | null; zone: string; /** MC-2b: my Pocket recordings that go with it. */ pocket?: ListedRecording[]; /** MC-5: the recording chosen in Add a call. */ startRec?: string | null; onCancel: () => void; onStarted: (occurrenceId: number, then: "teams" | "upload" | "none") => void }) {
   const [client, setClient] = useState(suggested ?? "");
   const [source, setSource] = useState<"teams" | "upload" | "pocket">(pocket.length ? "pocket" : c.teams ? "teams" : "upload");
-  const [choice, setChoice] = useState<PocketChoice>(() => firstChoice(pocket));
+  const [choice, setChoice] = useState<PocketChoice>(() => firstChoice(pocket.filter((r) => !startRec || r.id === startRec).concat(pocket)));
   // The call kept by a first Continue whose Pocket recording asked again (no line times): the second goes to it.
   const [kept, setKept] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
@@ -818,8 +846,8 @@ const whenShort = (iso: string, zone: string) => `${new Date(iso).toLocaleDateSt
 const spanOf = (r: ListedRecording) => ({ id: r.id, startAt: r.startAt, seconds: (Date.parse(r.endAt) - Date.parse(r.startAt)) / 1000 });
 
 /** One press of Continue with my Pocket recording: one call to Pocket on the server, or a question back. */
-async function bringPocket(occurrenceId: number, v: PocketChoice): Promise<{ ask?: "whole" | "replace"; length?: string }> {
-  const r = await call<{ ask?: "whole" | "replace"; length?: string }>("meeting.pocket_bring", { recordingId: v.id, occurrenceId, part: v.whole !== null ? "all" : v.part, ...(v.replace ? { replace: true } : {}) });
+async function bringPocket(occurrenceId: number, v: PocketChoice, move = false): Promise<{ ask?: "whole" | "replace"; length?: string }> {
+  const r = await call<{ ask?: "whole" | "replace"; length?: string }>("meeting.pocket_bring", { recordingId: v.id, occurrenceId, part: v.whole !== null ? "all" : v.part, ...(v.replace ? { replace: true } : {}), ...(move ? { move: true } : {}) });
   return r.ask ? r : {};
 }
 
@@ -828,15 +856,15 @@ async function bringPocket(occurrenceId: number, v: PocketChoice): Promise<{ ask
  * start and length, which part comes in when it runs more than 10 minutes past the call, what the server said back,
  * and who will see it, all before Continue.
  */
-function PocketFields({ recs, call: c, zone, value, onChange, who, named = false }: { recs: readonly ListedRecording[]; call: { startAt: string; endAt: string }; zone: string; value: PocketChoice; onChange: (v: PocketChoice) => void; who: string; /** The one recording is already named above (the setup's source option). */ named?: boolean }) {
+function PocketFields({ recs, call: c, zone, value, onChange, who, named = false, listed = false }: { recs: readonly ListedRecording[]; call: { startAt: string; endAt: string }; zone: string; value: PocketChoice; onChange: (v: PocketChoice) => void; who: string; /** The one recording is already named above (the setup's source option). */ named?: boolean; /** MC-5: every recording as a choice with its title, when and length, even one alone. */ listed?: boolean }) {
   const rec = recs.find((r) => r.id === value.id) ?? recs[0];
   if (!rec) return null;
   const longer = longerThanCall(spanOf(rec), c);
   return (
     <div className="mtg-pocket-pick" data-pocket-pick="">
-      {recs.length > 1 && (
-        <fieldset className="mtg-setup-source">
-          <legend>{PW.pick}</legend>
+      {(recs.length > 1 || listed) && (
+        <fieldset className="mtg-setup-source mtg-recs" data-rec-pick="">
+          <legend className={listed ? "sr-only" : undefined}>{PW.pick}</legend>
           {recs.map((r) => (
             <label key={r.id}>
               <input type="radio" name="mtg-pocket-rec" checked={r.id === rec.id} onChange={() => onChange({ ...firstChoice([r]), replace: value.replace })} />
@@ -845,7 +873,7 @@ function PocketFields({ recs, call: c, zone, value, onChange, who, named = false
           ))}
         </fieldset>
       )}
-      {recs.length === 1 && !named && <p className="muted">{rec.title ? `${rec.title} · ` : ""}{recordingLine(whenShort(rec.startAt, zone), lengthLabel(rec.minutes))}</p>}
+      {recs.length === 1 && !named && !listed && <p className="muted">{rec.title ? `${rec.title} · ` : ""}{recordingLine(whenShort(rec.startAt, zone), lengthLabel(rec.minutes))}</p>}
       {longer && value.whole === null && (
         <fieldset className="mtg-setup-source" data-pocket-part="">
           <legend>{PW.partAsk(lengthWords(spanOf(rec).seconds), lengthWords((Date.parse(c.endAt) - Date.parse(c.startAt)) / 1000))}</legend>
@@ -861,7 +889,8 @@ function PocketFields({ recs, call: c, zone, value, onChange, who, named = false
       )}
       {value.whole !== null && <p role="status" className="mtg-pocket-ask">{PW.whole(value.whole)}</p>}
       {value.replace && <p role="status" className="mtg-pocket-ask">{PW.replaceAsk}</p>}
-      <p className="mtg-pocket-who" data-pocket-who="">{who} {PW.ai}</p>
+      {/* On a call's page the line under the title already says who sees it (listed): only what the AI does. */}
+      {(who || listed) && <p className="mtg-pocket-who" data-pocket-who="">{who ? `${who} ` : ""}{PW.ai}</p>}
     </div>
   );
 }
@@ -906,86 +935,156 @@ function PocketAddSetup({ rec, clients, suggested, zone, onCancel, onAdded }: { 
   );
 }
 
-/** MC-2b: on a call I review with no transcript yet, my Pocket recordings that go with it, brought in on a press. */
-function PocketBringBox({ recs, occ, series, zone, onDone }: { recs: readonly ListedRecording[]; occ: OccurrenceView; series: SeriesView; zone: string; onDone: () => Promise<void> }) {
-  const [choice, setChoice] = useState<PocketChoice>(() => firstChoice(recs));
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const who = series.call === "hand" ? PW.seeMe : series.call ? PW.seeCall : PW.seeClient;
-  const bring = async () => {
-    setBusy(true);
-    setErr(null);
-    try {
-      const r = await bringPocket(occ.id, choice);
-      if (r.ask === "whole") setChoice((x) => ({ ...x, whole: r.length ?? "" }));
-      else if (r.ask === "replace") setChoice((x) => ({ ...x, replace: true }));
-      else await onDone();
-    } catch (e) {
-      setErr(errText(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <section className="mtg-setup mtg-pocket-box" aria-labelledby="mtg-pocket-head" data-pocket-bring="">
-      <h3 id="mtg-pocket-head">{PW.bringHead}</h3>
-      <PocketFields recs={recs} call={occ} zone={zone} value={choice} onChange={setChoice} who={who} />
-      {err && <p className="error-line" role="alert">{err}</p>}
-      <span className="mtg-setup-actions">
-        <button type="button" className="mini primary" disabled={busy} onClick={() => void bring()}>{busy ? PW.bringing : choice.replace ? PW.replaceYes : PW.bring}</button>
-      </span>
-    </section>
-  );
+/** MC-5: one of my recordings Add a call offers: not yet a call's transcript; the listed call it fits, if one does. */
+export type RecChoice = { rec: ListedRecording; fits: CallRow | null };
+
+/** MC-5: a file chosen in Add a call, uploaded on the call's page once it is added (so the date question can be asked there). */
+let uploadFor: { occurrenceId: number; file: File } | null = null;
+const takeUpload = (occurrenceId: number): File | null => {
+  const f = uploadFor?.occurrenceId === occurrenceId ? uploadFor.file : null;
+  if (f) uploadFor = null;
+  return f;
+};
+
+/** MC-5: the last half hour before now in my zone ("10:30" at 10:47), and its day. */
+function lastHalfHour(nowMs: number, zone: string): { date: string; start: string } {
+  const z = Temporal.Instant.fromEpochMilliseconds(nowMs).toZonedDateTimeISO(zone);
+  const t = Temporal.PlainTime.from({ hour: z.hour, minute: z.minute - (z.minute % 30) });
+  return { date: z.toPlainDate().toString(), start: t.toString({ smallestUnit: "minute" }) };
 }
 
-/** MC-2: Add a call that isn't on my calendar: only I see it, and its transcript is uploaded. */
-function AddCall({ clients, today, onCancel, onAdded }: { clients: CaptureClient[]; today: string; onCancel: () => void; onAdded: (occurrenceId: number) => void }) {
-  const [name, setName] = useState("");
-  const [date, setDate] = useState(today);
-  const [start, setStart] = useState("10:00");
+/**
+ * MC-5: Add a call, one panel, one step. Only I see it. Transcript: Pocket recording (only when connected; chosen to start
+ * when there is one to offer), A file, or Later. A recording fills Name from its title and Day, Starts and Length from
+ * itself; one that fits a listed call says which, with Review that call. About is always mine to choose. One recording's
+ * transcript is read only on Add and review; Add a call asks Pocket nothing more.
+ */
+function AddCall({ clients, today, nowMs, zone, pocketOn, recs, onCancel, onAdded, onReviewThat }: { clients: CaptureClient[]; today: string; nowMs: number; zone: string; pocketOn: boolean | null; recs: readonly RecChoice[]; onCancel: () => void; onAdded: (occurrenceId: number, file: File | null) => void; onReviewThat: (row: CallRow, recId: string) => void }) {
+  const at = lastHalfHour(nowMs, zone);
+  const [mode, setMode] = useState<Choice>(pocketOn && recs.length ? "pocket" : "file");
+  const [recId, setRecId] = useState<string>(recs.find((x) => !x.fits)?.rec.id ?? recs[0]?.rec.id ?? "");
+  const rec = mode === "pocket" ? recs.find((x) => x.rec.id === recId) ?? null : null;
+  const [name, setName] = useState(rec?.rec.title ?? "");
+  const [named, setNamed] = useState(false);
+  const [date, setDate] = useState(at.date > today ? today : at.date);
+  const [start, setStart] = useState(at.start);
   const [minutes, setMinutes] = useState(30);
   const [client, setClient] = useState("");
+  const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const first = useRef<HTMLInputElement | null>(null);
-  useEffect(() => first.current?.focus(), []);
+  const [dropping, setDropping] = useState(false);
+  // A call kept by a first press whose recording then failed: a second press brings the recording to it, never a second call.
+  const kept = useRef<{ recId: string; id: number } | null>(null);
   const min = Temporal.PlainDate.from(today).subtract({ days: 13 }).toString();
+  // The recording's title is the name until I type one.
+  useEffect(() => {
+    if (!named) setName(rec?.rec.title ?? "");
+  }, [rec?.rec.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ready = !!name.trim() && !!client && (mode !== "pocket" || !!rec) && (mode !== "file" || !!file);
   const save = async () => {
     setBusy(true);
     setErr(null);
     try {
+      if (mode === "pocket" && rec) {
+        const id = kept.current?.recId === rec.rec.id ? kept.current.id : (await call<{ occurrenceId: number }>("meeting.pocket_add", { recordingId: rec.rec.id, name: name.trim(), clientKey: client })).occurrenceId;
+        kept.current = { recId: rec.rec.id, id };
+        await bringPocket(id, { id: rec.rec.id, part: "all", whole: null, replace: false });
+        return onAdded(id, null);
+      }
       const r = await call<{ occurrenceId: number }>("meeting.call_add", { name: name.trim(), date, start, minutes, clientKey: client });
-      onAdded(r.occurrenceId);
+      onAdded(r.occurrenceId, mode === "file" ? file : null);
     } catch (e) {
       setErr(errText(e));
       setBusy(false);
     }
   };
+  const choices: Choice[] = [...(pocketOn ? (["pocket"] as const) : []), "file", "later"];
+  const takeFile = (fs: FileList | null | undefined) => {
+    const f = fs?.length === 1 ? fs[0]! : null;
+    if (fs && fs.length > 1) setErr(POCKET_TEXT.oneAtATime);
+    if (f) (setFile(f), setErr(null));
+  };
+  const fields = (
+    <div className="mtg-add-grid">
+      <label>{ADD_TEXT.name}<input value={name} maxLength={200} required onChange={(e) => (setName(e.target.value), setNamed(true))} data-add-name="" /></label>
+      {mode === "pocket" ? (
+        rec && <p className="muted mtg-add-when" data-add-when="">{whenLine(rec.rec.startAt, rec.rec.endAt, zone)}</p>
+      ) : (
+        <>
+          <label>{ADD_TEXT.day}<input type="date" value={date} min={min} max={today} required onChange={(e) => setDate(e.target.value)} /></label>
+          <label>{ADD_TEXT.starts}<input type="time" value={start} required onChange={(e) => setStart(e.target.value)} data-add-start="" /></label>
+          <label>{ADD_TEXT.length}
+            <select value={minutes} onChange={(e) => setMinutes(Number(e.target.value))}>
+              {[15, 30, 45, 60, 90, 120].map((m) => <option key={m} value={m}>{lengthLabel(m)}</option>)}
+            </select>
+          </label>
+        </>
+      )}
+      <span className={`mtg-add-field${client ? "" : " needed"}`}>
+        <label htmlFor="mtg-add-client">{ADD_TEXT.about}{!client && <span className="mtg-needed">{PAGE_TEXT.needed}</span>}</label>
+        <ClientPick id="mtg-add-client" clients={clients} value={client} suggested={null} onChange={setClient} />
+      </span>
+    </div>
+  );
   return (
-    <form className="mtg-setup mtg-add" aria-labelledby="mtg-add-title" onSubmit={(e) => (e.preventDefault(), void save())} onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), onCancel())}>
-      <h3 id="mtg-add-title">{CALLS_TEXT.add}</h3>
-      <p className="muted">{CALLS_TEXT.addSub}</p>
-      <div className="mtg-add-grid">
-        <label>{CALLS_TEXT.addName}<input ref={first} value={name} maxLength={200} required onChange={(e) => setName(e.target.value)} /></label>
-        <label>{CALLS_TEXT.addDay}<input type="date" value={date} min={min} max={today} required onChange={(e) => setDate(e.target.value)} /></label>
-        <label>{CALLS_TEXT.addStart}<input type="time" value={start} required onChange={(e) => setStart(e.target.value)} /></label>
-        <label>{CALLS_TEXT.addLength}
-          <select value={minutes} onChange={(e) => setMinutes(Number(e.target.value))}>
-            {[15, 30, 45, 60, 90, 120].map((m) => <option key={m} value={m}>{lengthLabel(m)}</option>)}
-          </select>
-        </label>
-        <span className="mtg-add-field"><label htmlFor="mtg-add-client">{CALLS_TEXT.addClient}</label><ClientPick id="mtg-add-client" clients={clients} value={client} suggested={null} onChange={setClient} /></span>
-      </div>
+    <form className="mtg-setup mtg-add mc5" aria-labelledby="mtg-add-title" onSubmit={(e) => (e.preventDefault(), ready && void save())} onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), onCancel())} data-add-call="">
+      <span className="mtg-add-head">
+        <h3 id="mtg-add-title">{ADD_TEXT.title}</h3>
+        <span className="muted" title={ADD_TEXT.onlyYouFull}>{ADD_TEXT.onlyYou}</span>
+      </span>
+      <span className="mtg-choices-head">
+        <span className="set-label">{PAGE_TEXT.transcript}</span>
+        <ChoiceSeg choices={choices} value={mode} onChange={(c) => (setMode(c), setErr(null))} />
+        {pocketOn === false && <a className="mtg-connect" href="#/settings/connections/pocket">{PAGE_TEXT.connect}</a>}
+      </span>
+      {mode === "pocket" && (recs.length ? (
+        <fieldset className="mtg-setup-source mtg-recs" data-rec-pick="">
+          <legend className="sr-only">{PW.pick}</legend>
+          {recs.map(({ rec: r, fits }) => (
+            <label key={r.id} className={fits ? "fits" : undefined}>
+              <input type="radio" name="mtg-add-rec" checked={r.id === recId} onChange={() => setRecId(r.id)} />
+              <span>
+                <strong>{r.title || PW.rowKind}</strong>
+                <span className="muted">{recordingLine(whenShort(r.startAt, zone), lengthLabel(r.minutes))}</span>
+                {fits && (
+                  <span className="mtg-rec-fits">
+                    {PAGE_TEXT.fits(fits.name)}{" "}
+                    <button type="button" className="link-btn" onClick={() => onReviewThat(fits, r.id)} data-review-that="">{PAGE_TEXT.reviewThat}</button>
+                  </span>
+                )}
+              </span>
+            </label>
+          ))}
+        </fieldset>
+      ) : (
+        <p className="muted">{PAGE_TEXT.noRecordings}</p>
+      ))}
+      {mode === "pocket" && rec && <p className="mtg-pocket-who" data-pocket-who="">{PW.ai}</p>}
+      {mode === "file" && (
+        <div className={`mtg-drop mtg-dropzone${dropping ? " dropping" : ""}`} data-drop=""
+          onDragOver={(e) => [...e.dataTransfer.types].includes("Files") && (e.preventDefault(), setDropping(true))} onDragLeave={() => setDropping(false)}
+          onDrop={(e) => (e.preventDefault(), setDropping(false), takeFile(e.dataTransfer.files))}>
+          <label className="mtg-drop-words">
+            {file ? file.name : PAGE_TEXT.drop}
+            <input type="file" accept={ACCEPT} onChange={(e) => (takeFile(e.target.files), (e.target.value = ""))} data-add-file="" />
+          </label>
+          <span className="mtg-drop-kinds">{PAGE_TEXT.kinds}</span>
+        </div>
+      )}
+      {fields}
       {err && <p className="error-line" role="alert">{err}</p>}
       <span className="mtg-setup-actions">
-        <button type="submit" className="mini primary" disabled={busy || !name.trim() || !client}>{busy ? "Adding…" : CALLS_TEXT.addSave}</button>
+        <button type="submit" className="mini primary" disabled={busy || !ready} data-add-save="">{busy ? ADD_TEXT.adding : mode === "later" ? ADD_TEXT.add : ADD_TEXT.addReview}</button>
         <button type="button" className="mini quiet" disabled={busy} onClick={onCancel}>{CALLS_TEXT.cancel}</button>
       </span>
     </form>
   );
 }
 
-function ReviewScreen({ id, pocketRecs = [], zone, quiet = false, view, line, filter, focus, colors, today, undoable, onBack, onPlace, onChanged }: { id: number; /** MC-2b: my Pocket recordings that go with this call (from my last press). */ pocketRecs?: readonly ListedRecording[]; zone: string; /** MC-3: opened by Calls itself, not by the person: the focus stays where it was. */ quiet?: boolean; view: CallView | null; line: number | null; filter: Exclude<CallFilter, "all"> | null; focus: number | null; colors: Record<string, string>; today: string; undoable?: ((text: string, undo: () => Promise<unknown>) => void) | undefined; /** MC-3: only when the list and the call are two steps: Back to the list. */ onBack?: () => void; onPlace: (at?: CallPlace) => void; onChanged?: (() => void) | undefined }) {
+type ReviewProps = { id: number; /** MC-5: on the phone Skip all's words are short (its full words are its label). */ phone?: boolean; /** MC-5: every recording of mine not yet a call's transcript: a hand-added call may take any. */ anyRecs?: readonly ListedRecording[]; /** MC-5: the recording chosen in Add a call. */ startRec?: string | null; /** MC-5: everyone on the call, where my calendar said. */ people?: number | null; /** MC-5: whether my Pocket is connected (null: not known yet). */ pocketOn?: boolean | null; /** MC-2b: my Pocket recordings that go with this call (from my last press). */ pocketRecs?: readonly ListedRecording[]; zone: string; /** MC-3: opened by Calls itself, not by the person: the focus stays where it was. */ quiet?: boolean; view: CallView | null; line: number | null; filter: Exclude<CallFilter, "all"> | null; focus: number | null; colors: Record<string, string>; today: string; undoable?: ((text: string, undo: () => Promise<unknown>) => void) | undefined; /** MC-3: only when the list and the call are two steps: Back to the list. */ onBack?: () => void; onPlace: (at?: CallPlace) => void; onChanged?: (() => void) | undefined };
+function ReviewScreen(props: ReviewProps) {
+  const { id, pocketRecs = [], anyRecs = [], startRec = null, pocketOn = null, zone, quiet = false, view, line, filter, focus, colors, today, undoable, onBack, onPlace, onChanged } = props;
   const w = useDevOpsWrite();
   const [r, setR] = useState<Review | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1053,6 +1152,31 @@ function ReviewScreen({ id, pocketRecs = [], zone, quiet = false, view, line, fi
   });
   // PK-1: a file dragged over the call's page shows where it goes; dropped elsewhere it does nothing.
   const dragging = usePageDrag(!!r?.canConfirm);
+  // MC-5: open proposals stay open while the page is; one opens by itself when DevOps needs an empty field or refused it.
+  const [openProps, setOpenProps] = useState<ReadonlySet<number>>(new Set());
+  useEffect(() => {
+    if (!r) return;
+    const auto = r.proposals.filter((p) => opensItself(p, r.checks[String(p.id)], rowErr[p.id] ?? null)).map((p) => p.id);
+    if (auto.some((x) => !openProps.has(x))) setOpenProps((s) => new Set([...s, ...auto]));
+  }, [r, rowErr]); // eslint-disable-line react-hooks/exhaustive-deps
+  // MC-5: Propose again and Get it from Teams (the menu, the failed pass's Try again, the transcript choices), and one upload.
+  const run = useCallRun(r?.occurrence ?? null, load);
+  const up = useTranscriptUpload(r ? { seriesId: r.meeting.id, date: r.occurrence.date, hasTranscript: r.occurrence.hasTranscript } : null, load);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  // MC-5: a file chosen in Add a call is uploaded here once the call is read (a date question is asked here).
+  useEffect(() => {
+    const f = r ? takeUpload(r.occurrence.id) : null;
+    if (f) up.pick(f);
+  }, [r?.occurrence.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // MC-1d: "Upload a transcript" from a meeting's menu lands here: on a call with a transcript the file button opens.
+  const menu = useMenu((): MenuStep => {
+    const items: MenuItem[] = [];
+    if (r && run.canRerun) items.push({ id: "call-rerun", label: CALL_ACTIONS.rerun, icon: "refresh", ...(run.busy ? { disabled: "Busy" } : {}), run: () => void run.rerun() });
+    if (r?.meeting.teams && !r.occurrence.hasTranscript) items.push({ id: "call-teams", label: CALL_ACTIONS.fromTeams, ...(run.busy ? { disabled: "Busy" } : {}), run: () => void run.fromTeams() });
+    items.push({ id: "call-upload", label: CALL_ACTIONS.upload, icon: "attach", ...(up.busy ? { disabled: "Reading…" } : {}), run: () => fileRef.current?.click() });
+    if (r && !r.meeting.call && r.occurrence.state !== "no_transcript" && !r.occurrence.hasTranscript) items.push({ id: "call-none", label: "No transcript this week", run: () => void call("meeting.no_transcript", { occurrenceId: r.occurrence.id }).then(load, (e: unknown) => setNote(errText(e))) });
+    return { title: r?.meeting.name ?? "Call", items };
+  });
 
   if (error) return (<><BackHead onBack={onBack} title="Call" /><p className="error-line" role="alert">{error}</p></>);
   if (!r) return (<><BackHead onBack={onBack} title="Call" /><p className="muted">Loading…</p></>);
@@ -1060,12 +1184,10 @@ function ReviewScreen({ id, pocketRecs = [], zone, quiet = false, view, line, fi
   const o = r.occurrence;
   const color = clientColor(m.clientKey, colors);
   const editable = r.canConfirm;
-  const showUpload = editable && (o.state === "needs_upload" || o.state === "waiting" || o.state === "no_transcript");
   const can = !!w?.can(m.clientKey);
   const open = r.proposals.filter(toReview);
   const counts = { all: open.length, gap: 0, commitment: 0, comment: 0 } as Record<CallFilter, number>;
   for (const p of open) counts[p.body.kind]++;
-  const done = r.proposals.filter((p) => p.state === "confirmed").length;
   const skipped = r.proposals.filter((p) => p.state === "skipped").length;
   const shownKinds = filter ? [filter] : KINDS;
   const checkOf = (p: Proposal) => r.checks[String(p.id)];
@@ -1151,7 +1273,7 @@ function ReviewScreen({ id, pocketRecs = [], zone, quiet = false, view, line, fi
       const d = await call<{ calls: { skipped: { id: number; was: "open" | "failed" }[] }[] }>("meeting.skip_all", { occurrenceIds: [o.id] });
       const items = d.calls.flatMap((c) => c.skipped);
       await load();
-      undoable?.(CLOSE_TEXT.closedOne, async () => {
+      undoable?.(LIST_TEXT.skippedClosed(items.length), async () => {
         if (items.length) await call("meeting.unskip_all", { items });
         await load();
       });
@@ -1162,63 +1284,88 @@ function ReviewScreen({ id, pocketRecs = [], zone, quiet = false, view, line, fi
     }
   };
 
+  const decided = r.proposals.length - open.length;
+  const people = m.call ? props.people ?? null : m.attendees || null;
+  const who = m.call === "hand" ? PAGE_TEXT.who.hand : m.call === "chat" ? PAGE_TEXT.who.chat : m.call ? PAGE_TEXT.who.calendar : PAGE_TEXT.who.registered;
+  const origin = r.pocket ? { text: PAGE_TEXT.origin.pocket, hint: r.pocketFrom ? `${r.pocketFrom === "mine" ? PW.fromMine : PW.fromReviewer} ${PW.unnamed}` : POCKET_TEXT.note } : m.call === "hand" ? { text: PAGE_TEXT.origin.hand, hint: null } : m.call === "chat" ? { text: CALL_LIST.fromChat, hint: r.noSpeakers ? CHAT_NO_SPEAKERS : null } : null;
+  const shownFilters = CALL_FILTERS.filter((f) => counts[f.key] > 0);
+  const skipWords = open.length === r.proposals.length ? CLOSE_TEXT.skipAllClose : CLOSE_TEXT.skipLastClose(open.length);
+  // A call with no transcript, or one waiting on it or marked as having none this week (as the old upload box showed): the choices.
+  const noTranscript = editable && ((!r.transcript && !o.hasTranscript) || o.state === "needs_upload" || o.state === "waiting" || o.state === "no_transcript");
+  const isOpen = (p: Proposal) => openProps.has(p.id);
+  const setOpen = (p: Proposal, on: boolean) => setOpenProps((x) => { const n = new Set(x); if (on) n.add(p.id); else n.delete(p.id); return n; });
+  const row = (p: Proposal, live: boolean) => (
+    <ProposalRow key={p.id} p={p} check={live ? checkOf(p) : undefined} err={live ? rowErr[p.id] ?? null : null} ticked={live && ticked.has(p.id)} editable={editable} can={can} busy={busy} clientKey={m.clientKey} opts={opts} today={today}
+      open={isOpen(p)} onOpen={(on) => setOpen(p, on)} onTick={(on) => tick(p, on)} onEdit={(patch) => void edit(p, patch)} onSend={() => void send([p])} onSendBreakDown={() => void send([p], { breakDown: true })} onKeep={() => void keep([p])} onSkip={(on) => void skip([p], on)} onEnable={() => w?.enable(m.clientKey)}
+      onQuote={r.transcript ? (n) => onPlace({ view: "transcript", line: n }) : undefined} />
+  );
+
   return (
     <>
       <div className="mtg-sticky" ref={stickyRef}>
-        <BackHead onBack={onBack} title={`Update ${m.clientName}'s plan`} sub={`${m.name} · ${dayLabel(o.date)}`} />
-        {r.transcript || r.proposals.length ? (
-          <div className="mtg-filter-row">
-            {/* MC-4: a closed call has nothing to filter; its kinds' counts would all read 0. */}
-            {view !== "transcript" && open.length > 0 && (
-              <div className="seg mtg-filter" role="group" aria-label="Show">
-                {CALL_FILTERS.map((f) => (
-                  <button key={f.key} type="button" className={`seg-btn${(filter ?? "all") === f.key ? " on" : ""}`} aria-pressed={(filter ?? "all") === f.key} onClick={() => onPlace(f.key === "all" ? undefined : { filter: f.key })}>
-                    {f.label} <span className="seg-count">{counts[f.key]}</span>
-                  </button>
-                ))}
-              </div>
-            )}
+        <header className="mtg-head" data-call-head="">
+          {onBack && <button type="button" className="mini quiet mtg-back" onClick={onBack} aria-label={CALL_LIST.back} data-calls-back=""><Icon name="back" /> <span className="mtg-back-word">{CALLS_TEXT.heading}</span></button>}
+          <h2 tabIndex={-1} title={m.name}>{m.name}</h2>
+          <span className="mtg-head-acts">
             {r.transcript && (
-              <div className="seg mtg-switch" role="group" aria-label="This call">
-                <button type="button" className={`seg-btn${view !== "transcript" ? " on" : ""}`} aria-pressed={view !== "transcript"} onClick={() => onPlace(filter ? { filter } : undefined)}>
-                  {TRANSCRIPT_TEXT.tabProposals} <span className="seg-count">{open.length}</span>
-                </button>
-                <button type="button" className={`seg-btn${view === "transcript" ? " on" : ""}`} aria-pressed={view === "transcript"} onClick={() => onPlace({ view: "transcript" })}>
-                  {TRANSCRIPT_TEXT.tab}
-                </button>
-              </div>
-            )}
-            {r.proposals.length > 0 && (
-              <span className="muted mtg-count" role="status">
-                {CALL_ROW.toReview(open.length)}{done ? ` · ${CALL_ROW.done(done)}` : ""}{skipped ? ` · ${CALL_ROW.skipped(skipped)}` : ""}
+              <span className="seg mtg-switch" role="group" aria-label="This call">
+                <button type="button" className={`seg-btn${view !== "transcript" ? " on" : ""}`} aria-pressed={view !== "transcript"} onClick={() => onPlace(filter ? { filter } : undefined)}>{TRANSCRIPT_TEXT.tabProposals}</button>
+                <button type="button" className={`seg-btn${view === "transcript" ? " on" : ""}`} aria-pressed={view === "transcript"} onClick={() => onPlace({ view: "transcript" })}>{TRANSCRIPT_TEXT.tab}</button>
               </span>
             )}
+            {editable && open.length > 0 && closedAt === null && (
+              <button type="button" className="mini" disabled={busy} onClick={() => void skipAllHere()} aria-label={skipWords} title={skipWords} data-call-act="skip-all">{props.phone ? (open.length === r.proposals.length ? LIST_TEXT.skipAll : LIST_TEXT.skipLast(open.length)) : skipWords}</button>
+            )}
+            {editable && <span data-call-menu="">{menu.button(PAGE_TEXT.menu)}</span>}
+          </span>
+          <p className="mtg-meta" data-call-meta="">
+            <span className="swatch calls-sq" style={{ "--c": color } as CSSProperties} aria-hidden="true" />
+            <span>{m.clientName}</span>
+            {!m.call && <span>{m.roleLabel}</span>}
+            <span>{whenOf(o.startAt, zone)}</span>
+            {people ? <span>{CALLS_TEXT.people(people)}</span> : null}
+            {origin && <span title={origin.hint ?? undefined} data-call-origin="">{origin.text}</span>}
+            <span title={who.full}>{who.short}</span>
+          </p>
+        </header>
+        {view !== "transcript" && open.length > 0 && closedAt === null && (
+          <div className="mtg-show" data-show-row="">
+            <span className="mtg-show-chips" role="group" aria-label={PAGE_TEXT.show}>
+              {shownFilters.map((f) => (
+                <button key={f.key} type="button" className={`ib4-chip${(filter ?? "all") === f.key ? " on" : ""}`} aria-pressed={(filter ?? "all") === f.key} onClick={() => onPlace(f.key === "all" ? undefined : { filter: f.key })} data-show={f.key}>
+                  {/* All's number is the decided line's "of N": said once. */}
+                  {f.label}{f.key !== "all" && <> <span className="seg-count">{counts[f.key]}</span></>}
+                </button>
+              ))}
+            </span>
+            {goesOn && <span className="calls-amber" data-transcript-goes="">{LIST_TEXT.goes(goesOn)}</span>}
+            <span className="mtg-decided" role="status" data-decided="">
+              {PAGE_TEXT.decided(decided, r.proposals.length)}
+              <span className="calls-left-bar" aria-hidden="true"><span style={{ width: `${Math.round((decided / Math.max(1, r.proposals.length)) * 100)}%` }} /></span>
+            </span>
           </div>
-        ) : null}
+        )}
       </div>
-      {view !== "transcript" && r.proposals.length > 0 && (closedAt !== null ? (
+      {run.msg && <p className="muted mtg-run-line" role="status">{run.msg}</p>}
+      {up.ask && !noTranscript && <DateAsk text={up.ask.text} onAnswer={up.answer} />}
+      {up.msg && !up.ask && !noTranscript && <p className="muted mtg-run-line" role="status">{up.msg}</p>}
+      {editable && r.transcript && dragging && !noTranscript && (
+        <div className="mtg-drop mtg-drop-replace dropping" {...dropProps(up)}>{POCKET_TEXT.dropReplace}</div>
+      )}
+      {editable && <input ref={fileRef} type="file" accept={ACCEPT} hidden onChange={(e) => (up.pick(e.target.files?.[0]), (e.target.value = ""))} data-call-file="" />}
+      {view !== "transcript" && r.proposals.length > 0 && closedAt !== null && (
         // MC-4: a closed call says when it closed and what came of it; what was skipped is one press away, and putting one back opens the call again.
         <section className="mtg-closed" aria-labelledby="mtg-closed-head" data-closed-page="">
           <h3 id="mtg-closed-head">{CLOSE_TEXT.closedAt(whenOf(closedAt, zone))}</h3>
           <p>{closedLine({ at: closedAt, done: outcomeOfCall(r.proposals.map((p) => ({ kind: p.body.kind, state: p.state }))), noTranscript: false })}</p>
           {skipped > 0 && (
-            <>
-              <button type="button" className="link-btn" data-see-skipped="" aria-expanded={seeSkipped} onClick={() => setUnfolded((u) => { const n = new Set(u); for (const k of KINDS) if (seeSkipped) n.delete(`${k}:skipped`); else n.add(`${k}:skipped`); return n; })}>
-                {seeSkipped ? CLOSE_TEXT.hideSkipped : CLOSE_TEXT.seeSkipped(skipped)}
-              </button>
-              {editable && <p className="muted">{CLOSE_TEXT.putBackOpens}</p>}
-            </>
+            <button type="button" className="link-btn" data-see-skipped="" aria-expanded={seeSkipped} title={editable ? CLOSE_TEXT.putBackOpens : undefined} onClick={() => setUnfolded((u) => { const n = new Set(u); for (const k of KINDS) if (seeSkipped) n.delete(`${k}:skipped`); else n.add(`${k}:skipped`); return n; })}>
+              {seeSkipped ? CLOSE_TEXT.hideSkipped : CLOSE_TEXT.seeSkipped(skipped)}
+            </button>
           )}
         </section>
-      ) : editable && open.length > 0 && (
-        <div className="mtg-open-head" data-open-head="">
-          <button type="button" className="mini" disabled={busy} onClick={() => void skipAllHere()} data-call-act="skip-all">{open.length === r.proposals.length ? CLOSE_TEXT.skipAllClose : CLOSE_TEXT.skipLastClose(open.length)}</button>
-          <span className="muted">{CLOSE_TEXT.skippedNone}</span>
-          {goesOn && <span className="calls-head-note amber" data-transcript-goes="">{CLOSE_TEXT.goesIn(goesOn)}</span>}
-        </div>
-      ))}
-      {r.pocket && <p className="mtg-pocket-note" role="note">{r.pocketFrom ? `${r.pocketFrom === "mine" ? PW.fromMine : PW.fromReviewer} ${PW.unnamed}` : POCKET_TEXT.note}</p>}
-      {r.noSpeakers && <p className="mtg-pocket-note" role="note" data-no-speakers="">{CHAT_NO_SPEAKERS}</p>}
+      )}
+      {!editable && <p className="muted mtg-look">{PAGE_TEXT.onlyLook(m.reviewers.map((x) => x.name))}</p>}
       {view !== "transcript" && r.summary && r.summary.length > 0 && (
         // MC-2: what was discussed and decided, above the proposals, on every call.
         <section className="mtg-summary" aria-labelledby="mtg-summary-head">
@@ -1226,23 +1373,19 @@ function ReviewScreen({ id, pocketRecs = [], zone, quiet = false, view, line, fi
           <ul>{r.summary.map((l, i) => <li key={i}>{l}</li>)}</ul>
         </section>
       )}
-      {view !== "transcript" && <p className="muted mtg-intro">
-        {r.transcript ? (r.pocket || r.noSpeakers ? `From the transcript (${r.transcript.lines} ${r.transcript.lines === 1 ? "line" : "lines"}). ` : `From the transcript (${r.transcript.lines} lines, ${r.transcript.speakers} people). `) : ""}
-        {editable && r.proposals.length === 0 ? "" : editable ? "Each row has its own button: new items and comments go to DevOps through the usual preview, promises are kept at once. Tick rows to do several together, or skip what isn't right." : m.call ? `Only ${m.reviewers.map((x) => x.name).join(", ")}, who asked FocusTime to review this call, can act on it. You can look.` : `Only this call's reviewers (${m.reviewers.map((x) => x.name).join(", ")}) can act on it. You can look.`}
-        {editable && m.call ? ` ${m.call === "hand" ? CALLS_TEXT.whoSeesHand : m.call === "chat" ? CALLS_TEXT.whoSeesChat : CALLS_TEXT.whoSees}` : ""}
-      </p>}
-      {editable && !r.transcript && pocketRecs.length > 0 && <PocketBringBox key={pocketRecs.map((x) => x.id).join()} recs={pocketRecs} occ={o} series={m} zone={zone} onDone={load} />}
-      {editable && <CallActions series={m} occ={o} onDone={load} focusUpload={view === "upload"} dropHere={!showUpload} dragging={dragging} />}
       {o.state === "failed" && (
         <section className="mtg-failed" role="status" aria-label={CALL_STATE.aiFailed}>
           <h3>{CALL_STATE.aiFailed}</h3>
           {o.aiMessage && <p>{o.aiMessage.replace(`${CALL_STATE.aiFailed}: `, "").replace(/^./, (c) => c.toUpperCase())}</p>}
           {o.aiNext && <p className="muted">{o.aiNext}</p>}
+          {editable && run.canRerun && <button type="button" className="mini primary" disabled={!!run.busy} onClick={() => void run.rerun()}>{run.busy === "rerun" ? "Proposing…" : CALL_ROW.tryAgain}</button>}
         </section>
       )}
       {note && <p className="error-line" role="alert">{note}</p>}
-      {showUpload && <UploadBox series={m} occ={o} onDone={load} dragging={dragging} pocketOffered={editable && !r.transcript && pocketRecs.length > 0} />}
-      {o.state === "waiting" && <p className="muted">FocusTime looks for the transcript after the call, every 15 minutes for 3 hours, then hourly up to 12 hours.</p>}
+      {o.state === "waiting" && <p className="muted mtg-run-line" title={PAGE_TEXT.waitingHint}>{PAGE_TEXT.waiting}</p>}
+      {noTranscript && (
+        <TranscriptChoices series={m} occ={o} recs={m.call === "hand" ? anyRecs : pocketRecs} startRec={startRec} pocketOn={pocketOn} zone={zone} up={up} dragging={dragging} start={view === "upload" ? "file" : null} onTeams={() => void run.fromTeams()} teamsBusy={run.busy === "teams"} teamsRefused={run.refused} onDone={load} />
+      )}
       {view === "transcript" ? (
         <TranscriptView occurrenceId={o.id} startAt={o.startAt} proposals={r.proposals} line={line} onProposal={(pid) => onPlace({ proposal: pid })} />
       ) : (<>
@@ -1254,26 +1397,25 @@ function ReviewScreen({ id, pocketRecs = [], zone, quiet = false, view, line, fi
           const selectable = rows.filter((p) => !checkOf(p)?.blocked);
           const allOn = selectable.length > 0 && selectable.every((p) => ticked.has(p.id));
           return (
-            <section key={kind} className="mtg-group" style={{ "--c": color } as CSSProperties} aria-label={SECTION_HEAD[kind]}>
+            <section key={kind} className="mtg-group" style={{ "--c": color } as CSSProperties} aria-label={SECTION_HEAD[kind]} data-group={kind}>
               <h3 className="mtg-sec-head">
-                <span>{SECTION_HEAD[kind]} <span className="muted">{CALL_ROW.toReview(rows.length)}</span></span>
-                {editable && selectable.length > 0 && (
+                <span>{SECTION_HEAD[kind]}{rows.length > 0 && <span className="mtg-sec-count">{rows.length}</span>}</span>
+                {editable && selectable.length > 1 && (
                   <button type="button" className="mini quiet" aria-pressed={allOn} onClick={() => setTicked((s) => { const n = new Set(s); for (const p of selectable) if (allOn) n.delete(p.id); else n.add(p.id); return n; })}>
                     {allOn ? CALL_BAR.clear : CALL_ROW.selectAll}
                   </button>
                 )}
               </h3>
-              {rows.map((p) => <ProposalRow key={p.id} p={p} check={checkOf(p)} err={rowErr[p.id] ?? null} ticked={ticked.has(p.id)} editable={editable} can={can} busy={busy} clientKey={m.clientKey} opts={opts} today={today} onTick={(on) => tick(p, on)} onEdit={(patch) => void edit(p, patch)} onSend={() => void send([p])} onSendBreakDown={() => void send([p], { breakDown: true })} onKeep={() => void keep([p])} onSkip={(on) => void skip([p], on)} onEnable={() => w?.enable(m.clientKey)} onShowLines={r.transcript ? (n) => onPlace({ view: "transcript", line: n }) : undefined} />)}
-              {!rows.length && <p className="muted mtg-none">Nothing left to review here.</p>}
+              {rows.map((p) => row(p, true))}
               {folds.map((f) => {
                 const key = `${kind}:${f.k}`;
-                const isOpen = unfolded.has(key);
+                const isOpenFold = unfolded.has(key);
                 return (
                   <div key={key} className="mtg-fold">
-                    <button type="button" className="link-btn" aria-expanded={isOpen} onClick={() => setUnfolded((u) => { const n = new Set(u); if (isOpen) n.delete(key); else n.add(key); return n; })}>
-                      <Icon name={isOpen ? "open" : "closed"} /> {f.k === "done" ? CALL_ROW.done(f.ps.length) : CALL_ROW.skipped(f.ps.length)}
+                    <button type="button" className="link-btn" aria-expanded={isOpenFold} onClick={() => setUnfolded((u) => { const n = new Set(u); if (isOpenFold) n.delete(key); else n.add(key); return n; })}>
+                      <Icon name={isOpenFold ? "open" : "closed"} /> {f.k === "done" ? CALL_ROW.done(f.ps.length) : CALL_ROW.skipped(f.ps.length)}
                     </button>
-                    {isOpen && f.ps.map((p) => <ProposalRow key={p.id} p={p} check={undefined} err={null} ticked={false} editable={editable} can={can} busy={busy} clientKey={m.clientKey} opts={opts} today={today} onTick={() => {}} onEdit={() => {}} onSend={() => {}} onKeep={() => {}} onSkip={(on) => void skip([p], on)} onEnable={() => {}} onShowLines={r.transcript ? (n) => onPlace({ view: "transcript", line: n }) : undefined} />)}
+                    {isOpenFold && f.ps.map((p) => row(p, false))}
                   </div>
                 );
               })}
@@ -1398,92 +1540,6 @@ function BackHead({ onBack, title, sub }: { onBack?: (() => void) | undefined; t
   );
 }
 
-function Quotes({ qs }: { qs: Quote[] | null }) {
-  if (!qs) return <p className="muted mtg-quote-gone">The transcript's words are kept 30 days; these are gone.</p>;
-  return (
-    <div className="mtg-quotes">
-      {qs.map((q) => (
-        <blockquote key={q.n}>
-          <span className="mtg-who">{q.speaker}{q.at ? ` · ${q.at}` : ""}</span> {q.text}
-        </blockquote>
-      ))}
-    </div>
-  );
-}
-
-function ProposalRow({ p, check, err, ticked, editable, can, busy, clientKey, opts, today, onTick, onEdit, onSend, onSendBreakDown, onKeep, onSkip, onEnable, onShowLines }: { p: Proposal; check: ProposalCheck | undefined; err: string | null; ticked: boolean; editable: boolean; can: boolean; busy: boolean; clientKey: string; opts: ReturnType<typeof useNewOptions>; today: string; onTick: (on: boolean) => void; onEdit: (patch: Record<string, unknown>) => void; onSend: () => void; onSendBreakDown?: () => void; onKeep: () => void; onSkip: (on: boolean) => void; onEnable: () => void; onShowLines?: ((line: number) => void) | undefined }) {
-  const b = p.body;
-  // RQ-1: a new item at the feature tier (the lowest portfolio level of the client's process, never a type's name).
-  const featureTier = b.kind === "gap" && isFeatureTier(opts?.levels, b.type);
-  const live = toReview(p);
-  const main = proposalWords(b);
-  const [text, setText] = useState(main);
-  useEffect(() => setText(main), [main]);
-  const field = b.kind === "gap" ? "title" : b.kind === "commitment" ? "what" : "text";
-  const save = () => text.trim() && text.trim() !== main && onEdit({ [field]: text.trim() });
-  const where =
-    // PK-1: a Pocket export's promise whose words don't say whose it is names nobody.
-    b.kind === "commitment" ? `${b.side === "unknown" ? CALL_ROW.noOwner : b.who}${b.toName ? ` to ${b.toName}` : ""}${b.due ? ` · due ${dayLabel(b.due)}` : ""} · ${b.side === "cooptimize" ? `in ${b.who.split(/\s+/)[0]}'s Promises` : "noted with this call"}`
-    : b.kind === "comment" ? `${NOTE[b.note]} on #${b.itemId} ${b.itemTitle} (${b.itemType})`
-    : null;
-  const needs = check?.needs ?? [];
-  const blocked = check?.blocked ?? null;
-  const stuck = needs.length > 0 || !!check?.cant || !!blocked;
-  const failed = p.state === "failed";
-  const state = p.state === "confirmed" ? (p.result?.message ?? (b.kind === "commitment" ? (b.side === "cooptimize" ? "Added to Promises" : "Noted with this call") : "Done")) : p.state === "skipped" ? "Skipped" : null;
-  const mainLabel = b.kind === "commitment" ? (b.side === "cooptimize" ? CALL_ROW.promise : CALL_ROW.note) : failed ? CALL_ROW.tryAgain : b.kind === "gap" ? CALL_ROW.create : CALL_ROW.comment;
-  return (
-    <article id={`mtg-prop-${p.id}`} tabIndex={-1} className={`mtg-prop ${p.state}${ticked ? " ticked" : ""}${stuck ? " stuck" : ""}`} aria-label={main}>
-      <span className="mtg-tick">
-        {editable && live && !blocked && <input type="checkbox" checked={ticked} onChange={(e) => onTick(e.target.checked)} aria-label={`Select: ${main}`} />}
-      </span>
-      <div className="mtg-prop-body">
-        {editable && live ? (
-          b.kind === "comment" ? <TextBox minRows={2} maxRows={8} maxLength={2000} value={text} onChange={(e) => setText(e.target.value)} onBlur={save} aria-label="Comment" /> : <input value={text} maxLength={b.kind === "gap" ? 255 : 200} onChange={(e) => setText(e.target.value)} onBlur={save} aria-label={b.kind === "gap" ? "Title" : "What"} />
-        ) : (
-          <p className="mtg-main">{main}</p>
-        )}
-        {where && <p className="muted mtg-where">{where}</p>}
-        {b.kind === "gap" && (live ? <GapFields b={b} id={p.id} clientKey={clientKey} opts={opts} today={today} editable={editable} check={check} onEdit={onEdit} /> : <p className="muted mtg-where">{b.type}{b.parentTitle ? ` under #${b.parentId} ${b.parentTitle}` : ""}</p>)}
-        {live && needs.length > 0 && <p id={`mtg-need-${p.id}`} className="mtg-need" role="status">{CALL_ROW.needs(needs.map((n) => n.name), b.kind === "gap" ? b.type : null)}</p>}
-        {live && check?.cant && <p className="mtg-need" role="status">{check.cant}</p>}
-        {live && blocked && <p className="mtg-need" role="note">{blocked}</p>}
-        {"namesRemoved" in b && b.namesRemoved && <p className="names-removed">Another client's name was removed: "another client" is written instead.</p>}
-        <Quotes qs={p.quotes} />
-        {/* MC-1d: the jump to the lines this proposal rests on, in the Transcript view (while the transcript is kept). */}
-        {onShowLines && b.lines.length > 0 && p.quotes && (
-          <button type="button" className="mini quiet mtg-show-lines" onClick={() => onShowLines(Math.min(...b.lines))} aria-label={`${CALL_ACTIONS.showLines}: ${main}`}>
-            {CALL_ACTIONS.showLines}
-          </button>
-        )}
-        {failed && p.result?.message && <p className="mtg-state-line problem" role="alert">{p.result.message}</p>}
-        {err && <p className="mtg-state-line problem" role="alert">{err}</p>}
-        {state && <p className="mtg-state-line">{state}</p>}
-      </div>
-      {editable && (
-        <div className="mtg-prop-actions">
-          {live && !blocked && (b.kind === "commitment" ? (
-            <button type="button" className="mini primary" disabled={busy} onClick={onKeep}>{mainLabel}</button>
-          ) : can ? (
-            <>
-              <button type="button" className="mini primary" disabled={busy || stuck} aria-describedby={needs.length ? `mtg-need-${p.id}` : undefined} title={stuck ? "Fill in what's needed first" : "Opens the DevOps preview; nothing is written until you confirm it"} onClick={onSend}>{mainLabel}</button>
-              {featureTier && onSendBreakDown && !failed && (
-                <button type="button" className="mini" disabled={busy || stuck} aria-describedby={needs.length ? `mtg-need-${p.id}` : undefined} title={stuck ? "Fill in what's needed first" : CALL_ROW.createAndBreakDownWhy} onClick={onSendBreakDown}>{CALL_ROW.createAndBreakDown}</button>
-              )}
-            </>
-          ) : (
-            <button type="button" className="mini quiet dw-enable" onClick={onEnable} title="DevOps is read-only for this client until you add your own write PAT in Settings › Connections › DevOps">Enable DevOps writes</button>
-          ))}
-          {live && <button type="button" className="mini quiet" disabled={busy} onClick={() => onSkip(true)}>{CALL_ROW.skip}</button>}
-          {p.state === "skipped" && <button type="button" className="mini quiet" disabled={busy} onClick={() => onSkip(false)}>{CALL_ROW.bringBack}</button>}
-          {/* RQ-1: a feature created from this call can be broken down from its row. */}
-          {p.state === "confirmed" && featureTier && b.kind === "gap" && p.result?.itemId ? <BreakDownButton clientKey={clientKey} item={{ id: p.result.itemId, title: b.title, type: b.type }} short /> : null}
-        </div>
-      )}
-    </article>
-  );
-}
-
 /** The file picker's kinds: a Teams transcript, or (PK-1) a Pocket export. What a file is, the server decides by its content. */
 const ACCEPT = ".vtt,.docx,.zip,.pdf,text/vtt,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/zip,application/pdf";
 
@@ -1544,16 +1600,17 @@ type UploadAnswer = { lines?: number; proposals?: number; outcome?: string; ask?
  * file again only on a yes. A drop onto a call that already has a transcript asks before replacing it; the picker
  * works as it always has.
  */
-function useTranscriptUpload(series: SeriesView, occ: OccurrenceView, onDone: () => Promise<void>) {
+function useTranscriptUpload(target: { seriesId: number; date: string; hasTranscript: boolean } | null, onDone: () => Promise<void>) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [ask, setAsk] = useState<{ file: File; text: string } | null>(null);
   const send = async (f: File, dateOk = false) => {
+    if (!target) return;
     setBusy(true);
     setMsg(null);
     setAsk(null);
     try {
-      const r = await uploadMeetingTranscript<UploadAnswer>(series.id, occ.date, f, { dateOk });
+      const r = await uploadMeetingTranscript<UploadAnswer>(target.seriesId, target.date, f, { dateOk });
       if (r.ask) setAsk({ file: f, text: POCKET_TEXT.dateAsk(dayLabel(r.ask.recorded), r.ask.length, dayLabel(r.ask.call)) });
       else {
         setMsg(r.outcome && r.outcome !== "done" ? `Read ${r.lines ?? 0} lines. ${CALL_STATE.aiFailed}.` : POCKET_TEXT.read(r.lines ?? 0, r.proposals ?? 0));
@@ -1572,7 +1629,7 @@ function useTranscriptUpload(series: SeriesView, occ: OccurrenceView, onDone: ()
     if (busy) return;
     const fs = [...e.dataTransfer.files];
     if (fs.length !== 1) return setMsg(fs.length ? POCKET_TEXT.oneAtATime : null);
-    if (occ.hasTranscript && !window.confirm(POCKET_TEXT.replace)) return;
+    if (target?.hasTranscript && !window.confirm(POCKET_TEXT.replace)) return;
     void send(fs[0]!);
   };
   const answer = (yes: boolean) => {
@@ -1585,6 +1642,7 @@ function useTranscriptUpload(series: SeriesView, occ: OccurrenceView, onDone: ()
   };
   return { busy, msg, ask, pick, dropped, answer };
 }
+type Upload = ReturnType<typeof useTranscriptUpload>;
 
 /** The drop area's own handlers: it takes the file (the cursor shows a copy) and the page's guard leaves it alone. */
 const dropProps = (u: ReturnType<typeof useTranscriptUpload>) => ({
@@ -1616,37 +1674,23 @@ function DateAsk({ text, onAnswer }: { text: string; onAnswer: (yes: boolean) =>
 }
 
 /**
- * MC-1d: a reviewer's two buttons on the call's page: Propose again (the AI pass once more on the stored transcript;
- * it replaces the open proposals, the done, skipped and failed ones stay; MC-1e: the same thing again is left out) and
- * Upload a transcript (a file in its place). PK-1: when the call's page shows no upload area, this is where a dragged
- * file is dropped.
+ * MC-1d: Propose again (the AI pass once more on the stored transcript; it replaces the open proposals, the done, skipped
+ * and failed ones stay; MC-1e: the same thing again is left out) and MC-2's Get it from Teams (one try with my sign-in,
+ * for this call only). MC-5: they live in the call's menu, the failed pass's Try again and the transcript choices; one
+ * line says what came of them. Asked for from a meeting's menu (or Needs you's Try again), each runs here once.
  */
-function CallActions({ series, occ, onDone, focusUpload = false, dropHere = false, dragging = false }: { series: SeriesView; occ: OccurrenceView; onDone: () => Promise<void>; focusUpload?: boolean; dropHere?: boolean; dragging?: boolean }) {
+function useCallRun(occ: OccurrenceView | null, onDone: () => Promise<void>) {
   const [busy, setBusy] = useState<"rerun" | "teams" | null>(null);
-  const up = useTranscriptUpload(series, occ, onDone);
-  // MC-1d: "Upload a transcript" from a meeting's menu lands here with the file button focused (the browser opens a
-  // file picker only from a press, so the person presses it once more).
-  const fileRef = useRef<HTMLInputElement | null>(null);
-  useEffect(() => {
-    if (focusUpload) fileRef.current?.focus();
-  }, [focusUpload]);
-  // MC-1d: Propose again chosen from the meeting's menu runs here, once, where its result shows. MC-2: so does the
-  // setup's Get it from Teams (the same one press).
-  useEffect(() => {
-    if (takeRerun(occ.id)) void rerun();
-    if (takeFetch(occ.id)) void fromTeams();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [occ.id]);
   const [msg, setMsg] = useState<string | null>(null);
-  /** MC-2: one try with my sign-in, for this call only; what came of it in plain words. */
+  /** After a refusal the file is the way on: Teams is no longer the main button. */
   const [refused, setRefused] = useState(false);
   const fromTeams = async () => {
+    if (!occ) return;
     setBusy("teams");
     setMsg(null);
     try {
       const r = await call<{ outcome: string; message: string }>("meeting.call_fetch", { occurrenceId: occ.id });
       setMsg(r.message);
-      // After a refusal the upload is the way on: Teams is no longer the main button.
       setRefused(r.outcome !== "found");
       await onDone();
     } catch (e) {
@@ -1657,6 +1701,7 @@ function CallActions({ series, occ, onDone, focusUpload = false, dropHere = fals
     }
   };
   const rerun = async (ask = true) => {
+    if (!occ) return;
     // It replaces the open proposals, with any words changed in them; the ones done or skipped stay.
     if (ask && occ.open > 0 && !window.confirm(`Propose again? The open proposals are replaced, with any words you changed. The ones done, skipped or failed stay, and the same thing again is left out.`)) return;
     setBusy("rerun");
@@ -1672,71 +1717,109 @@ function CallActions({ series, occ, onDone, focusUpload = false, dropHere = fals
       setBusy(null);
     }
   };
-  const canRerun = occ.hasTranscript && occ.state !== "waiting" && occ.state !== "fetching";
-  const line = up.msg ?? msg;
+  const id = occ?.id ?? null;
+  useEffect(() => {
+    if (id === null) return;
+    if (takeRerun(id)) void rerun();
+    if (takeFetch(id)) void fromTeams();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+  const canRerun = !!occ && occ.hasTranscript && occ.state !== "waiting" && occ.state !== "fetching";
+  return { busy, msg, refused, fromTeams, rerun, canRerun };
+}
+
+type Choice = "teams" | "pocket" | "file" | "later";
+
+/** MC-5: the transcript choices as a segmented control (Add a call's, and a call's page with no transcript). */
+export function ChoiceSeg({ choices, value, onChange }: { choices: readonly Choice[]; value: Choice; onChange: (c: Choice) => void }) {
   return (
-    <>
-      <div className={`mtg-actions${dropHere ? " mtg-drop" : ""}${dropHere && dragging ? " dropping" : ""}`} role="group" aria-label="This call" {...(dropHere ? dropProps(up) : {})}>
-        {canRerun && (
-          <button type="button" className={`mini${occ.state === "failed" ? " primary" : ""}`} disabled={!!busy || up.busy} onClick={() => void rerun()} title="The AI step once more on this call's transcript. It replaces the open proposals; the ones done, skipped or failed stay, and the same thing again is left out.">
-            {busy === "rerun" ? "Proposing…" : CALL_ACTIONS.rerun}
-          </button>
-        )}
-        {series.teams && !occ.hasTranscript && (
-          <button type="button" className={`mini${!refused ? " primary" : ""}`} disabled={!!busy || up.busy} onClick={() => void fromTeams()} title={CALLS_TEXT.sourceTeamsHint}>
-            {busy === "teams" ? "Asking Teams…" : CALL_ACTIONS.fromTeams}
-          </button>
-        )}
-        <label className={`mini file-button${busy || up.busy ? " disabled" : ""}`} title={POCKET_TEXT.takes}>
-          {up.busy ? "Reading…" : CALL_ACTIONS.upload}
-          <input ref={fileRef} type="file" accept={ACCEPT} disabled={!!busy || up.busy} onChange={(e) => (up.pick(e.target.files?.[0]), (e.target.value = ""))} />
-        </label>
-        {dropHere && dragging && <span className="mtg-drop-hint" aria-hidden="true">{occ.hasTranscript ? POCKET_TEXT.dropReplace : POCKET_TEXT.dropHere}</span>}
-        {line && !up.ask && <span className="muted" role="status">{line}</span>}
-      </div>
-      {up.ask && <DateAsk text={up.ask.text} onAnswer={up.answer} />}
-    </>
+    <span className="seg mtg-choice" role="group" aria-label={PAGE_TEXT.transcript} data-transcript-choice="">
+      {choices.map((c) => (
+        <button key={c} type="button" className={`seg-btn${value === c ? " on" : ""}`} aria-pressed={value === c} onClick={() => onChange(c)} data-choice={c}>{PAGE_TEXT.choice[c]}</button>
+      ))}
+    </span>
   );
 }
 
-function UploadBox({ series, occ, onDone, dragging = false, pocketOffered = false }: { series: SeriesView; occ: OccurrenceView; onDone: () => Promise<void>; dragging?: boolean; /** MC-2b: my Pocket recording is offered above: no export tip. */ pocketOffered?: boolean }) {
-  const up = useTranscriptUpload(series, occ, onDone);
-  const [msg, setMsg] = useState<string | null>(null);
-  const none = async () => {
+/** MC-5: A file: one drop area with its words, the file kinds in small type under it. */
+function DropFile({ up, dragging, children }: { up: Upload; dragging: boolean; children?: React.ReactNode }) {
+  const ref = useRef<HTMLInputElement | null>(null);
+  return (
+    <div className={`mtg-drop mtg-dropzone${dragging ? " dropping" : ""}`} {...dropProps(up)} data-drop="">
+      <label className={`mtg-drop-words${up.busy ? " disabled" : ""}`}>
+        {up.busy ? "Reading…" : dragging ? POCKET_TEXT.dropHere : PAGE_TEXT.drop}
+        <input ref={ref} type="file" accept={ACCEPT} disabled={up.busy} onChange={(e) => (up.pick(e.target.files?.[0]), (e.target.value = ""))} />
+      </label>
+      <span className="mtg-drop-kinds">{PAGE_TEXT.kinds}</span>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * MC-5: a call with no transcript shows Add a call's choices instead of the old box: From Teams (a Teams meeting FocusTime
+ * may ask), Pocket recording (when connected: my recordings that fit the call), A file. Pocket not connected: a quiet link.
+ */
+function TranscriptChoices({ series, occ, recs, startRec = null, pocketOn, zone, up, dragging, start, onTeams, teamsBusy, teamsRefused, onDone }: { series: SeriesView; occ: OccurrenceView; recs: readonly ListedRecording[]; startRec?: string | null; pocketOn: boolean | null; zone: string; up: Upload; dragging: boolean; start: "file" | null; onTeams: () => void; teamsBusy: boolean; teamsRefused: boolean; onDone: () => Promise<void> }) {
+  const choices: Choice[] = [...(series.teams ? (["teams"] as const) : []), ...(pocketOn ? (["pocket"] as const) : []), "file"];
+  const first: Choice = start ?? (pocketOn && recs.length ? "pocket" : series.teams ? "teams" : "file");
+  const [c, setC] = useState<Choice>(first);
+  // A hand-added call: my recordings that fit it first, then the others (it takes the chosen one's time).
+  const sorted = useMemo(() => [...recs].sort((a, b) => Number(goesWith(spanOf(b), occ)) - Number(goesWith(spanOf(a), occ)) || b.startAt.localeCompare(a.startAt)), [recs, occ]);
+  const [choice, setChoice] = useState<PocketChoice>(() => firstChoice(sorted.filter((r) => !startRec || r.id === startRec).concat(sorted)));
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    if (dragging) setC("file");
+  }, [dragging]);
+  const chosen = sorted.find((r) => r.id === choice.id) ?? null;
+  const moves = series.call === "hand" && !!chosen && !goesWith(spanOf(chosen), occ);
+  const bring = async () => {
+    setBusy(true);
+    setErr(null);
     try {
-      await call("meeting.no_transcript", { occurrenceId: occ.id });
-      await onDone();
+      const r = await bringPocket(occ.id, moves ? { ...choice, part: "all" } : choice, moves);
+      if (r.ask === "whole") setChoice((x) => ({ ...x, whole: r.length ?? "" }));
+      else if (r.ask === "replace") setChoice((x) => ({ ...x, replace: true }));
+      else await onDone();
     } catch (e) {
-      setMsg(errText(e));
+      setErr(errText(e));
+    } finally {
+      setBusy(false);
     }
   };
-  const line = up.msg ?? msg;
   return (
-    <section className={`mtg-upload mtg-drop${dragging ? " dropping" : ""}`} aria-label="Upload the transcript" {...dropProps(up)}>
-      <h3>{occ.state === "waiting" ? "Have the transcript already?" : "Upload the transcript"}</h3>
-      <p className="muted">
-        {series.call === "chat" ? (
-          `${CALLS_TEXT.uploadChat}${pocketOffered ? "" : ` ${POCKET_TEXT.pocketHow}`}`
-        ) : (
-          <>
-            {series.call ? (series.teams ? "Download it from the meeting's recap in Teams, or ask the organizer to send it." : series.organizer === "other" ? "This call is organized outside Cooptimize, so FocusTime doesn't ask Teams for it. In Teams, open the meeting's recap and download the transcript; if you can't, ask the organizer to send it." : "Download it from the meeting's recap in Teams, or wherever it was recorded.") : series.source === "upload" ? "This call is organized outside Cooptimize, so FocusTime never reads it. In Teams, open the meeting's recap and download the transcript; if you can't, ask the organizer to send it." : "Download it from the meeting's recap in Teams."} {pocketOffered ? "" : `${POCKET_TEXT.pocketHow} `}{series.call === "hand" ? "It's kept 30 days, for you only." : series.call ? "It's kept 30 days, for you and the Cooptimizers on the invite only." : "It's kept 30 days, for this call's reviewers and attendees only."}
-          </>
-        )}
-      </p>
-      <p className="muted">{POCKET_TEXT.takes}</p>
-      {up.ask ? (
-        <DateAsk text={up.ask.text} onAnswer={up.answer} />
-      ) : (
-        <span className="mtg-upload-actions">
-          <label className={`mini primary file-button${up.busy ? " disabled" : ""}`}>
-            {up.busy ? "Reading…" : POCKET_TEXT.choose}
-            <input type="file" accept={ACCEPT} disabled={up.busy} onChange={(e) => (up.pick(e.target.files?.[0]), (e.target.value = ""))} />
-          </label>
-          <span className="muted mtg-drop-or">{dragging ? POCKET_TEXT.dropHere : POCKET_TEXT.orDrop}</span>
-          {occ.state !== "no_transcript" && !series.call && <button type="button" className="mini quiet" onClick={() => void none()}>No transcript this week</button>}
+    <section className="mtg-choices" aria-label={PAGE_TEXT.transcript} data-no-transcript="">
+      <span className="mtg-choices-head">
+        <span className="set-label">{PAGE_TEXT.transcript}</span>
+        <ChoiceSeg choices={choices} value={c} onChange={setC} />
+        {pocketOn === false && <a className="mtg-connect" href="#/settings/connections/pocket">{PAGE_TEXT.connect}</a>}
+      </span>
+      {c === "teams" && (
+        <span className="mtg-choice-body">
+          <button type="button" className={`mini${teamsRefused ? "" : " primary"}`} disabled={teamsBusy} onClick={onTeams} title={CALLS_TEXT.sourceTeamsHint} data-get-teams="">{teamsBusy ? "Asking Teams…" : PAGE_TEXT.getTeams}</button>
         </span>
       )}
-      {line && !up.ask && <p className="muted" role="status">{line}</p>}
+      {c === "pocket" && (
+        <div className="mtg-choice-body" data-pocket-bring="">
+          {recs.length ? (
+            <>
+              <PocketFields recs={sorted} call={moves && chosen ? chosen : occ} zone={zone} value={choice} onChange={setChoice} who="" listed />
+              {moves && chosen && <p className="mtg-run-line" role="note" data-takes-time="">{PAGE_TEXT.takesTime(whenLine(chosen.startAt, chosen.endAt, zone))}</p>}
+              {err && <p className="error-line" role="alert">{err}</p>}
+              <span><button type="button" className="mini primary" disabled={busy} onClick={() => void bring()} data-use-recording="">{busy ? PW.bringing : choice.replace ? PW.replaceYes : PAGE_TEXT.useRecording}</button></span>
+            </>
+          ) : (
+            <p className="muted">{PAGE_TEXT.noRecordings}</p>
+          )}
+        </div>
+      )}
+      {c === "file" && (
+        <DropFile up={up} dragging={dragging}>
+          {up.msg && !up.ask && <p className="muted" role="status">{up.msg}</p>}
+        </DropFile>
+      )}
+      {up.ask && <DateAsk text={up.ask.text} onAnswer={up.answer} />}
     </section>
   );
 }
