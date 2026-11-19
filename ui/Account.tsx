@@ -294,6 +294,8 @@ export function VmProvider({ children, onSettings }: { children: ReactNode; onSe
         if (next) head.push({ id: "checking-next", label: next, run: () => void notify(said) });
         items.unshift(...head);
       }
+      // VM-6: one part unread doesn't hide the rest: the state shows, and this says the auto-shutdown time wasn't read.
+      if (s.scheduleUnread) note.push(s.scheduleUnread);
       if (note.length && s.lastRead) note.push(s.lastRead);
       // VM-2: today's automatic start couldn't sign in (said once; the chip's ! until this menu was opened).
       if (s.autoStart?.signInProblem) items.push({ id: "auto-signin", label: "Auto-start couldn't sign in to Azure", hint: "Allow Azure access", run: consent });
@@ -459,7 +461,7 @@ export function VmChip({ dot = false }: { dot?: boolean } = {}) {
   // VM-3: today's start left it off: the reason in the title and a mark until the menu is opened.
   const leftOff = status.autoStart?.leftOff ?? null;
   const leftNote = !!leftOff && !leftOff.seen;
-  const extra = [signInNote ? "Auto-start couldn't sign in to Azure: open this menu and choose Allow Azure access" : status.needsConsent ? "FocusTime needs your OK to use Azure: open this menu and choose Allow Azure access" : status.problem ? status.problem.text.replace(/\.$/, "") : status.error?.message, status.checking && ago ? `Last read ${ago}` : null, leftOff && leftOff.reason !== "sign_in" ? leftOff.text.replace(/\.$/, "") : null].filter(Boolean).join(". ");
+  const extra = [signInNote ? "Auto-start couldn't sign in to Azure: open this menu and choose Allow Azure access" : status.needsConsent ? "FocusTime needs your OK to use Azure: open this menu and choose Allow Azure access" : status.problem ? status.problem.text.replace(/\.$/, "") : status.scheduleUnread ? null : status.error?.message, status.scheduleUnread && !status.checking ? status.scheduleUnread.replace(/\.$/, "") : null, status.checking && ago ? `Last read ${ago}` : null, leftOff && leftOff.reason !== "sign_in" ? leftOff.text.replace(/\.$/, "") : null].filter(Boolean).join(". ");
   return (
     <button
       type="button"

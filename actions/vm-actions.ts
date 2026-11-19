@@ -12,7 +12,7 @@ import { localToday } from "../week/dates.ts";
 import type { IsoDate } from "../week/types.ts";
 import { AuthFailure } from "../sources/oauth/oauth.ts";
 import { AzureError, parseVmId, sameVm, type AzureClient, type Poll, type VmRef } from "../sources/azure/client.ts";
-import { canStart, canStop, CHECK_AGAIN_MS, CHECK_LATER_MS, CHECKING, chipOf, CHIP_LABEL, chipText, morningPrompt, PROBLEM_AFTER_MS, lastReadText, READ_PROBLEM, readProblemOf, reached, refreshMs, shutdownFrom, shutdownLabel, type PowerState, type ReadProblem, type Shutdown, type VmOp, type VmTransition } from "../plan/vm.ts";
+import { canStart, canStop, CHECK_AGAIN_MS, CHECK_LATER_MS, CHECKING, chipOf, CHIP_LABEL, chipText, morningPrompt, PROBLEM_AFTER_MS, lastReadText, READ_PROBLEM, readProblemOf, reached, SCHEDULE_UNREAD, refreshMs, shutdownFrom, shutdownLabel, type PowerState, type ReadProblem, type Shutdown, type VmOp, type VmTransition } from "../plan/vm.ts";
 import { autoStartEnvAllowed, autoStartStateOf, clock, dayReason, nextAutoStart, OUTCOMES, outcomeText, outcomeToday, plannedAt, skipText, stopEndsDays, withoutSkip, withSkip, workingWeekdays, type AutoStartState } from "../plan/vm-autostart.ts";
 import type { PlanStore } from "../store/plan-store.ts";
 import { storedIdentity, type MicrosoftAccount } from "./account.ts";
@@ -336,7 +336,7 @@ async function status(ctx: VmContext, cfg: AppConfig | null, today: IsoDate, fre
     return {
       ...base, ...told, chip, label: CHIP_LABEL[chip], text: chipText(chip, m.schedule, tz, today), power: m.power, transition: live ? { op: live.op, since: live.since } : null, canStart: canStart(chip), canStop: canStop(chip),
       schedule: m.schedule && label ? { label, time: m.schedule.time, status: m.schedule.status, timeZoneId: m.schedule.timeZoneId } : null,
-      noShutdown: !m.schedule && !m.scheduleError, prompt: false, readAt: new Date(m.at).toISOString(), lastRead: lastReadText(new Date(m.at).toISOString(), tz, today), autoStart,
+      noShutdown: !m.schedule && !m.scheduleError, scheduleUnread: m.scheduleError ? SCHEDULE_UNREAD : null, prompt: false, readAt: new Date(m.at).toISOString(), lastRead: lastReadText(new Date(m.at).toISOString(), tz, today), autoStart,
     };
   }
   m = m!;
@@ -354,7 +354,7 @@ async function status(ctx: VmContext, cfg: AppConfig | null, today: IsoDate, fre
     noShutdown: !m.schedule && !m.scheduleError,
     // VM-6: a refused auto-shutdown read doesn't hide the state: the state shows, and the menu says the time couldn't be
     // read (before, only a 403 said anything, as the error, and any other failure said nothing).
-   
+    scheduleUnread: m.scheduleError ? SCHEDULE_UNREAD : null,
     prompt, refreshMs: refreshMs(chip), error: m.scheduleError?.kind === "forbidden" ? m.scheduleError : null, readAt: new Date(m.at).toISOString(), lastRead: lastReadText(new Date(m.at).toISOString(), tz, today), checking: null, problem: null,
     autoStart: cfg ? await autoStartView(ctx, cfg, chip).catch(() => null) : null,
   };
