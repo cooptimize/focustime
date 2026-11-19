@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { anOccurrenceView, anOtherCall, aSeriesView, ZONE } from "../test/builders/index.ts";
 import { pocketRows } from "./call-list-pocket.ts";
-import { callClientChoices, callRows, chipClients, closedAtOf, closedLine, closedList, dayHeading, filterCounts, firstToOpen, hiddenList, hiddenMissing, hideKeyOf, markShort, needsAction, needsNote, openList, outcomeOfCall, shortWhen, weekOf } from "./call-list.ts";
+import { callClientChoices, dismissOf, callRows, chipClients, closedAtOf, closedLine, closedList, dayHeading, filterCounts, firstToOpen, hiddenList, hiddenMissing, hideKeyOf, markShort, needsAction, needsNote, openList, outcomeOfCall, shortWhen, weekOf } from "./call-list.ts";
 import { CALL_STATE } from "./call-words.ts";
 
 // Thursday Nov 5: This week is Nov 2 to 8, Last week Oct 26 to Nov 1.
@@ -267,5 +267,20 @@ describe("MC-6: words for chat calls and Pocket recordings", () => {
     expect(CLOSE_TEXT.hidden(1)).toBe("1 call hidden");
     expect(CLOSE_TEXT.hidden(3)).toBe("3 calls hidden");
     expect(CLOSE_TEXT.hiddenGone(2)).toBe("2 you hid aren't in the last 14 days.");
+  });
+});
+
+describe("MC-6: which rows have Dismiss", () => {
+  const base = { review: true, left: null, pocket: [], occurrenceId: 7, state: { label: CALL_STATE.upload, needsMe: true } } as const;
+  it("a kept call I review whose one button is Add transcript or Use Pocket recording: Remove when I added it, else Close", () => {
+    expect(dismissOf({ ...base, kept: "hand" })).toBe("remove");
+    expect(dismissOf({ ...base, kept: "call" })).toBe("close");
+    expect(dismissOf({ ...base, kept: "call", state: { label: "Ready", needsMe: true }, pocket: [{ id: "r1" } as never] })).toBe("close");
+  });
+  it("never a registered client call, a call I only look at, one with proposals left or a calendar call nobody kept", () => {
+    expect(dismissOf({ ...base })).toBeNull();
+    expect(dismissOf({ ...base, kept: "call", review: false })).toBeNull();
+    expect(dismissOf({ ...base, kept: "call", left: { open: 2, all: 3 } })).toBeNull();
+    expect(dismissOf({ ...base, kept: "call", occurrenceId: null })).toBeNull();
   });
 });

@@ -52,6 +52,9 @@
    Skip all is in its own header, said once). */
 .need-row .calls-skip { display: none; min-height: 0; padding: 0 4px; font-size: var(--fs-2); }
 .need-row:not(.open):is(:hover, :focus-within) .calls-skip { display: inline-flex; }
+/* MC-6: Dismiss, the same: on a hovered or focused row (the open call's is in its menu), always on touch. */
+.need-row .calls-dismiss { display: none; min-height: 0; padding: 0 4px; font-size: var(--fs-2); }
+.need-row:not(.open):is(:hover, :focus-within) .calls-dismiss, .app.phone .need-row .calls-dismiss { display: inline-flex; }
 
 /* A week's rows: one line each: when, the square, the name, the client, the mark and Hide (on hover or focus). */
 .calls-row.one { grid-template-columns: [tick] auto [time] auto [sq] auto [main] minmax(0, 1fr) [end] auto; padding: 3px 8px; border-left: 1px solid transparent; }
@@ -217,3 +220,5 @@
 
 /* MC-6: a recording in Add a call that already has its own row in the list. */
 .mtg-in-list { margin-left: 8px; padding: 0 6px; border: 1px solid var(--border); border-radius: 999px; font-size: var(--fs-1); font-weight: 500; color: var(--muted); }
+@media (hover: none) { .need-row .calls-dismiss { display: inline-flex; } }
+.app.phone .need-row .calls-dismiss { min-height: 44px; padding: 0 8px; }

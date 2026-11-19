@@ -330,4 +330,71 @@ describe.skipIf(!CHROMIUM)("MC-6: Calls polish (browser, demo mode)", () => {
     await expect.poll(() => add.count(), { timeout: W }).toBe(0);
     await expect.poll(() => page.locator("[data-calls-list] li.open .calls-name").first().textContent(), { timeout: W }).toBe(name);
   }, T);
+
+  describe("20: Dismiss, every kept call with no transcript has a way out in one press", () => {
+    /** Adds a call by hand (no transcript) and returns its row in Needs you. */
+    const handCall = async (page: Page, name: string) => {
+      const { occurrenceId } = (await call(page, "meeting.call_add", { name, date: "2026-11-04", start: "10:00", minutes: 30, clientKey: "northwind" })).data;
+      await calls(page);
+      return { id: occurrenceId as number, row: page.locator("[data-section='needs'] li[data-row]").filter({ has: page.locator(".calls-name", { hasText: name }) }) };
+    };
+    const tabCount = (page: Page) => page.locator(".topbar .view-tab").filter({ hasText: /^Calls/ }).locator(".count").first().textContent().catch(() => "0");
+
+    it("a call I added: Dismiss on hover removes it at once, the tab's count drops, Undo puts it back", async () => {
+      const { page, errors } = await open();
+      const { row } = await handCall(page, "Pallet label huddle");
+      // Another call open beside the list (the open call's Dismiss is in its menu).
+      await page.locator("[data-section='needs'] [data-call-row]").filter({ hasText: "Northwind weekly status call" }).click();
+      await page.getByRole("heading", { level: 2, name: "Northwind weekly status call" }).waitFor({ timeout: W });
+      await expect.poll(() => row.count(), { timeout: W }).toBe(1);
+      await expect(row.getAttribute("class")).resolves.not.toMatch(/\bopen\b/);
+      await expect(row.locator("[data-call-act='upload']").textContent()).resolves.toBe("Add transcript");
+      const btn = row.locator("[data-call-act='dismiss']");
+      await page.mouse.move(5, 890);
+      await expect(btn.isVisible()).resolves.toBe(false);
+      await row.hover();
+      await expect.poll(() => btn.isVisible()).toBe(true);
+      await expect(btn.getAttribute("data-dismiss")).resolves.toBe("remove");
+      const before = Number(await tabCount(page));
+      await btn.click();
+      await expect.poll(() => row.count(), { timeout: W }).toBe(0);
+      await expect.poll(async () => Number(await tabCount(page)), { timeout: W }).toBe(before - 1);
+      const toast = page.locator(".undo-toast");
+      await expect.poll(() => toast.textContent(), { timeout: W }).toContain("Removed: Pallet label huddle");
+      await expect(toast.count()).resolves.toBe(1);
+      await toast.getByRole("button", { name: "Undo" }).click();
+      await expect.poll(() => row.count(), { timeout: W }).toBe(1);
+      expect(errors).toEqual([]);
+    }, T);
+
+    it("any other kept call: Dismiss closes it with no transcript, into Closed; it's in the call's menu too", async () => {
+      const { page } = await open();
+      await calls(page);
+      // A calendar call kept with no transcript (Add transcript, or Use Pocket recording when one goes with it).
+      const harbor = (await call(page, "meeting.calls", {})).data.calls.find((c: { name: string }) => c.name === "Harbor sprint planning");
+      const { occurrenceId } = (await call(page, "meeting.call_start", { key: harbor.key, startAt: harbor.startAt, endAt: harbor.endAt, clientKey: "harbor" })).data;
+      await calls(page);
+      const row = page.locator("[data-section='needs'] li[data-row]").filter({ has: page.locator(".calls-name", { hasText: "Harbor sprint planning" }) });
+      await expect.poll(() => row.count(), { timeout: W }).toBe(1);
+      await expect(row.locator("[data-call-act='upload'], [data-call-act='pocket']").count()).resolves.toBe(1);
+      await expect(row.locator("[data-call-act='dismiss']").getAttribute("data-dismiss")).resolves.toBe("close");
+      // From the call's own menu.
+      await go(page, `#/calls/${occurrenceId}`);
+      await page.getByRole("heading", { level: 2, name: "Harbor sprint planning" }).waitFor({ timeout: W });
+      await page.locator(".calls-beside").getByRole("button", { name: /^More/ }).first().click();
+      await page.getByRole("menuitem", { name: "Dismiss" }).click();
+      await expect.poll(() => page.locator(".undo-toast").textContent(), { timeout: W }).toContain("Closed with no transcript: Harbor sprint planning");
+      await expect.poll(() => row.count(), { timeout: W }).toBe(0);
+      await go(page, "#/calls?show=closed");
+      await expect.poll(() => page.locator("[data-section='closed'] .calls-name", { hasText: "Harbor sprint planning" }).count(), { timeout: W }).toBe(1);
+    }, T);
+
+    it("at 390 Dismiss is always on a row, at least 44 px", async () => {
+      const page = await phone();
+      await handCall(page, "Phone huddle");
+      const btn = page.locator("[data-section='needs'] li[data-row]").filter({ hasText: "Phone huddle" }).locator("[data-call-act='dismiss']");
+      await expect.poll(() => btn.isVisible(), { timeout: W }).toBe(true);
+      expect((await btn.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    }, T);
+  });
 });

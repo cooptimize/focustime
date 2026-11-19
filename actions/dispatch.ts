@@ -2795,6 +2795,10 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "meeting.call_unhide":
     case "meeting.skip_all":
     case "meeting.unskip_all":
+    case "meeting.call_remove":
+    case "meeting.call_restore":
+    case "meeting.call_close_none":
+    case "meeting.call_reopen":
       return meetingAction(await meetingContext(ctx), action as MeetingAction, req.input);
     default: {
       const unhandled: never = action;

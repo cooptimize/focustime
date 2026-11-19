@@ -21,7 +21,7 @@ import type { AppConfig } from "../config/schema.ts";
 import type { LogRecord } from "../log/logger.ts";
 import { fromPocket, unnamedSpeakers, attendeeIds, canConfirm, isCall, mayRead, commentLevelOk, defaultReviewers, detectSource, joinKey, lastReadLine, MEETING_ROLES, newOnly, nextRetry, nudgesFor, outcomeOf, parseOutcome, proposalOrder, retryable, ROLE_LABEL, toReview, type MeetingRole, type MeetingSeries, type Occurrence, type Proposal, type ProposalBody, type TranscriptKind, type TranscriptSource } from "../plan/meetings.ts";
 import { AnswersError, parseAnswers, type Answers } from "../plan/three-questions.ts";
-import { callWriteWords, CALL_LIST, CALL_ROW, FETCH_WORDS, fetchFound, type FetchOutcome, type ProposalCheck, type RequiredField, CHAT_OTHER_CLIENT } from "../plan/call-words.ts";
+import { callWriteWords, CALL_LIST, CALL_ROW, FETCH_WORDS, fetchFound, type FetchOutcome, type ProposalCheck, type RequiredField, CHAT_OTHER_CLIENT, DISMISS_TEXT } from "../plan/call-words.ts";
 import { inWindow, isOtherCall, OTHER_CALL_DAYS, otherCallsWindow, type CalendarMeeting } from "../plan/calls.ts";
 import type { PressGrants } from "./call-press.ts";
 import { CHECK_CAP, type ExistsGrants, type ExistsHold, type HeldAnswer } from "./call-exists.ts";
@@ -53,7 +53,7 @@ import { closedAtOf, outcomeOfCall } from "../plan/call-list.ts";
 export type { MeetingNudgeView, OccurrenceView, OtherCallView, SeriesView } from "../plan/meeting-views.ts";
 import type { ActionResponse } from "./types.ts";
 
-export const MEETING_ACTIONS = ["meeting.list", "meeting.candidates", "meeting.register", "meeting.update", "meeting.remove", "meeting.mine", "meeting.review", "meeting.edit", "meeting.no_transcript", "meeting.keep", "meeting.unkeep", "meeting.rerun", "meeting.check_now", "meeting.transcript", "meeting.calls", "meeting.call_start", "meeting.call_fetch", "meeting.call_add", "meeting.pocket_list", "meeting.pocket_bring", "meeting.pocket_add", "meeting.pocket_address_add", "meeting.pocket_address_remove", "meeting.calls_check", "meeting.call_hides", "meeting.call_hide", "meeting.call_unhide", "meeting.skip_all", "meeting.unskip_all"] as const;
+export const MEETING_ACTIONS = ["meeting.list", "meeting.candidates", "meeting.register", "meeting.update", "meeting.remove", "meeting.mine", "meeting.review", "meeting.edit", "meeting.no_transcript", "meeting.keep", "meeting.unkeep", "meeting.rerun", "meeting.check_now", "meeting.transcript", "meeting.calls", "meeting.call_start", "meeting.call_fetch", "meeting.call_add", "meeting.pocket_list", "meeting.pocket_bring", "meeting.pocket_add", "meeting.pocket_address_add", "meeting.pocket_address_remove", "meeting.calls_check", "meeting.call_hides", "meeting.call_hide", "meeting.call_unhide", "meeting.skip_all", "meeting.unskip_all", "meeting.call_remove", "meeting.call_restore", "meeting.call_close_none", "meeting.call_reopen"] as const;
 export type MeetingAction = (typeof MEETING_ACTIONS)[number];
 
 /** A FocusTime user as registration matches them: id, name and every address that is them. */
@@ -413,6 +413,24 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
       }
       // MC-4: Skip all and close (one call or several I review), and its Undo. Nothing is written to DevOps or kept as a promise.
       case "meeting.skip_all": return await skipAll(store, me, input, ctx);
+      case "meeting.call_remove":
+      case "meeting.call_close_none": return await dismissCall(ctx, store, me, input, action === "meeting.call_remove" ? "remove" : "close");
+      case "meeting.call_restore": {
+        const o = obj(input, ["seriesId"]);
+        if (!(await store.restoreHandCall(id(o.seriesId, "seriesId"), me))) return bad(DISMISS_TEXT.notMine, 403);
+        ctx.log({ source: "plan", op: "meeting_call_restored", count: 1 });
+        return { ok: true, data: { restored: true } };
+      }
+      case "meeting.call_reopen": {
+        const o = obj(input, ["occurrenceId", "state"]);
+        const state = o.state === "needs_upload" || o.state === "waiting" ? o.state : null;
+        if (!state) throw new Invalid("state must be needs_upload or waiting");
+        const { o: occ, series } = await store.viewer(me).reviewer(id(o.occurrenceId, "occurrenceId"));
+        if (!isCall(series) || occ.state !== "no_transcript" || occ.dismissedBy?.toLowerCase() !== me.toLowerCase() || occ.transcriptAt) return bad(DISMISS_TEXT.notClosed, 409);
+        await store.viewer(me).updateOccurrence(occ.id, { state, dismissedBy: null });
+        ctx.log({ source: "plan", op: "meeting_call_reopened", count: 1 });
+        return { ok: true, data: { reopened: true } };
+      }
       case "meeting.unskip_all": return await unskipAll(store, me, input, ctx);
       // MC-2b, PK-4: only from Calls' opening, its Refresh, Check Pocket again, and Continue on a setup.
       case "meeting.pocket_list": {
@@ -722,6 +740,30 @@ type Skipped = { id: number; was: "open" | "failed"; skippedAt: string; by: stri
  * for its fix) on calls I review is skipped, and each call closes. Nothing goes to DevOps, no promise is kept, and the
  * answer says what each was, for Undo.
  */
+/**
+ * MC-6: Dismiss on a kept call with no transcript (any reviewer of it). Remove: a call I added by hand, by me only, goes
+ * (removed_at; it exists nowhere else). Close: any other kept call closes as No transcript (in Closed until a transcript
+ * comes: the pass sets it ready again). Both refuse a call with a transcript (Skip all and close closes that one).
+ * Nothing is read, sent or written anywhere but this call's own row.
+ */
+async function dismissCall(ctx: MeetingContext, store: MeetingStore, me: string, input: unknown, kind: "remove" | "close"): Promise<ActionResponse> {
+  const o = obj(input, ["occurrenceId"]);
+  const { o: occ, series } = await store.viewer(me).reviewer(id(o.occurrenceId, "occurrenceId"));
+  if (!isCall(series)) return bad(DISMISS_TEXT.notACall, 409);
+  if (occ.transcriptAt || (await store.transcript(occ.id))) return bad(DISMISS_TEXT.hasTranscript, 409);
+  if (kind === "remove") {
+    if (series.callKind !== "hand" || series.registrantId.toLowerCase() !== me.toLowerCase()) return bad(DISMISS_TEXT.notMine, 403);
+    const seriesId = await store.removeHandCall(occ.id, me);
+    if (seriesId === null) return bad(DISMISS_TEXT.notMine, 403);
+    ctx.log({ source: "plan", op: "meeting_call_removed", count: 1 });
+    return { ok: true, data: { removed: true, seriesId, message: DISMISS_TEXT.removed(series.name) } };
+  }
+  const prior = occ.state === "waiting" ? "waiting" : "needs_upload";
+  if (occ.state !== "no_transcript") await store.viewer(me).updateOccurrence(occ.id, { state: "no_transcript", dismissedBy: me, nextCheckAt: null });
+  ctx.log({ source: "plan", op: "meeting_call_closed_none", count: 1 });
+  return { ok: true, data: { closed: true, prior, message: DISMISS_TEXT.closed(series.name) } };
+}
+
 async function skipAll(store: MeetingStore, me: string, input: unknown, ctx: MeetingContext): Promise<ActionResponse> {
   const o = obj(input, ["occurrenceIds"]);
   if (!Array.isArray(o.occurrenceIds) || !o.occurrenceIds.length || o.occurrenceIds.length > 30) throw new Invalid("Close 1 to 30 calls at a time");

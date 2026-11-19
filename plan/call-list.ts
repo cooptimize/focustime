@@ -74,6 +74,8 @@ export type CallRow = {
   seriesKey: string | null;
   /** MC-4: the client FocusTime suggests for a calendar call (the person decides), or null: "Which client?". */
   suggested: string | null;
+  /** MC-6: a call kept in Calls (not a registered client call): "hand" when I added it by hand, else "call". */
+  kept?: "hand" | "call";
 };
 
 /** MC-4: my hides: single meetings by their calendar key, and series ("every one") by their series key. */
@@ -152,6 +154,7 @@ export function callRows(x: CallListInput): CallRow[] {
       bucket: closed ? "closed" : "open", place: state.needsMe ? "needs" : "week", review: s.mine.review, pocket: [], recording: null,
       mark: null, check: null, left: o.proposals ? { open: o.open, all: o.proposals } : null,
       closed: closed ? { at: o.closedAt ?? null, done: o.done ?? null, noTranscript: o.state === "no_transcript" } : null, seriesKey: null, suggested: null,
+      ...(s.call ? { kept: s.call === "hand" ? ("hand" as const) : ("call" as const) } : {}),
     };
     all.push(row);
     if (s.mine.review && !o.hasTranscript && o.state !== "reviewed") takes.add(row);
@@ -347,6 +350,17 @@ export function chipClients(rows: readonly CallRow[], nameOf: (key: string) => s
  * Use Pocket recording (my recording fits), or Try again (a pass failed). Null: nothing to press (waiting on someone else).
  */
 export type NeedsAction = { kind: "left"; text: string } | { kind: "upload" | "pocket" | "retry"; text: string } | null;
+/**
+ * MC-6: Dismiss, on a row I review that FocusTime keeps as a call (not a registered client call) whose one button is Add
+ * transcript or Use Pocket recording: Remove for a call I added by hand, else Close with no transcript.
+ */
+export function dismissOf(r: Pick<CallRow, "kept" | "review" | "left" | "state" | "pocket" | "occurrenceId">): "remove" | "close" | null {
+  if (!r.kept || !r.review || r.occurrenceId === null) return null;
+  const a = needsAction(r);
+  if (a?.kind !== "upload" && a?.kind !== "pocket") return null;
+  return r.kept === "hand" ? "remove" : "close";
+}
+
 export function needsAction(r: Pick<CallRow, "left" | "state" | "pocket">): NeedsAction {
   if (r.left?.open) return { kind: "left", text: LIST_TEXT.left(r.left.open) };
   if (r.state.label === CALL_STATE.aiFailed) return { kind: "retry", text: LIST_TEXT.tryAgain };

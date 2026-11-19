@@ -303,6 +303,23 @@ export const FETCH_WORDS: Record<Exclude<FetchOutcome, "found">, string> = {
   not_in_chat: "FocusTime shows a chat's calls to the Cooptimizers in that chat who follow its client. Upload the transcript with Add a call instead.",
 };
 /** MC-6: the refusal when a call started in a client's chat is given another client. */
+/**
+ * MC-6: Dismiss, a kept call's way out when it has no transcript (Add transcript or Use Pocket recording): a call I
+ * added by hand is removed (it exists nowhere else); any other closes as No transcript, in Closed until a transcript
+ * comes. One Undo message says which.
+ */
+export const DISMISS_TEXT = {
+  dismiss: "Dismiss",
+  hintRemove: "Remove this call: you added it, and it's nowhere else",
+  hintClose: "Close it with no transcript. Adding one later opens it again",
+  removed: (name: string) => `Removed: ${name}`,
+  closed: (name: string) => `Closed with no transcript: ${name}`,
+  hasTranscript: "This call has a transcript. Skip all and close closes it.",
+  notMine: "Only a call you added by hand can be removed, and only by you.",
+  notACall: "Dismiss is for a call in Calls. A registered client call says No transcript this week from its menu.",
+  notClosed: "This call isn't closed with no transcript now, so there's nothing to undo.",
+} as const;
+
 export const CHAT_OTHER_CLIENT = "A call started in a client's chat is about that client, or Internal. Choose one of those.";
 /** MC-2c: once, above the proposals and the Transcript, when Teams gave a chat call's transcript without speaker names. */
 export const CHAT_NO_SPEAKERS = "Teams gave this transcript without speaker names.";

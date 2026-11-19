@@ -5,8 +5,8 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from
 import { clientColor } from "../labels.ts";
 import { Icon } from "../icons.tsx";
 import { lengthLabel } from "../../plan/calls.ts";
-import { CALL_LIST, CLOSE_TEXT, LIST_TEXT, MARK_TEXT } from "../../plan/call-words.ts";
-import { callClientChoices, closedLine, markShort, markWords, needsAction, needsNote, shortWhen, type CallMarkKind, type CallRow, type SeriesEntry } from "../../plan/call-list.ts";
+import { CALL_LIST, CLOSE_TEXT, DISMISS_TEXT, LIST_TEXT, MARK_TEXT } from "../../plan/call-words.ts";
+import { callClientChoices, closedLine, dismissOf, markShort, markWords, needsAction, needsNote, shortWhen, type CallMarkKind, type CallRow, type SeriesEntry } from "../../plan/call-list.ts";
 import type { CaptureClient } from "../../plan/capture.ts";
 
 const timeOf = (iso: string, zone: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: zone });
@@ -86,10 +86,11 @@ const Square = ({ color }: { color: string | null }) => <span className={`swatch
  * once something is decided or the short amber note; Skip all is a quiet button there on the selected, hovered or focused
  * row (not on the phone: there it is only in the call's header). A click anywhere on the row or Enter opens the call.
  */
-export function NeedsRow({ r, open, zone, today, colors, selecting, ticked, onTick, onOpen, onAction, onSkipAll, phone = false, refused = false }: RowActs & { r: CallRow; onAction: (kind: "upload" | "pocket" | "retry") => void; onSkipAll: () => void; phone?: boolean; /** MC-6: Teams refused this call's transcript. */ refused?: boolean }) {
+export function NeedsRow({ r, open, zone, today, colors, selecting, ticked, onTick, onOpen, onAction, onSkipAll, onDismiss, phone = false, refused = false }: RowActs & { r: CallRow; onAction: (kind: "upload" | "pocket" | "retry") => void; onSkipAll: () => void; /** MC-6: Dismiss, on a kept call with no transcript. */ onDismiss?: () => void; phone?: boolean; /** MC-6: Teams refused this call's transcript. */ refused?: boolean }) {
   const color = r.clientKey ? clientColor(r.clientKey, colors) : null;
   const act = needsAction(r);
   const note = needsNote(r, today);
+  const dismiss = dismissOf(r);
   return (
     <li className={`calls-row need-row${open ? " open" : ""}${selecting ? " selecting" : ""}`} style={color ? ({ "--c": color } as CSSProperties) : undefined} data-row={r.key}>
       {selecting && (r.left?.open ? <Tick on={ticked} name={r.name} onTick={onTick} /> : <span className="calls-tick" aria-hidden="true" />)}
@@ -103,6 +104,7 @@ export function NeedsRow({ r, open, zone, today, colors, selecting, ticked, onTi
       <span className="calls-meta">{shortWhen(r.startAt, r.day, today, zone)} · {r.clientName ?? CALL_LIST.noClient}{!act && !r.state.needsMe ? <span data-call-state=""> · {r.state.label}</span> : null}</span>
       <span className="calls-row-end two">
         {r.left?.open && !phone ? <button type="button" className="mini quiet calls-skip" onClick={onSkipAll} data-call-act="skip-all">{r.left.open === r.left.all ? LIST_TEXT.skipAll : LIST_TEXT.skipLast(r.left.open)}</button> : null}
+        {dismiss && onDismiss ? <button type="button" className="mini quiet calls-dismiss" onClick={onDismiss} title={dismiss === "remove" ? DISMISS_TEXT.hintRemove : DISMISS_TEXT.hintClose} aria-label={`${DISMISS_TEXT.dismiss}: ${r.name}`} data-call-act="dismiss" data-dismiss={dismiss}>{DISMISS_TEXT.dismiss}</button> : null}
         {refused && act?.kind === "upload" ? <span className="calls-amber" data-call-refused="">{LIST_TEXT.teamsRefused}</span> : null}
         {note && "amber" in note ? <span className="calls-amber" data-call-note="">{note.amber}</span> : note ? <Bar done={note.done} /> : null}
       </span>

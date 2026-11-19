@@ -203,6 +203,27 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
         return (await seriesById(id))!;
       });
     },
+    /**
+     * MC-6: Dismiss on a call I added by hand with no transcript: it is removed (it exists nowhere else). Only its adder,
+     * only a hand-added call, only while it has no transcript; the series' id, or null when it is anything else.
+     */
+    async removeHandCall(occurrenceId: number, adder: string): Promise<number | null> {
+      return db.tx(async () => {
+        const o = await db.get("SELECT o.series_id, o.transcript_at, s.registrant_id FROM meeting_occurrences o JOIN meeting_series s ON s.id = o.series_id WHERE o.id = ? AND s.call_kind = 'hand' AND s.removed_at IS NULL", [occurrenceId]);
+        if (!o || o.transcript_at || String(o.registrant_id ?? "").toLowerCase() !== adder.toLowerCase()) return null;
+        await db.run("UPDATE meeting_series SET removed_at = ?, updated_at = ? WHERE id = ? AND call_kind = 'hand' AND removed_at IS NULL", [stamp(), stamp(), Number(o.series_id)]);
+        return Number(o.series_id);
+      });
+    },
+    /** MC-6: Dismiss's Undo on a call I added by hand: back as it was, for its adder only. */
+    async restoreHandCall(seriesId: number, adder: string): Promise<boolean> {
+      return db.tx(async () => {
+        const s = await db.get("SELECT registrant_id FROM meeting_series WHERE id = ? AND call_kind = 'hand' AND removed_at IS NOT NULL", [seriesId]);
+        if (!s || String(s.registrant_id ?? "").toLowerCase() !== adder.toLowerCase()) return false;
+        await db.run("UPDATE meeting_series SET removed_at = NULL, updated_at = ? WHERE id = ? AND call_kind = 'hand'", [stamp(), seriesId]);
+        return true;
+      });
+    },
     async removeSeries(id: number): Promise<void> {
       await db.tx(async () => void (await db.run(`UPDATE meeting_series SET removed_at = ?, updated_at = ? WHERE id = ? AND removed_at IS NULL AND ${REGISTERED}`, [stamp(), stamp(), id])));
     },
