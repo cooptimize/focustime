@@ -399,3 +399,17 @@ The rule for words: a fact is on screen once; a state that is an action is the b
 | Transcript choices | Add a call and a call with no transcript | the segmented control (`seg`), then for Pocket recording a list of radio cards, for A file a dashed drop area with the kinds in `--fs-1` under it |
 
 On the phone every control on the list's rows, the call's header, the Show row and a folded proposal is at least 44 px; the call's header is one row (Back as an icon, the view switch, Skip all with short words, the menu) over the title and its line.
+
+## 14. Status: three states a line can be in (ST-1, Nov 19)
+
+Every line under a Status feature is in one of three states, named the same everywhere, and told apart by shape as well as color, so they read with color off and in either theme:
+
+| State | Means | Drawn | Words |
+|---|---|---|---|
+| On the report | in DevOps now; Monday's report shows it | a plain bullet, "· author, day" after it ("You" on mine in Write) (the full time on hover) | "On Monday's report" is its part's label |
+| Ready to push | mine, written or added, not in DevOps yet | a 3 px solid left edge in `--watch` on a 7% `--watch` wash | "Ready to push" in `--watch`, 600 |
+| Suggested | written for me; nothing happens until Add | a 1 px dashed box in `--accent`, no fill | "SUGGESTED" as a section label in `--accent` |
+
+Why new parts: none of the app's rows said "this isn't real yet" in two degrees. The left edge is the app's mark for a row needing attention (the watch color, as a selected or amber row), and a dashed outline is already the app's "not committed" look (a dashed Catch-up column, a dashed drop area), so Suggested reads as the less real of the two. The key under the header draws the three marks small (a 6 px dot, a 14 px edge, a 14 px dashed square) with their names and a few words each. Row actions (Edit, Delete, Add, Dismiss, Remove) are small quiet buttons; links only for what opens more (Based on, See last week's lines, Show them). Push to DevOps is the bar's main button, as on Calls' bar (`mini primary`).
+
+A feature's two parts are labelled with section labels; "Not on it yet" sits on `--sunken` under a 1 px dashed rule in `--border-strong`, so the line between what Monday's email says and what it doesn't is drawn once per feature. The Push bar is the ticked-rows bar (`bl-bulk`) at the foot, shown only while a line is Ready to push. On the phone every control in these parts is at least 44 px.

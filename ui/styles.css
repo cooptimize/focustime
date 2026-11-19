@@ -5185,6 +5185,68 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .app.phone .status-view .st-feature { padding: 6px 4px; }
 .app.phone .status-view .st-needs { padding: 6px; }
 
+/* ST-1: three states, two labelled parts per feature, the Show row, the key and the one Push bar at the foot.
+   The states differ in shape as well as color: On the report a bullet, Ready to push a solid amber edge, Suggested a
+   dashed blue box. */
+.st-show { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; max-width: 1100px; }
+.st-show-label { font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+.st-show-chips { display: flex; gap: 6px; min-width: 0; }
+.st-show .ib4-chip { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding-top: 0; padding-bottom: 0; }
+.st-show .seg-count { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.st-updated { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: var(--fs-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.st-key { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: var(--fs-2); max-width: 1100px; }
+.st-key-item { display: inline-flex; align-items: center; gap: 6px; }
+.st-key-item strong { font-weight: 500; }
+.st-key-mark { display: inline-block; flex: none; }
+.st-key-item.st-state-on_report .st-key-mark { width: 6px; height: 6px; margin: 0 4px; border-radius: 50%; background: var(--text); }
+.st-key-item.st-state-ready .st-key-mark { width: 14px; height: 14px; border-left: 3px solid var(--watch); background: color-mix(in oklab, var(--watch) 10%, transparent); }
+.st-key-item.st-state-suggested .st-key-mark { width: 14px; height: 14px; border: 1px dashed var(--accent); border-radius: 3px; }
+.st-report-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: var(--fs-2); }
+.st-client-head { justify-content: flex-start; flex-wrap: wrap; }
+.st-client-count { font-size: var(--fs-2); font-variant-numeric: tabular-nums; }
+.st-client-acts { display: inline-flex; flex-wrap: wrap; gap: 6px; margin-left: 8px; }
+.st-last-link, .st-basis { font-size: var(--fs-2); color: var(--text-muted); }
+.st-part { display: grid; gap: 4px; }
+.st-part-label { margin: 0; font-size: var(--fs-1); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+.st-part-count { text-transform: none; letter-spacing: 0; font-weight: 500; }
+.st-notyet { margin-top: 2px; padding: 8px 10px; border-top: 1px dashed var(--border-strong); border-radius: 0 0 6px 6px; background: var(--sunken); gap: 6px; }
+.st-bullets.st-comments { list-style: disc; padding-left: 20px; gap: 2px; }
+.st-bullets .st-comment { display: list-item; padding: 0; border: 0; font-size: var(--fs-3); }
+.st-bullets .st-comment .st-text { white-space: pre-wrap; }
+.st-bullets .st-by { display: inline; }
+.st-bullets .st-by .link-btn { margin-left: 6px; }
+.st-last { color: var(--text-muted); }
+/* Ready to push: mine, not in DevOps yet. */
+.st-pending-line.st-state-ready, .st-box.st-state-ready { padding: 4px 8px; border-left: 3px solid var(--watch); border-radius: 0 4px 4px 0; background: color-mix(in oklab, var(--watch) 7%, transparent); }
+.st-pending-line.st-state-ready .st-box-foot { justify-content: flex-start; }
+.st-state-ready .st-pending-tag { color: var(--watch); font-weight: 600; }
+.st-pending-line.st-deleting .st-text { text-decoration: line-through; color: var(--text-muted); }
+.st-box.st-state-ready .st-box-foot { justify-content: flex-start; flex-wrap: wrap; }
+.st-ready-list { display: grid; gap: 4px; margin-top: 4px; }
+/* Suggested: written for me, nothing happens until Add. */
+.st-sugg.st-state-suggested { grid-template-columns: auto minmax(0, 1fr) auto; background: transparent; border: 1px dashed var(--accent); border-radius: 6px; }
+.st-sugg.st-state-suggested.st-sugg-template .st-sugg-label { color: var(--accent); }
+.st-sugg-note, .st-basis, .st-basis-list { grid-column: 1 / -1; }
+.st-sugg-note { margin: 0; font-size: var(--fs-2); color: var(--text-muted); }
+.st-basis { justify-self: start; }
+.st-basis-list { margin: 0; padding-left: 18px; font-size: var(--fs-2); color: var(--text-muted); display: grid; gap: 2px; }
+/* Preview: one line while lines are Ready to push. */
+.st-preview-top { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 6px 10px; border-left: 3px solid var(--watch); border-radius: 0 6px 6px 0; background: color-mix(in oklab, var(--watch) 7%, transparent); font-size: var(--fs-2); max-width: 1100px; }
+/* The Push bar: the app's ticked-rows bar, at the foot of the page above the status bar, only while lines are ready. */
+.st-foot { position: sticky; bottom: 0; z-index: 6; max-width: 1100px; margin-top: 4px; }
+.st-foot .st-foot-clients { font-size: var(--fs-2); }
+.st-foot .st-push-btn { margin-left: auto; }
+/* Room under the last line so the bar never sits over a control at the end of the page. */
+.status-view:has(.st-foot) { padding-bottom: 72px; scroll-padding-bottom: 136px; }
+/* On the phone the document scrolls (the page is no scroll box of its own), and the bar sits above the bottom bar. */
+.app.phone .status-view { overflow: visible; }
+.app.phone .status-view .st-foot { bottom: calc(var(--bb-h, 0px) + 36px); }
+.app.phone .status-view :is(.st-show .ib4-chip, .st-foot .mini, .st-sugg .mini, .st-sugg .link-btn, .st-adds .mini, .st-last-link, .st-preview-top .mini, .st-preview-top .link-btn, .st-bullets .link-btn, .st-pending-line .link-btn, .st-hints summary) { min-height: 44px; min-width: 44px; }
+.app.phone .status-view .st-updated { margin-left: 0; flex: 1 1 100%; min-width: 0; white-space: normal; }
+.app.phone .status-view .st-updated .calls-left-bar { flex: none; }
+.app.phone .status-view .st-sugg.st-state-suggested { grid-template-columns: minmax(0, 1fr); }
+.app.phone .status-view .st-notyet { padding: 6px; }
+
 /* QF-1: Today on any day (‹ › and Back to today), a PTO day, a PTO half muted, and Timebox my day beside the plan. */
 .today-step { align-items: center; }
 .today-step .today-back { font-size: var(--fs-2); font-weight: 500; margin-left: 6px; }

@@ -131,9 +131,9 @@ describe.skipIf(!CHROMIUM)("DV-2: DevOps changes show up on their own", () => {
 
   it("Refresh on Status says what it found", async () => {
     await page.evaluate(() => (location.hash = "#/week/status"));
-    await page.locator(".st-count").waitFor({ timeout: 30_000 });
+    await page.locator("[data-updated]").waitFor({ timeout: 30_000 });
     await page.getByRole("combobox", { name: "Client report" }).selectOption({ label: "Northwind report" });
-    const btn = page.locator(".st-push").getByRole("button", { name: "Refresh" });
+    const btn = page.locator(".st-report-tools").getByRole("button", { name: "Refresh" });
     await btn.waitFor({ timeout: 30_000 });
     await btn.click();
     const said = page.locator(".st-refreshed");
