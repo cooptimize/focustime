@@ -89,7 +89,7 @@ async function optionsOf(ctx: NewItemContext, cfg: AppConfig, clientKey: string)
   // Anything at a level with a level under it can be a parent (the requirement level's children are tasks: left out).
   const parentTypes = new Set(levels.filter((l) => l.kind === "portfolio").flatMap((l) => l.types));
   const parents = (items ?? []).filter((i) => parentTypes.has(i.type) && !isClosed(i.stateCategory)).map((i) => ({ id: i.id, title: i.title, type: i.type, state: i.state, url: i.url, parentId: i.parentId }));
-  return { clientKey, canWrite, levels, parents, problem: items ? null : "FocusTime couldn't read this client's items just now, so there are no parents to choose" };
+  return { clientKey, canWrite, levels, parents, problem: items ? null : "FocusTime couldn't read this client's items just now, so there are no parents to choose", project: model.project };
 }
 
 /** Save as draft's values, checked against the process when it can be read. */
@@ -110,7 +110,7 @@ async function draftValues(ctx: NewItemContext, cfg: AppConfig | null, o: Obj, w
       // create's preview reads and checks it before anything is sent.
       const p = parentItemId !== null ? opts.parents.find((x) => x.id === parentItemId) : undefined;
       if (p) {
-        const why = parentProblem(opts.levels.map((l) => l.types), p.type, type);
+        const why = parentProblem(opts.levels.map((l) => l.types), p.type, type, opts.project);
         if (why) throw new Invalid(why);
       }
     }

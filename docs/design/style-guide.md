@@ -380,3 +380,22 @@ Every Settings section (the person's own and a client's own page; Admin keeps it
 **Help.** What it does first, about one line at 1440 and at most two on a phone; a longer help ends at a sentence or clause and the rest is behind More about this, word for word (`splitHelp`).
 
 **On the phone** every control is at least 44 px tall at every Text size (44 px, not a size that scales down with the text), with at least 8 px between two separate controls; the sides of one choice and the rows of one list may touch, their lines part them (SA-5). A switch's or a select's whole row takes the press; a choice's sides become full-width rows, except two-to-four short sides inside a list entry (a standing block's day and half), which stay one row. Help keeps to two lines at the Text size in use: the line gets shorter as the text grows (`useHelpMax`), and one with no clause to break at ends at a word. A table becomes rows, a wide row stacks, a list adds and removes with full-width buttons. Nothing is read-only on the phone. The Undo sits above the bottom bar inside the 16 px gutters.
+
+## 13. Calls made scannable (MC-5, Nov 18)
+
+The rule for words: a fact is on screen once; a state that is an action is the button, with no state text beside it; help that only explains the screen goes, to a hover where it still helps; a sentence stays only when something is wrong; a count of zero isn't drawn. Each part below is one the app already has, used as it is elsewhere, except where a line says why.
+
+| Part | Where | Made of |
+|---|---|---|
+| Header menu | Calls' list ("More for Calls") and a call's page ("More for this call") | the row menu (section 11's ⋯ button and `useMenu`), holding what was a row of buttons and links; a hint on an item says its state ("Checked 4:30 PM") |
+| Client row | under Open, Closed and Hidden | a section label ("Client") and the Inbox's chips (`ib4-chip`), each client's color square in the chip; pressed as the Inbox's |
+| Needs you card | Calls' list | a bordered card of two lines, like a block card: the client's square, the name, then a count in muted text or one pill button; line 2 muted with a 4 px bar or an amber note. Selected: the client's color on the left edge and a tinted ground, as a selected block |
+| Row press | every list row | the row is one button stretched over it (`::after`, inset 0); its own controls sit above it. New here because a row now has no Review button: the whole row is the press |
+| Short mark | week rows | the small outlined mark MC-4 drew, with one word ("Teams", "Pocket", "Teams · Pocket"); the full words are its label and title |
+| Client picker | week rows | a select drawn as a quiet pill (`appearance: none`, 8.5em at most); "Which client?" in the watch color |
+| Show row | a call's page | a section label ("Show") and the Inbox's chips with counts, then "3 of 14 decided" and a 4 px bar; scrolls sideways on the phone in one line |
+| Proposal, folded | a call's page | three lines: a tick, the title, one main pill, a quiet Skip, the chevron (section 11's); a muted fields line that is itself a button; a quote line (speaker in the text color, its time muted, the words cut with an ellipsis) |
+| Proposal, open | a call's page | the title as a text box, then a grid of labelled cells (container queries: 4 across at 860 px of the column, 2 at 420 px, 1 below); "needed" in the watch color in a label and a watch-colored edge on its cell |
+| Transcript choices | Add a call and a call with no transcript | the segmented control (`seg`), then for Pocket recording a list of radio cards, for A file a dashed drop area with the kinds in `--fs-1` under it |
+
+On the phone every control on the list's rows, the call's header, the Show row and a folded proposal is at least 44 px; the call's header is one row (Back as an icon, the view switch, Skip all with short words, the menu) over the title and its line.

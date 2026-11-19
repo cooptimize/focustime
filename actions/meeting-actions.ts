@@ -417,9 +417,9 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
         return await pocketList(ctx, me, userZone(cfg));
       }
       case "meeting.pocket_bring": {
-        const o = obj(input, ["recordingId", "occurrenceId"], ["part", "replace"]);
+        const o = obj(input, ["recordingId", "occurrenceId"], ["part", "replace", "move"]);
         const pass = (series: MeetingSeries, occ: Occurrence, lines: TranscriptLine[]) => runPass({ store, ai: ctx.ai, capture: (k) => ctx.capture(cfg, k), users: ctx.users, log: ctx.log, now: ctx.now }, series, occ, lines);
-        return await pocketBring(ctx, store, me, { recordingId: o.recordingId, occurrenceId: id(o.occurrenceId, "occurrenceId"), part: o.part, replace: o.replace }, pass);
+        return await pocketBring(ctx, store, me, { recordingId: o.recordingId, occurrenceId: id(o.occurrenceId, "occurrenceId"), part: o.part, replace: o.replace, move: o.move }, pass);
       }
       case "meeting.pocket_add": {
         const o = obj(input, ["recordingId", "name", "clientKey"]);

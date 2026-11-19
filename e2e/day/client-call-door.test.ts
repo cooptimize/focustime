@@ -38,7 +38,7 @@ describe.skipIf(!CHROMIUM)("a client call opens from its meeting (browser, demo 
     expect(await ev.locator(".call-mark, .ev-call").count()).toBe(0);
     await expect(ev.locator(".ev-call-state").textContent()).resolves.toBe("Weekly status call · Review 11 proposals");
     await ev.locator(".ev-title").click();
-    await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor();
+    await page.getByRole("heading", { level: 2, name: /^Northwind weekly status call/ }).waitFor();
     // MC-3: the call opens on the Calls tab, beside the list; the browser's Back returns to Day.
     await expect.poll(() => page.evaluate(() => location.hash)).toMatch(/^#\/calls\/\d+$/);
     await expect(page.locator(".topbar .view-tab[aria-current]").textContent()).resolves.toContain("Calls");
@@ -46,7 +46,7 @@ describe.skipIf(!CHROMIUM)("a client call opens from its meeting (browser, demo 
     await expect.poll(() => page.evaluate(() => location.hash)).toMatch(/^#\/day/);
     await ev.waitFor({ timeout: 30_000 });
     await ev.locator(".ev-title").click();
-    await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor();
+    await page.getByRole("heading", { level: 2, name: /^Northwind weekly status call/ }).waitFor();
     await open(page, MON);
     // The rest of the meeting opens its menu: the call first, Open in Outlook after.
     await ev.locator(".ev-time").click();
@@ -84,7 +84,7 @@ describe.skipIf(!CHROMIUM)("a client call opens from its meeting (browser, demo 
     await panel.locator(".bp-meet-line").click();
     const agRow = panel.locator(".bp-meetings li", { hasText: "Northwind weekly status" });
     await agRow.locator("a.ag-main").click();
-    await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor();
+    await page.getByRole("heading", { level: 2, name: /^Northwind weekly status call/ }).waitFor();
     expect(errors).toEqual([]);
     await page.close();
   }, T);
@@ -98,7 +98,7 @@ describe.skipIf(!CHROMIUM)("a client call opens from its meeting (browser, demo 
     await mark.waitFor({ timeout: 30_000 });
     await expect(mark.locator(".call-what").textContent()).resolves.toBe("Review 11 proposals");
     await mark.click();
-    await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor();
+    await page.getByRole("heading", { level: 2, name: /^Northwind weekly status call/ }).waitFor();
     await open(page, "#/today");
     // PH-1: More is a screen; Calls (MC-2: was Client calls) is a row with how many calls are there to review.
     await page.locator(".bottom-bar").getByRole("button", { name: /^More/ }).click();

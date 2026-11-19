@@ -7,7 +7,7 @@
 import { isAboveStory } from "../../plan/needed.ts";
 import { useEffect, useMemo, useState } from "react";
 import { aOr, parentTypesOf, type NewOptions } from "../../plan/quick-create.ts";
-import { CALL_ROW, type ProposalCheck } from "../../plan/call-words.ts";
+import { CALL_ROW, PAGE_TEXT, type ProposalCheck } from "../../plan/call-words.ts";
 import type { GapProposal } from "../../plan/meetings.ts";
 import { NO_ANSWERS, type Answers } from "../../plan/three-questions.ts";
 import { PeopleField } from "../ahead/People.tsx";
@@ -60,7 +60,9 @@ export function GapFields({ b, id, clientKey, opts, today, editable, check, onEd
   const assignTo = b.assignTo === undefined ? "me" : (b.assignTo ?? "");
   const parentWords = [...allowed].join(" or ").toLowerCase();
   const parentLabel = b.parentId !== null ? `#${b.parentId}${b.parentTitle ? ` ${b.parentTitle}` : ""}` : null;
-  const need = (fill: NonNullable<ProposalCheck["needs"]>[number]["fill"]) => (needs.has(fill) ? <span className="mtg-needed">{CALL_ROW.needed}</span> : null);
+  // MC-5: a field DevOps needs says "needed" in amber in its label and has an amber edge; no other sentence beside a field.
+  const need = (fill: NonNullable<ProposalCheck["needs"]>[number]["fill"]) => (needs.has(fill) ? <span className="mtg-needed">{PAGE_TEXT.needed}</span> : null);
+  const cell = (fill: NonNullable<ProposalCheck["needs"]>[number]["fill"] | null) => `mtg-cell${fill && needs.has(fill) ? " needed" : ""}`;
 
   if (!editable) {
     // An attendee looks: the same fields, as words.
@@ -80,48 +82,52 @@ export function GapFields({ b, id, clientKey, opts, today, editable, check, onEd
   const sizeProblem = sizeNum !== null && (!Number.isFinite(sizeNum) || sizeNum < 0 || sizeNum > 10_000) ? "Size is a number" : null;
   return (
     <div className="mtg-gap-fields">
-      <div className="nf-grid mtg-nf">
-        <span className="set-label">Level</span>
-        <span className="nf-types">
-          {opts && !types.length ? <span className="muted">{opts.problem}</span> : <Segmented label={`Level for ${b.title}`} options={typeOptions} value={b.type} onChange={(t) => {
-            // Changing the type keeps the parent only when it can still hold it (as the New form does).
-            const keeps = b.parentId === null || (opts?.parents.find((p) => p.id === b.parentId) && new Set(parentTypesOf(ladder, t)).has(opts.parents.find((p) => p.id === b.parentId)!.type));
-            onEdit({ type: t, ...(keeps ? {} : { parentId: null }) });
-          }} />}
+      <div className="mtg-grid">
+        <span className={cell(null)}>
+          <span className="set-label">Level</span>
+          <span className="nf-types">
+            {opts && !types.length ? <span className="muted">{opts.problem}</span> : <Segmented label={`Level for ${b.title}`} options={typeOptions} value={b.type} onChange={(t) => {
+              // Changing the type keeps the parent only when it can still hold it (as the New form does).
+              const keeps = b.parentId === null || (opts?.parents.find((p) => p.id === b.parentId) && new Set(parentTypesOf(ladder, t)).has(opts.parents.find((p) => p.id === b.parentId)!.type));
+              onEdit({ type: t, ...(keeps ? {} : { parentId: null }) });
+            }} />}
+          </span>
         </span>
-        <span className="set-label">Parent</span>
-        <span className="nf-parent">
+        <span className={cell(null)}>
+          <span className="set-label">Parent</span>
           {opts && types.length && !allowed.size ? (
-            <span className="muted">{aOr(b.type.toLowerCase()).replace(/^a/, "A")} is at the top: no parent</span>
+            <span className="muted" title={`${aOr(b.type.toLowerCase()).replace(/^a/, "A")} is at the top: no parent`}>{PAGE_TEXT.noParent}</span>
           ) : (
-            <>
+            <span className="nf-parent" title={b.parentId === null ? CALL_ROW.noParent : parents.length ? `Any open ${parentWords}` : `No open ${parentWords} to choose`}>
               <SelectField label={`Parent for ${b.title}`} value={b.parentId === null ? "" : String(b.parentId)} options={parentOptions} onChange={(k) => {
                 const p = parents.find((x) => x.id === Number(k));
                 onEdit(k ? { parentId: Number(k), parentTitle: p?.title ?? null } : { parentId: null });
               }} className="nf-select" />
-              <span className="muted nf-why">{b.parentId === null ? CALL_ROW.noParent : parents.length ? `Optional. Any open ${parentWords}` : `Optional. No open ${parentWords} to choose`}</span>
-            </>
+            </span>
           )}
         </span>
-        <span className="set-label">Assigned to{need("assignTo")}</span>
-        <span className="nf-people"><PeopleField clientKey={clientKey} value={assignTo} onChange={(v) => onEdit({ assignTo: v === "me" ? "me" : v || null })} label={`Assigned to, for ${b.title}`} /></span>
-        <span className="set-label" id={`mtg-date-${id}`}>Target date{need("date")}</span>
-        <span className="nf-date">
-          <DateField value={b.date ?? null} onChange={(d) => onEdit({ date: d })} label={`Target date for ${b.title}${needs.has("date") ? ", needed" : ""}`} today={today} placeholder={needs.has("date") ? "Choose a date" : "None"} />
-          <span className={needs.has("date") ? "mtg-need-why" : "muted nf-why"}>{required.has("date") ? "Required by this client's process" : "Optional"}</span>
+        <span className={cell("assignTo")}>
+          <span className="set-label">Assigned to{need("assignTo")}</span>
+          <span className="nf-people"><PeopleField clientKey={clientKey} value={assignTo} onChange={(v) => onEdit({ assignTo: v === "me" ? "me" : v || null })} label={`Assigned to, for ${b.title}`} /></span>
+        </span>
+        <span className={cell("date")} title={required.has("date") ? "Required by this client's process" : undefined}>
+          <span className="set-label" id={`mtg-date-${id}`}>Target date{need("date")}</span>
+          <span className="nf-date">
+            <DateField value={b.date ?? null} onChange={(d) => onEdit({ date: d })} label={`Target date for ${b.title}${needs.has("date") ? ", needed" : ""}`} today={today} placeholder={needs.has("date") ? "Choose a date" : "None"} />
+          </span>
         </span>
       </div>
       <button type="button" className="link-btn nf-more" aria-expanded={more} onClick={() => setMore(!more)}>
-        <Icon name={more ? "open" : "closed"} /> {storyLevel ? "More: description, size and details" : "More: description and size"}{inMore ? ` (${CALL_ROW.needed.toLowerCase()})` : ""}
+        <Icon name={more ? "open" : "closed"} /> {PAGE_TEXT.describe}{inMore ? <span className="mtg-needed">{PAGE_TEXT.needed}</span> : null}
       </button>
       {more && (
         <div className="nf-grid nf-more-body mtg-nf">
           <label className="set-label" htmlFor={`mtg-desc-${id}`}>Description{need("description")}</label>
-          <span><TextBox id={`mtg-desc-${id}`} minRows={2} maxRows={10} maxLength={8000} value={description} onChange={(e) => setDescription(e.target.value)} onBlur={() => description !== b.description && onEdit({ description: description.trim() || null })} /></span>
+          <span className={cell("description")}><TextBox id={`mtg-desc-${id}`} minRows={2} maxRows={10} maxLength={8000} value={description} onChange={(e) => setDescription(e.target.value)} onBlur={() => description !== b.description && onEdit({ description: description.trim() || null })} /></span>
           <label className="set-label" htmlFor={`mtg-size-${id}`}>Size{need("size")}</label>
-          <span className="nf-size">
-            <input id={`mtg-size-${id}`} inputMode="decimal" value={size} placeholder={needs.has("size") ? "Needed" : "None"} onChange={(e) => setSize(e.target.value)} onBlur={() => !sizeProblem && sizeNum !== (b.size ?? null) && onEdit({ size: sizeNum })} />
-            <span className="muted nf-why">{sizeProblem ?? "The process's size field (points or effort), if the type has one"}</span>
+          <span className={`nf-size ${cell("size")}`}>
+            <input id={`mtg-size-${id}`} title="The process's size field (points or effort), if the type has one" inputMode="decimal" value={size} placeholder={needs.has("size") ? "Needed" : "None"} onChange={(e) => setSize(e.target.value)} onBlur={() => !sizeProblem && sizeNum !== (b.size ?? null) && onEdit({ size: sizeNum })} />
+            {sizeProblem && <span className="mtg-need-why">{sizeProblem}</span>}
           </span>
           {/* RQ-1: story level only; each question beside its label in the row's width, as Description is. */}
           {storyLevel && (

@@ -53,7 +53,7 @@ const ROUTE: Record<RhythmModel["kind"], [string, string]> = {
   closeout: ["#/day", "Open Close out"],
   nudges: ["#/inbox", "Open the Inbox"],
   status: ["#/status", "Open Status"],
-  meetings: ["#/meetings", "Open client calls"],
+  meetings: ["#/calls", "Open Calls"],
 };
 const NAME: Record<RhythmModel["kind"], string> = { brief: "Morning brief", checkin: "Midday check-in", closeout: "Close out", nudges: "Nudges", status: "Status report", meetings: "Client calls" };
 

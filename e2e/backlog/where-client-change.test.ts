@@ -1,6 +1,7 @@
 // RB-3b: names picked from one client's code never travel into another client's item. Demo mode, the demo's invented
 // repos (sources/demo/code.ts). Pick names for Northwind in "Where is it?", change the form's client, and create: the
-// create carries only the words the person typed. The pick edge cases are unit tests (plan/where-picks.test.ts).
+// create carries only the words the person typed. UC-3: Undo puts the client back with the names, and the fields the
+// change reset. The pick edge cases are unit tests (plan/where-picks.test.ts).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Locator, Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
@@ -10,7 +11,20 @@ import { SHOTS } from "../shots.ts";
 async function pickStory(f: Locator) {
   const r = f.getByRole("radio", { name: "User Story" });
   await r.waitFor({ timeout: 30_000 });
-  if (!(await r.isChecked())) await r.click();
+  // UC-3: right after a client change the old client's levels can still show for a moment, and the new client's
+  // defaults fill in after them; pick until User Story stays chosen.
+  let steady = 0;
+  await expect
+    .poll(async () => {
+      if (!(await r.isVisible().catch(() => false))) return (steady = 0);
+      if (!(await r.isChecked())) {
+        steady = 0;
+        await r.click().catch(() => undefined);
+        return 0;
+      }
+      return ++steady;
+    }, { timeout: 30_000, interval: 200 })
+    .toBeGreaterThanOrEqual(3);
 }
 
 
@@ -135,6 +149,15 @@ describe.skipIf(!CHROMIUM)("RB-3b: a client change takes out names picked from t
     await downTo(page, "dim.Store");
     const both = "The fact.SalesLine (table, Gold warehouse) totals and dim.Store (table, Gold warehouse)";
     await expect(box.inputValue()).resolves.toBe(both);
+    // UC-3: a parent chosen before the change, to see it come back with the client.
+    const parentButton = f.getByRole("button", { name: /^Parent:/ });
+    await parentButton.click();
+    const firstParent = page.locator(".cell-pop").getByRole("option").nth(1);
+    await firstParent.click();
+    const parentBefore = await parentButton.getAttribute("aria-label").then((x) => x ?? parentButton.textContent());
+    expect(parentBefore).not.toMatch(/None$/);
+    const clientBefore = await f.getByRole("button", { name: /^Client:/ }).textContent();
+    const levelBefore = await f.getByRole("radio", { checked: true }).getAttribute("aria-label").then(async (x) => x ?? (await f.getByRole("radio", { checked: true }).textContent()));
 
     // A client change: the picks go, the typed words stay, one line with Undo, heard by a screen reader.
     await choose(page, f, "Client", "Atlas");
@@ -142,14 +165,19 @@ describe.skipIf(!CHROMIUM)("RB-3b: a client change takes out names picked from t
     await expect(box.inputValue()).resolves.toBe("The totals and");
     const line = f.locator("[data-where-picks]");
     await expect(line.getByRole("status").textContent()).resolves.toBe("Took out 2 names picked from Northwind's code.");
-    await expect(line.getByRole("button", { name: "Undo: put back the 2 names" }).count()).resolves.toBe(1);
+    await expect(line.getByRole("button", { name: "Undo: put back the 2 names and the client" }).count()).resolves.toBe(1);
     await shot(page, "rb3b-taken-out");
-    // Undo puts them back, and says once whose code they are from.
+    // UC-3 item 8: Undo puts the names back and the client with them, and the level and parent it had, so the names
+    // never sit under another client.
     await line.getByRole("button", { name: /^Undo/ }).click();
     await expect(box.inputValue()).resolves.toBe(both);
+    await expect.poll(() => f.getByRole("button", { name: /^Client:/ }).textContent()).toBe(clientBefore);
+    await expect.poll(() => f.getByRole("heading", { level: 2 }).textContent()).toBe("New in Northwind's DevOps");
+    await expect.poll(async () => (await f.getByRole("radio", { checked: true }).getAttribute("aria-label")) ?? (await f.getByRole("radio", { checked: true }).textContent()), { timeout: 30_000 }).toBe(levelBefore);
+    await expect.poll(async () => (await parentButton.getAttribute("aria-label")) ?? (await parentButton.textContent()), { timeout: 30_000 }).toBe(parentBefore);
     // Focus goes back to the box the names went into (review 3).
     await expect.poll(() => page.evaluate(() => document.activeElement?.getAttribute("data-question"))).toBe("where");
-    await expect(line.getByRole("status").textContent()).resolves.toBe("Put back 2 names. They're from Northwind's code, not Atlas's.");
+    await expect(line.getByRole("status").textContent()).resolves.toBe("Put back 2 names and the client, Northwind.");
     await expect(line.getByRole("button").count()).resolves.toBe(0);
     await shot(page, "rb3b-put-back");
 
@@ -188,6 +216,33 @@ describe.skipIf(!CHROMIUM)("RB-3b: a client change takes out names picked from t
     await page.close();
   }, T);
 
+  // UC-3 review: a name picked under the new client ends the change's Undo, so Undo can never put the old client back
+  // over the new client's names.
+  it("the New form: a pick under the new client takes the Undo away", async () => {
+    const { page, errors } = await freshPage(h, VIEW);
+    const f = await openNew(page, "Northwind");
+    await f.getByRole("radio", { name: "User Story" }).click();
+    const box = whereBox(f);
+    await box.focus();
+    await page.keyboard.type("The fact.sal");
+    await list(page).waitFor({ timeout: 30_000 });
+    await downTo(page, "fact.SalesLine");
+    await choose(page, f, "Client", "Atlas");
+    await pickStory(f);
+    const line = f.locator("[data-where-picks]");
+    await expect(line.getByRole("button", { name: /^Undo/ }).count()).resolves.toBe(1);
+    await box.focus();
+    await box.evaluate((t: HTMLTextAreaElement) => t.setSelectionRange(t.value.length, t.value.length));
+    await page.keyboard.type(" and pl_copy");
+    await list(page).waitFor({ timeout: 30_000 });
+    await downTo(page, "pl_copy_shipments");
+    await expect.poll(() => box.inputValue()).toContain("pl_copy_shipments");
+    await expect.poll(() => line.getByRole("button").count()).toBe(0);
+    await expect(f.getByRole("heading", { level: 2 }).textContent()).resolves.toBe("New in Atlas's DevOps");
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
   it("the draft editor: the same on a client change, and the saved draft keeps only the text", async () => {
     const { page, errors } = await freshPage(h, VIEW);
     const f = await openNew(page, "Northwind");
@@ -214,7 +269,9 @@ describe.skipIf(!CHROMIUM)("RB-3b: a client change takes out names picked from t
     await expect(line.getByRole("status").textContent()).resolves.toBe("Took out 1 name picked from Northwind's code.");
     await line.getByRole("button", { name: /^Undo/ }).click();
     await expect(box.inputValue()).resolves.toBe("Check dim.vStoreRegion (view, Gold warehouse) by hand");
-    await expect(line.getByRole("status").textContent()).resolves.toBe("Put back 1 name. It's from Northwind's code, not Atlas's.");
+    // UC-3 item 8: the client comes back with the name.
+    await expect(line.getByRole("status").textContent()).resolves.toBe("Put back 1 name and the client, Northwind.");
+    await expect(ed.getByRole("combobox", { name: "Client" }).inputValue()).resolves.toBe("Northwind");
     // A second change: the same again; then save. The draft's row holds the text only.
     await ed.getByRole("combobox", { name: "Client" }).selectOption("Harbor");
     await expect(box.inputValue()).resolves.toBe("Check by hand");

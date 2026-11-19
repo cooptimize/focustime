@@ -116,4 +116,7 @@ export const PICKS_TEXT = {
   undo: "Undo",
   undoLabel: (n: number) => `Undo: put back the ${n === 1 ? "name" : `${n.toLocaleString("en-US")} names`}`,
   putBack: (n: number, from: readonly string[], to: string) => `Put back ${count(n)}. ${n === 1 ? "It's" : "They're"} from ${owners(from)} code, not ${to}'s.`,
+  /** UC-3: Undo puts the client back too, so picked names never sit under another client. */
+  undoWithClient: (n: number) => `Undo: put back the ${n === 1 ? "name" : `${n.toLocaleString("en-US")} names`} and the client`,
+  putBackWithClient: (n: number, client: string) => `Put back ${count(n)} and the client, ${client}.`,
 } as const;

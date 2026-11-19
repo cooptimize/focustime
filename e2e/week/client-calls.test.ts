@@ -4,7 +4,7 @@
 // date on says so on its row and can't be sent until it has one; a story with no parent gets the parent picker; a
 // row's Create opens the app's one DevOps preview and, confirmed, folds into "1 done"; a promise is kept at once with
 // Undo; the older comment on a feature says it won't be sent and offers only Skip; ticking shows the bar with its
-// count, Clear hides it; Back returns to Week. Clock: Thursday Nov 5, 2026 10:00 AM ET (the call was Monday).
+// count, Clear hides it; Back returns to Week. MC-5: rows by their title, Create and Keep, one count in the Show row. Clock: Thursday Nov 5, 2026 10:00 AM ET (the call was Monday).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
 
@@ -26,52 +26,55 @@ describe.skipIf(!CHROMIUM)("meeting capture (browser, demo mode)", () => {
     await expect(mark.textContent()).resolves.toBe("1 call needs you");
     await expect(mark.getAttribute("aria-label")).resolves.toBe("1 call needs you: Northwind weekly status call, Weekly status call · Review 11 proposals. Open in Calls");
     await mark.click();
-    await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor({ timeout: 30_000 });
+    await page.getByRole("heading", { level: 2, name: /^Northwind weekly status call/ }).waitFor({ timeout: 30_000 });
     const id = Number((await page.evaluate(() => location.hash)).split("/")[2]);
     // Nothing ticked to start, and no bar.
     await expect(page.locator(".mtg-prop input[type=checkbox]:checked").count()).resolves.toBe(0);
     await expect(page.locator(".mtg-bulk").count()).resolves.toBe(0);
-    // One count, the same on the Proposals switch and the page's line.
-    await expect(page.locator(".mtg-count").textContent()).resolves.toMatch(/^11 to review/);
-    await expect(page.locator(".mtg-switch").getByRole("button", { name: /Proposals/ }).textContent()).resolves.toContain("11");
+    // MC-5: one count, in the Show row only ("0 of 11 decided", with its bar); the switch has none.
+    await expect(page.locator("[data-decided]").textContent()).resolves.toBe("0 of 11 decided");
+    await expect(page.locator(".mtg-switch").getByRole("button", { name: /Proposals/ }).textContent()).resolves.toBe("Proposals");
 
     // The filter, in the address.
-    await page.locator(".mtg-filter").getByRole("button", { name: /New in DevOps/ }).click();
+    await page.locator(".mtg-show").getByRole("button", { name: /New in DevOps/ }).click();
     await expect.poll(() => page.evaluate(() => location.hash)).toBe(`#/calls/${id}/new`);
     await expect.poll(() => page.locator(".mtg-group").count()).toBe(1);
 
-    // The Epic: Northwind's process needs a target date. Said on the row; Create waits for it.
-    const epic = page.locator(".mtg-prop").filter({ has: page.locator("input[value='Accountant reporting area']") });
-    await expect(epic.locator(".mtg-need").textContent()).resolves.toContain("Target Date");
-    const create = epic.getByRole("button", { name: "Create in DevOps" });
+    // The Epic: Northwind's process needs a target date. MC-5: the row opens by itself with the field marked needed
+    // (and said to a screen reader); Create waits for it.
+    const epic = page.locator(".mtg-prop[aria-label='Accountant reporting area']");
+    await expect(epic.locator("[id^='mtg-need-']").textContent()).resolves.toContain("Target Date");
+    await expect(epic.locator(".mtg-cell.needed").count()).resolves.toBe(1);
+    const create = epic.locator(".mtg-p1").getByRole("button", { name: "Create", exact: true });
     await expect(create.isDisabled()).resolves.toBe(true);
     await epic.getByRole("button", { name: /^Target date for Accountant reporting area/ }).click();
     await page.locator(".dp-pop input.dp-box").fill("2026-12-18");
     await page.locator(".dp-pop input.dp-box").press("Enter");
     await page.locator(".dp-pop").waitFor({ state: "detached" });
-    await expect.poll(() => epic.locator(".mtg-need").count()).toBe(0);
+    await expect.poll(() => epic.locator("[id^='mtg-need-']").count()).toBe(0);
     await expect.poll(() => create.isDisabled()).toBe(false);
 
     // A story with no parent gets the parent picker on its row.
-    const loose = page.locator(".mtg-prop").filter({ has: page.locator("input[value='Date range in the export file name']") });
+    const loose = page.locator(".mtg-prop[aria-label='Date range in the export file name']");
+    if (!/is-open/.test((await loose.getAttribute("class")) ?? "")) await loose.locator("[data-prop-open]").click();
     await expect(loose.getByRole("button", { name: /^Parent for Date range in the export file name/ }).count()).resolves.toBe(1);
 
     // A row's Create opens the one DevOps preview; confirmed, it folds into "1 done".
-    const statement = page.locator(".mtg-prop").filter({ has: page.locator("input[value='Monthly statement as a PDF']") });
-    await statement.getByRole("button", { name: "Create in DevOps" }).click();
+    const statement = page.locator(".mtg-prop[aria-label='Monthly statement as a PDF']");
+    await statement.locator(".mtg-p1").getByRole("button", { name: "Create", exact: true }).click();
     const dialog = page.locator(".write-dialog.devops");
     await dialog.waitFor({ timeout: 30_000 });
     await expect(dialog.textContent()).resolves.toContain("Monthly statement as a PDF");
     await dialog.getByRole("button", { name: "Create in DevOps" }).click();
     await dialog.waitFor({ state: "detached", timeout: 30_000 });
     await expect.poll(() => page.locator(".mtg-fold").first().textContent()).toContain("1 done");
-    await expect(page.locator(".mtg-count").textContent()).resolves.toMatch(/^10 to review · 1 done/);
+    await expect(page.locator("[data-decided]").textContent()).resolves.toBe("1 of 11 decided");
 
     // A promise is kept at once, with Undo.
-    await page.locator(".mtg-filter").getByRole("button", { name: /Promises/ }).click();
+    await page.locator(".mtg-show").getByRole("button", { name: /Promises/ }).click();
     await expect.poll(() => page.evaluate(() => location.hash)).toBe(`#/calls/${id}/promises`);
-    const mine = page.locator(".mtg-prop:not(.confirmed)").filter({ has: page.locator("input[value='Send the date range filter for review']") });
-    await mine.getByRole("button", { name: "Add to Promises" }).click();
+    const mine = page.locator(".mtg-prop:not(.confirmed)[aria-label='Send the date range filter for review']");
+    await mine.getByRole("button", { name: "Keep", exact: true }).click();
     const toast = page.locator(".undo-toast");
     await expect.poll(() => toast.textContent()).toContain("Promises");
     await expect.poll(() => mine.count()).toBe(0);
@@ -79,7 +82,7 @@ describe.skipIf(!CHROMIUM)("meeting capture (browser, demo mode)", () => {
     await expect.poll(() => mine.count()).toBe(1);
 
     // Comments: the older one on a feature won't be sent and has only Skip; the rest tick into the bar.
-    await page.locator(".mtg-filter").getByRole("button", { name: /Comments/ }).click();
+    await page.locator(".mtg-show").getByRole("button", { name: /Comments/ }).click();
     const onFeature = page.locator(".mtg-prop.stuck").filter({ hasText: "#1110" });
     await expect(onFeature.textContent()).resolves.toContain("won't be sent");
     await expect(onFeature.getByRole("button", { name: "Add comment" }).count()).resolves.toBe(0);
@@ -105,24 +108,24 @@ describe.skipIf(!CHROMIUM)("meeting capture (browser, demo mode)", () => {
     // MC-4: in Needs you, with how many are left.
     const series = page.locator("[data-section='needs'] [data-call-row]").filter({ hasText: "Northwind weekly status" }).first();
     await series.waitFor({ timeout: 30_000 });
-    const listed = Number(/(\d+) left of/.exec((await page.locator("[data-section='needs'] li").first().textContent()) ?? "")?.[1]);
+    const listed = Number(/(\d+) left/.exec((await page.locator("[data-section='needs'] li").first().textContent()) ?? "")?.[1]);
     await series.click();
-    await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor({ timeout: 30_000 });
+    await page.getByRole("heading", { level: 2, name: /^Northwind weekly status call/ }).waitFor({ timeout: 30_000 });
     const id = Number((await page.evaluate(() => location.hash)).split("/")[2]);
-    await expect(page.locator(".mtg-count").textContent()).resolves.toMatch(new RegExp(`^${listed} to review`));
+    await expect(page.locator("[data-decided]").textContent()).resolves.toBe(`0 of ${listed} decided`);
     // The filter survives a reload.
-    await page.locator(".mtg-filter").getByRole("button", { name: /Promises/ }).click();
+    await page.locator(".mtg-show").getByRole("button", { name: /Promises/ }).click();
     await expect.poll(() => page.evaluate(() => location.hash)).toBe(`#/calls/${id}/promises`);
     await page.reload();
-    await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor({ timeout: 30_000 });
-    await expect(page.locator(".mtg-filter").getByRole("button", { name: /Promises/ }).getAttribute("aria-pressed")).resolves.toBe("true");
+    await page.getByRole("heading", { level: 2, name: /^Northwind weekly status call/ }).waitFor({ timeout: 30_000 });
+    await expect(page.locator(".mtg-show").getByRole("button", { name: /Promises/ }).getAttribute("aria-pressed")).resolves.toBe("true");
     await expect.poll(() => page.locator(".mtg-group").count()).toBe(1);
     // Skip one: it folds into "1 skipped" and the count drops; Bring back returns it.
-    const row = page.locator(".mtg-prop.open").filter({ has: page.locator("input[value='Add the row limit warning before the export ships']") });
+    const row = page.locator(".mtg-prop.open[aria-label='Add the row limit warning before the export ships']");
     await row.getByRole("button", { name: "Skip" }).click();
     await expect.poll(() => row.count()).toBe(0);
     const fold = page.locator(".mtg-fold").filter({ hasText: "1 skipped" });
-    await expect(page.locator(".mtg-count").textContent()).resolves.toMatch(new RegExp(`^${listed - 1} to review · 1 skipped`));
+    await expect(page.locator("[data-decided]").textContent()).resolves.toBe(`1 of ${listed} decided`);
     // From the transcript, the skipped row's line opens it, unfolded and focused.
     await page.locator(".mtg-switch").getByRole("button", { name: /Transcript/ }).click();
     await page.getByRole("searchbox", { name: "Filter the transcript" }).fill("row limit");
@@ -131,7 +134,7 @@ describe.skipIf(!CHROMIUM)("meeting capture (browser, demo mode)", () => {
     await expect(fold.getByRole("button", { name: /1 skipped/ }).getAttribute("aria-expanded")).resolves.toBe("true");
     await page.locator(".mtg-prop.skipped").getByRole("button", { name: "Bring back" }).click();
     await expect.poll(() => row.count()).toBe(1);
-    await expect.poll(() => page.locator(".mtg-count").textContent()).toMatch(new RegExp(`^${listed} to review`));
+    await expect.poll(() => page.locator("[data-decided]").textContent()).toBe(`0 of ${listed} decided`);
     // MC-3: the list is still beside the call, with the call's row marked open.
     await expect(series.getAttribute("aria-current")).resolves.toBe("true");
     expect(errors).toEqual([]);
@@ -143,7 +146,7 @@ describe.skipIf(!CHROMIUM)("meeting capture (browser, demo mode)", () => {
       await page.evaluate(() => (location.hash = "#/week"));
       const id = (await page.evaluate(() => fetch("/api/action", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-csrf": document.cookie.match(/__Host-focustime-csrf=([^;]+)/)?.[1] ?? "" }, body: JSON.stringify({ action: "meeting.mine", input: {} }) }).then((r) => r.json()))).data.occurrences[0].id as number;
       await page.evaluate((x) => (location.hash = x), `#/calls/${id}`);
-      await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor({ timeout: 30_000 });
+      await page.getByRole("heading", { level: 2, name: /^Northwind weekly status call/ }).waitFor({ timeout: 30_000 });
       const view = page.locator(".mtg-view");
       const top = await view.evaluate((el) => el.getBoundingClientRect().top);
       const barH = await page.evaluate(() => document.querySelector(".app.phone > .topbar")?.getBoundingClientRect().height ?? null);
@@ -154,8 +157,8 @@ describe.skipIf(!CHROMIUM)("meeting capture (browser, demo mode)", () => {
         await page.waitForTimeout(400);
         const head = (await page.locator(".mtg-sticky").boundingBox())!;
         expect(Math.round(head.y)).toBe(Math.round(barH ?? top));
-        await expect(page.getByRole("heading", { name: "Update Northwind's plan" }).isVisible()).resolves.toBe(true);
-        await expect(page.locator(".mtg-filter").isVisible()).resolves.toBe(true);
+        await expect(page.getByRole("heading", { level: 2, name: /^Northwind weekly status call/ }).isVisible()).resolves.toBe(true);
+        await expect(page.locator(".mtg-show").isVisible()).resolves.toBe(true);
         // The header of the section being read sits right under them.
         // MC-3: the section under that line, unless its end is pushing its header out for the next one's.
         const line = head.y + head.height;

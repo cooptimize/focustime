@@ -1208,7 +1208,7 @@ async function previewOne(env: Env, c: unknown, tz: string, memo: Map<string, Pr
         // An id from another project of the same organization reads fine: only this client's project counts.
         const inProject = String(parent.fields["System.TeamProject"] ?? env.projectName).toLowerCase();
         if (inProject !== env.projectName.toLowerCase() && inProject !== env.project.toLowerCase()) throw new Refused(`#${parentId} isn't in ${env.clientName}'s project ${env.projectName}`, 409);
-        const why = parentProblem(ladder, parent.type, type);
+        const why = parentProblem(ladder, parent.type, type, env.projectName);
         if (why) throw new Refused(why, 409);
         const parentStates = await writer.states(org, pat, project, parent.type);
         if (!isOpenCategory(parentStates.find((x) => x.name === parent!.state)?.category)) throw new Refused(`#${parent.id} is ${parent.state}; FocusTime adds items only under open parents`, 409);

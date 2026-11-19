@@ -30,23 +30,27 @@ describe.skipIf(!CHROMIUM)("RQ-1: a call's rows ask what the process needs (brow
     const mark = page.locator(".calls-need").first();
     await mark.waitFor({ timeout: 30_000 });
     await mark.click();
-    await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor({ timeout: 30_000 });
+    await page.getByRole("heading", { level: 2, name: /^Northwind weekly status call/ }).waitFor({ timeout: 30_000 });
 
-    // A story: Target Date Needed when the row opens, Create waits; the three questions take the row's width.
-    const story = page.locator(".mtg-prop").filter({ has: page.locator("input[value='Monthly statement as a PDF']") });
-    await expect.poll(() => story.locator(".mtg-need").first().textContent(), { timeout: 20_000 }).toContain("Target Date");
-    await expect(story.getByRole("button", { name: "Create in DevOps" }).isDisabled()).resolves.toBe(true);
-    await story.getByRole("button", { name: /^More: description, size and details/ }).click();
+    // A story: Target Date Needed (said to a screen reader once open), so MC-5: the row opens by itself, its Target date cell says "needed" with an amber
+    // edge, and Create waits; the three questions take the row's width.
+    const story = page.locator(".mtg-prop[aria-label='Monthly statement as a PDF']");
+    await expect.poll(() => story.locator("[id^='mtg-need-']").first().textContent(), { timeout: 20_000 }).toContain("Target Date");
+    await expect.poll(() => story.getAttribute("class"), { timeout: 20_000 }).toMatch(/is-open/);
+    await expect(story.locator(".mtg-cell.needed .set-label").textContent()).resolves.toBe("Target dateneeded");
+    await expect(story.locator(".mtg-p1").getByRole("button", { name: "Create", exact: true }).isDisabled()).resolves.toBe(true);
+    await story.getByRole("button", { name: /Description and size/ }).click();
     await expect(story.locator("textarea.tq-box").count()).resolves.toBe(3);
-    const widths = await story.evaluate((el) => ({ row: el.querySelector(".mtg-prop-body")!.getBoundingClientRect().width, box: el.querySelector("textarea.tq-box")!.getBoundingClientRect().width }));
+    const widths = await story.evaluate((el) => ({ row: el.querySelector(".mtg-open")!.getBoundingClientRect().width, box: el.querySelector("textarea.tq-box")!.getBoundingClientRect().width }));
     expect(widths.box).toBeGreaterThan(widths.row * 0.5);
 
     // The Epic changed to a Feature: Needed again, no questions, and Create and break down.
-    const row = page.locator(".mtg-prop").filter({ has: page.locator("input[value='Accountant reporting area']") });
+    const row = page.locator(".mtg-prop[aria-label='Accountant reporting area']");
+    if (!/is-open/.test((await row.getAttribute("class")) ?? "")) await row.locator("[data-prop-open]").click();
     await row.getByRole("radio", { name: "Feature" }).click();
     const both = row.getByRole("button", { name: "Create and break down" });
     await both.waitFor({ timeout: 20_000 });
-    await expect.poll(() => row.locator(".mtg-need").first().textContent(), { timeout: 20_000 }).toContain("Target Date");
+    await expect.poll(() => row.locator("[id^='mtg-need-']").first().textContent(), { timeout: 20_000 }).toContain("Target Date");
     await expect(both.isDisabled()).resolves.toBe(true);
     await expect(row.locator("textarea.tq-box").count()).resolves.toBe(0);
     await pickDate(page, row, /^Target date for Accountant reporting area/, "2026-12-18");

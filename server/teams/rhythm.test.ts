@@ -581,7 +581,7 @@ expect(t.logs.map((l) => JSON.stringify(l)).join()).not.toContain("Import mappin
     expect(t.cardsSent()).toHaveLength(1);
     expect(t.cardsSent()[0]).toContain("FocusTime · Client calls");
     expect(t.cardsSent()[0]).toContain("Update Adatum's plan");
-    expect(t.cardsSent()[0]).toContain(`${URL_}/#/meetings/7`);
+    expect(t.cardsSent()[0]).toContain(`${URL_}/#/calls/7`);
     // The same occurrence again, 20 minutes on: nothing new. Its upload nudge for another occurrence: one more card.
     t.at("11:20");
     await t.rhythm.tick(ANA, await t.facts());
