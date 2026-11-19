@@ -718,3 +718,18 @@ Azure's reason for a refused read, from its code (`READ_PROBLEM` in `plan/vm.ts`
 - Under the reason: **"Last read 2:14 PM"**, or **"Last read Tue 2:14 PM"** for another day: the last good read, never a failed one.
 - The state read and the auto-shutdown not: the state on the chip, and in the menu and the chip's title **"FocusTime couldn't read your VM's auto-shutdown time."**
 
+
+## ST-1 words (Nov 19)
+
+From `ui/status-states.ts` (`STATE_NAME`, `STATE_KEY`, `ST_WORDS`, `LINE_NOTE`). What went: the sentence under Status's header ("What Monday's report will show for your features…"), "Kat last sent <client>'s report …" (now the client name's hover), the "Needs your update" label and "You worked on this since Kat's last send and haven't added a line yet.", "You worked on this", "N updates", the count line ("5 features · 2 with an update · 3 without · 3 features need your update"), "N lines to push", "Push all", "Draft", "Draft all", "Drafting…", "AI suggests", "Suggested line", "Use", "Not pushed yet", "Suggested, not pushed yet", "Edited, not pushed yet", "Deleted when you push", "Undo edit", "you, not pushed yet" in Preview, "What a draft uses (N)", "This week" (the hints' heading), "Last week (N)", "+ Add a line", the sentences inside Also assigned to you and No update yet (now their hover).
+
+- The three states, the only names for them anywhere: **"On the report"**, **"Ready to push"**, **"Suggested"**. The key: **"On the report"** *in DevOps, on Monday's email*, **"Ready to push"** *yours, not in DevOps yet*, **"Suggested"** *written for you; add it to use it*.
+- The header: **"Status report"**, **"For Monday, Nov 9 · Kat sends it 7:00 AM"**; **"Write"**, **"Preview"**.
+- The Show row: **"Show"**, **"Needs an update"**, **"All"** with their counts; **"2 of 5 features have an update"** (**"0 of 1 feature has an update"**).
+- A client's head: its name, **"1 of 2 updated"**, **"Suggest for all"** (**"Suggesting…"**), **"Add all"**.
+- A feature: its title, **"#1110 · Active"**, the tag **"Needs an update"**, **"See last week's lines"** (**"Hide last week's lines"**); **"On Monday's report"** with **"· 2 lines"**, **"· 1 line"** or **"· nothing yet"**; each line **"<text> · Priya Shah, Tue"** with **"Edit"** and **"Delete"** on mine; **"Not on it yet"**; **"Write a line"**, **"Suggest a line"** (**"Suggesting…"**), **"What you worked on (2)"**.
+- A Ready to push line: its text, **"Ready to push"**, **"Remove"**; an edit **"Ready to push · Edit of your line"**; a delete **"Ready to push · Deletes your line"** with **"Keep it"**. The box keeps SR-3's **"Enter for the next line · Shift+Enter for a new line in this one · Esc to close"**, **"Edits your line · Enter when done"**, **"Shows as Alex Rivera"**, **"Cancel edit"**.
+- A suggestion: **"Suggested"**, its text, **"Add"**, **"Edit"**, **"Dismiss"**, **"Based on 2 things you worked on"** (**"1 thing"**), GD-2's **"Another client's name was removed"** inside it; while it is written **"Writing a suggestion…"**; none to write **"Nothing to suggest from: no story activity, notes or captures this week"**.
+- The foot bar: **"3 lines ready to push"** (**"1 line ready to push"**), **"Harbor 1, Cooptimize 1, Northwind 1"**, OP-1's line, **"Push to DevOps"**.
+- Pushed just now: **"On the report · Comment added in DevOps"** with **"Undo"**, **"Undone"**, **"Ready to push · Didn't push: <why>"** with **"Retry"**.
+- Preview: **"No update yet"**; **"2 lines aren't on the report yet"** (**"1 line isn't on the report yet"**), **"Show them"** (**"Hide them"**), **"Push to DevOps"**.

@@ -731,7 +731,7 @@ function NoUpdateList({ r, c, writable, lines, ops, skip }: { r: StatusReport; c
   const open = lines.some((l) => rows.some((f) => f.id === l.itemId));
   return (
     <details className="st-also st-noupdate" open={open || undefined}>
-      <summary>{ST_WORDS.noUpdate} ({rows.length})</summary>
+      <summary title="Worked on this week (on someone's week or with story activity) but no comment since Kat's last send, so Monday's report leaves them out.">{ST_WORDS.noUpdate} ({rows.length})</summary>
       <ul className="st-nu-list">
         {rows.map((f: NoUpdateFeature) => {
           const mine = lines.filter((l) => l.itemId === f.id && l.kind === "comment");
@@ -794,8 +794,7 @@ function ClientSection({ c, color, mode, lines, drafting, draftNote, ops, sugg, 
       </div>
       {mode === "edit" && filter === "all" && c.also.length > 0 && (
         <details className="st-also">
-          <summary>Also assigned to you ({c.also.length})</summary>
-          <p className="muted st-note">Not on this week's plan and no story touched. They show in Monday's report only if someone comments.</p>
+          <summary title="Not on this week's plan and no story touched. They show in Monday's report only if someone comments.">Also assigned to you ({c.also.length})</summary>
           <div className="st-features">
             {c.also.map((f) => (
               <FeatureBlock key={f.id} c={c} f={f} mode={mode} lines={lines.filter((l) => l.itemId === f.id)} ops={ops} />

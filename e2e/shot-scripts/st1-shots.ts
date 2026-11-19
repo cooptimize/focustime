@@ -26,7 +26,8 @@ async function shot(page: Page, name: string, run: () => Promise<void>, full = f
 /** STEP 0.5: words on the page's main (visible text), and the distance from a line to the button that pushes it. */
 async function measure(page: Page, label: string, line: Locator | null, push: Locator | null) {
   const words = await page.evaluate(() => (document.querySelector("main.status-view") as HTMLElement | null)?.innerText.split(/\s+/).filter(Boolean).length ?? 0);
-  const none = await page.evaluate(() => [...document.querySelectorAll("main.status-view *")].filter((e) => e.children.length === 0 && /^(No update yet|nothing yet|Nothing yet)$/i.test((e.textContent ?? "").trim())).length);
+  // Visible only (a closed fold's text isn't on screen): "No update yet", and since ST-1 a part's "· nothing yet".
+  const none = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>("main.status-view *")].filter((e) => e.children.length === 0 && e.getClientRects().length && !e.closest("details:not([open]) > :not(summary)") && /^(·\s*)?(No update yet|nothing yet)$/i.test((e.textContent ?? "").trim())).length);
   let dist = "n/a";
   if (line && push && (await line.count()) && (await push.count())) {
     await line.last().scrollIntoViewIfNeeded();

@@ -250,3 +250,4 @@ Raised in step 13 (not blocking):
 - [VM-6: Azure refusing the VM's state (Nov 18)](open-questions/vm-6.md)
 - [VM-7: a refused Azure answer's three facts (Nov 18)](open-questions/vm-7.md)
 - [MC-6: Calls polish after the redesign, and a chat call keeps its chat's client (Nov 18)](open-questions/mc-6.md)
+- [ST-1: Status: what is on the report and what isn't yet (Nov 19)](open-questions/st-1-status.md)

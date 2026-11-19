@@ -1,0 +1,18 @@
+## ST-1: Status: what is on the report and what isn't yet (Nov 19)
+
+Where the brief left something open, the reading that changes less was taken and noted here.
+
+- **The name ST-1 is used twice.** PR #82 (merged) was the Settings overhaul under "ST-1" and owns `docs/decisions/st-1.md` and `docs/open-questions/st-1.md`. A step never edits another step's file, so this one's are `st-1-status.md`. Should one of them be renamed (for example the Settings overhaul to "SET-1")?
+- **Commits.** The brief asks for one commit per part (A to G). A (the rule) and G (docs) are their own commits; B to F landed as one, because the feature's two parts, the Show row, the suggestion, the foot bar and Preview all live in the one `FeatureBlock` and the page's state, and a split would have left commits where the page was half drawn.
+- **Suggestions are not kept across a reload.** Before ST-1 a Draft's lines were kept in the browser with the other lines to push. A Suggested line is not a line to push, so it is kept in memory only, as SR-3's suggestions were: after a reload the features that need an update ask for theirs again (the server's memo answers without a new AI call), and a suggestion from Suggest a line on another feature is gone. Keep them in the browser too?
+- **A Coop update** keeps its "[Coop update v1]" text, which says it is Coop's; the "· Coop" after its author and its dashed left edge are gone, since a dashed edge now means Suggested.
+- **Clicking my comment's text** no longer opens it for editing (only Edit does), so a click on a line never changes its state by accident.
+- **What it was based on, without a suggestion.** The brief puts it in the suggestion ("Based on N things you worked on"). A feature with no suggestion showing (dismissed, added, or none) keeps it as a quiet fold, "What you worked on (N)", so the facts stay reachable as "What a draft uses" and "This week" were.
+- **Needs an update as a filter** uses the server's mark: a feature stays listed after I write its line, and only its tag goes. Taking it off the list as I type would move the row away under the cursor.
+- **The Show row, the key and the foot bar** are in Write only. Preview has its own top line.
+- **"N of M features have an update"** counts the features with any comment in the window, as the old count line did. On a client report it counts the report's features against every feature listed (the report's, No update yet, mine and added).
+- **Pushed just now** stays at the top of the page, as before, with each row's state named.
+- **The foot bar and keyboard focus.** The page leaves room under the last line so nothing ends under the bar, and every control can be scrolled above it (tested at 1440 and 1280, both Text sizes). A sticky bar passes over rows while the page scrolls, as Calls' does; Tab to a control that is under the bar at that moment may leave it there, since Chrome's scroll to the nearest edge doesn't count the bar. A fix would scroll a focused control above the bar.
+- **Add all** shows at two or more suggestions in a client. The demo's AI writes at most one per client, so the browser test answers Suggest for all's one request itself with two lines.
+- **The client report's own header** ("Draft for Monday, Nov 9 · Kat sends it at 7:00 AM · last sent Nov 2") is unchanged: its layout isn't this step's. Its features use the same two parts and states.
+- **The wording test** checks the app's words (the UI's strings and the Guide), not the code's comments, which keep each step's history, nor the earlier sections of `docs/design/wording.md`, which record what each step said at the time.

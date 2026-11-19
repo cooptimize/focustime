@@ -49,3 +49,30 @@ describe("ST-1 line states", () => {
     expect(ST_WORDS.forMonday(mondayWords("2026-11-23"), sendsWords("Kat sends it Monday 7:00 AM"))).toBe("For Monday, Nov 23 · Kat sends it 7:00 AM");
   });
 });
+
+// Test 9: the three names are the only names for these states in the app's words; the old words are gone.
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
+const uiFiles = (dir: string): string[] => readdirSync(dir).flatMap((n) => {
+  const p = join(dir, n);
+  return statSync(p).isDirectory() ? uiFiles(p) : /\.(ts|tsx)$/.test(n) && !/\.test\.tsx?$/.test(n) ? [p] : [];
+});
+/** The app's words, not its comments (the comments keep each step's history). */
+const words = (t: string) => t.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|\s)\/\/\s.*$/gm, "$1").replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
+describe("ST-1 words", () => {
+  const root = new URL(".", import.meta.url).pathname;
+  const all = uiFiles(root).map((p) => [p, readFileSync(p, "utf8")] as const);
+  it.each(["AI suggests", "Draft all", "not pushed yet"])("%s appears nowhere in the app", (w) => {
+    expect(all.filter(([, t]) => t.toLowerCase().includes(w.toLowerCase())).map(([p]) => p)).toEqual([]);
+  });
+  it("Status names a line's state only with the three names", () => {
+    const status = words(readFileSync(join(root, "Status.tsx"), "utf8") + readFileSync(join(root, "status-states.ts"), "utf8"));
+    for (const old of ["Suggested line", "Suggested, not", "Edited, not", "Deleted when you push", "lines to push", "line to push", "Push all", "Drafting…", ">Use<", ">Draft<", "What a draft uses", "You worked on this<", "Needs your update<"]) expect(status, old).not.toContain(old);
+    for (const name of ["On the report", "Ready to push", "Suggested"]) expect(status).toContain(name);
+  });
+  it("the Guide's Status pages use the three names and the new words", () => {
+    const guide = readFileSync(join(root, "guide", "content.ts"), "utf8") + readFileSync(join(root, "guide", "tours.ts"), "utf8");
+    for (const old of ["AI suggests", "Push all", "Draft all", "Use puts it in", "{b:Draft}"]) expect(guide, old).not.toContain(old);
+    for (const name of ["On the report", "Ready to push", "Suggested", "Suggest a line", "Push to DevOps"]) expect(guide).toContain(name);
+  });
+});

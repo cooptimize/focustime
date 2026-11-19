@@ -30,8 +30,8 @@ export type TextKind =
   | "used_suggestion" // a suggestion I added (once Use)
   | "typed" // a line I wrote
   | "saved_draft" // a Draft's line kept in this browser from before ST-1: it was among the lines to push
-  | "edit_pending" // an edit of my comment, not pushed yet
-  | "delete_pending" // a delete of my comment, not pushed yet
+  | "edit_pending" // an edit of my comment, waiting for Push
+  | "delete_pending" // a delete of my comment, waiting for Push
   | "pushing" // a line in the DevOps preview now
   | "pushed" // a line that went to DevOps just now (with its Undo)
   | "push_failed" // a line DevOps didn't take (with its reason and Retry)
