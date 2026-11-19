@@ -253,3 +253,4 @@ Raised in step 13 (not blocking):
 - [ST-1: Status: what is on the report and what isn't yet (Nov 19)](open-questions/st-1-status.md)
 - [MC-7: Paste a transcript or your notes into a call (Nov 19)](open-questions/mc-7.md)
 - [RB-7: Code on a branch you choose (Nov 19)](open-questions/rb-7.md)
+- [TB-1: Tabs in three groups, Status after Calls (Nov 19)](open-questions/tb-1-tab-groups.md)

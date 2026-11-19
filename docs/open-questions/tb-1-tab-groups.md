@@ -1,0 +1,13 @@
+## TB-1: Tabs in three groups, Status after Calls (Nov 19)
+
+Where the brief left something open, the reading that changes less was taken and noted here.
+
+- **The name TB-1 is used twice.** PR #54 (merged) was the FocusTime bot in Teams under "TB-1". This step's files are `tb-1-tab-groups.md`, as ST-1's second use was `st-1-status.md`. Should one of them be renamed?
+- **The room left at 1280.** Measured on the demo at 1280 (spare room between the last tab and the right side, after the dividers): Default 88 px without the Dev mark and 31 px with it; Large 116 and 56; Larger 51 without the Dev mark, and 0 with it, where the dividers have given way. One more tab, or a longer word, at 1280 with the Dev mark at Larger would reach RB-6's and MC-3's steps again. Is 1280 at Larger with the Dev mark worth keeping the lines for, for example by making the space around a divider smaller at Larger?
+- **Where the dividers give way.** With the Dev mark at 1366 Default (seven tabs) and at 1280 Larger, and in the developer loop's wider Local mark at 1440 Default too. Without the Dev mark (prod) they show everywhere measured. Since the lines go only where the Dev mark takes the room, is that right, or should the Dev mark itself be shorter?
+- **Should the number keys have stayed put?** The brief chose keys that follow the bar (4 Inbox, 5 Calls, 6 Status). Someone who used 4 for Status or 5 for the Inbox every day now lands elsewhere for a while; T and L still open Day and the Inbox. Keeping the old numbers would have kept habits but made the keys disagree with the bar.
+- **An eighth tab.** Where would one (for example Ownership) sit? By the three groups' sense (your work; what is coming at you; looking out or up) Ownership reads as looking out, so after Status and before Code, which would make Code 8 and move nothing else. The bar at 1280 with the Dev mark at Larger has no room for it today without RB-6's steps.
+- **The phone's More.** Should More list its rows in the same group order (Backlog, then Calls, then Status and Code)? Left as it is, by the brief.
+- **The command menu.** Calls and Code moved from their own groups (Meetings, Code) into Views so Views lists all seven tabs in the bar's order; their labels, keys and searches are unchanged. The per-client "Code: <client>" rows stay under Code.
+- **The stored last place.** On main (and now) the stored place is used when an address names no place, such as the hosted app's `#/capture`; a bare address opens Day. The browser test checks the stored place that way.
+- **CLAUDE.md's glossary.** Its Tab row still says "Today · Week · Ahead · Inbox (1–4)" from NV-1; it was not current before this step either. Left for a step that brings the glossary up to date.

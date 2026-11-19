@@ -8,7 +8,7 @@ FocusTime is one Node.js server (TypeScript, run directly by Node) that serves a
 
 | Part | What it is | Where |
 |---|---|---|
-| Web app | React 19, built by Vite into static files: seven tabs (Day, Week, Backlog, Status, Inbox, Calls, and Code for those who may read code), the block panel, the story card over any screen, and full-window panels (Settings, Admin, Client calls, the Guide, these docs). Heavy panels and Code load only when opened | `ui/`, `vite.config.ts` |
+| Web app | React 19, built by Vite into static files: seven tabs in three groups (Day, Week, Backlog; Inbox, Calls; Status, and Code for those who may read code; keys 1 to 7 in that order), the block panel, the story card over any screen, and full-window panels (Settings, Admin, Client calls, the Guide, these docs). Heavy panels and Code load only when opened | `ui/`, `vite.config.ts` |
 | Server | Node.js `http` server: sign-in, sessions, the action API, a few upload and media routes, the Teams bot endpoint, the built UI | `server/app.ts`, `server/main.ts` |
 | Actions | Every operation the UI, the command menu, the assistant and the bot can run (396 of them): named in one registry, validated, dispatched | `actions/registry.ts`, `actions/dispatch.ts` |
 | Pure rules | The week from patterns and events, risks, free time, planning, the Inbox's rules, notifications; no I/O | `week/`, `plan/` |

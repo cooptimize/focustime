@@ -4,7 +4,7 @@ Why the code is the way it is, step by step, is in [decisions.md](decisions.md).
 
 This page says where things are: one section per folder, in the order of CLAUDE.md's Folder map, then the docs and the files at the top of the repo. How FocusTime works (the parts, the screens, a request, an external write, the data, the integrations, security, operations) is in [technical/](technical/README.md), and this page doesn't repeat it. What a single file does is in its own header comment.
 
-The screens people see are Day, Week, Backlog, Status, Inbox and Code, with the block panel, the story card, Settings, Admin, the Guide and the Technical docs. Several keep an older name in the code (Day is `today`, Backlog is `ahead`, a to-do is a `pick`): [Names in the code](technical/README.md#names-in-the-code) lists them all, and [The screens](technical/architecture.md#the-screens) gives each screen's files, reads and rules.
+The screens people see are Day, Week, Backlog, Inbox, Calls, Status and Code (the top bar's order, `TABS` in `ui/nav.ts`), with the block panel, the story card, Settings, Admin, the Guide and the Technical docs. Several keep an older name in the code (Day is `today`, Backlog is `ahead`, a to-do is a `pick`): [Names in the code](technical/README.md#names-in-the-code) lists them all, and [The screens](technical/architecture.md#the-screens) gives each screen's files, reads and rules.
 
 ## `ui/`
 
