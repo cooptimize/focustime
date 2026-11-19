@@ -57,8 +57,6 @@ export type SectionDef = {
   old?: readonly string[];
   /** SA-5: the words people use for it (search). */
   keywords?: readonly string[];
-  /** P1: laid out for a big screen; read-only on the phone. */
-  phoneReadOnly?: boolean;
   /** Only in a demo session. */
   demoOnly?: boolean;
   /** A sub-page: not in the rail, opened from its parent, with Back. */
@@ -69,7 +67,7 @@ export type SectionDef = {
 // sections went into others and their ids land there (OLD_SECTIONS).
 export const SECTIONS: readonly SectionDef[] = [
   { id: "you", label: "Profile", group: "you", description: "Who is signed in, your level, and first-run setup.", old: ["You", "Setup"] },
-  { id: "hours", label: "Working hours", group: "you", description: "Your hours, lunch and time zone, one-day changes and standing blocks.", old: ["Standing blocks", "Day shape"], keywords: ["schedule", "work day", "hours"], phoneReadOnly: true },
+  { id: "hours", label: "Working hours", group: "you", description: "Your hours, lunch and time zone, one-day changes and standing blocks.", old: ["Standing blocks", "Day shape"], keywords: ["schedule", "work day", "hours"] },
   { id: "display", label: "Display", group: "you", description: "Theme, text size, timelines, the days Week shows, personal events and motion.", keywords: ["accessibility", "appearance", "look"] },
   { id: "notifications", label: "Reminders and notices", group: "work", description: "Where FocusTime reaches you, each reminder with its time, quiet times, and every kind of notice.", old: ["Notifications"], keywords: ["alerts", "nudges"] },
   { id: "planning", label: "Planning", group: "work", description: "How to-dos, timeboxes and DevOps updates work, with the fine tuning folded away.", old: ["Day and Week", "Today and Week", "Risk rules", "Backlog", "Roadmap", "Ahead"] },

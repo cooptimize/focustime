@@ -129,14 +129,14 @@ function Hit({ h, clients, asking, setAsking, onOpen }: Props & { h: SearchResul
     const open = asking === h.id;
     if (own.length === 1)
       return (
-        <a className="ps-item ps-hit" href={`#/settings/client/${encodeURIComponent(own[0]!.key)}`} onKeyDown={arrows} onClick={(e) => (e.preventDefault(), onOpen({ kind: "client", client: own[0]!.key, setting: h.setting! }))}>
+        <a className="ps-item ps-hit" data-result={h.id} href={`#/settings/client/${encodeURIComponent(own[0]!.key)}`} onKeyDown={arrows} onClick={(e) => (e.preventDefault(), onOpen({ kind: "client", client: own[0]!.key, setting: h.setting! }))}>
           {label}
           <span className="ps-hint">{nameOf(own[0]!)}'s page</span>
         </a>
       );
     return (
       <div className="ps-hit-group">
-        <button type="button" className="ps-item ps-hit" aria-expanded={open} onKeyDown={arrows} onClick={() => setAsking(open ? null : h.id)}>
+        <button type="button" className="ps-item ps-hit" data-result={h.id} aria-expanded={open} onKeyDown={arrows} onClick={() => setAsking(open ? null : h.id)}>
           {label}
           <span className="ps-hint">{own.length ? (open ? "Which client?" : "A client's page · which client?") : "A client's page · no clients yet"}</span>
         </button>
@@ -155,18 +155,18 @@ function Hit({ h, clients, asking, setAsking, onOpen }: Props & { h: SearchResul
   const o = openOf(h);
   if (h.kind === "answer")
     return o ? (
-      <a className="ps-item ps-hit ps-answer" href={resultHref(h) ?? undefined} onKeyDown={arrows} onClick={(e) => (e.preventDefault(), onOpen(o))}>
+      <a className="ps-item ps-hit ps-answer" data-result={h.id} href={resultHref(h) ?? undefined} onKeyDown={arrows} onClick={(e) => (e.preventDefault(), onOpen(o))}>
         {label}
         <span className="ps-hint ps-answer-text">{h.answer}</span>
       </a>
     ) : (
-      <div className="ps-item ps-hit ps-answer" role="note">
+      <div className="ps-item ps-hit ps-answer" data-result={h.id} role="note">
         {label}
         <span className="ps-hint ps-answer-text">{h.answer}</span>
       </div>
     );
   return (
-    <a className="ps-item ps-hit" href={resultHref(h) ?? undefined} onKeyDown={arrows} onClick={(e) => (e.preventDefault(), o && onOpen(o))}>
+    <a className="ps-item ps-hit" data-result={h.id} href={resultHref(h) ?? undefined} onKeyDown={arrows} onClick={(e) => (e.preventDefault(), o && onOpen(o))}>
       {label}
       <Where h={h} />
     </a>

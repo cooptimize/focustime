@@ -5620,6 +5620,12 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
 .panel-shell.phone .ps-head .x-close { margin: -6px -8px -6px 0; }
 .panel-shell.phone .ps-back { margin-left: -8px; min-height: 44px; }
 .panel-shell.phone .ps-rail { padding: 12px 16px 24px; }
+/* SA-5: Most used, first on the phone's Settings list, then the search and the sections. */
+.panel-shell.phone .ps-most { padding: 12px 16px 0; container-type: inline-size; }
+.panel-shell.phone .ps-most > .ps-group-head { margin: 0; padding: 0 10px 6px; }
+.panel-shell.phone .ps-most + .ps-rail { padding-top: 16px; }
+.ps-most-times { display: flex; flex-wrap: wrap; gap: 8px; }
+.ps-most-times > * { flex: 1 1 140px; }
 .panel-shell.phone .ps-item { padding: 12px 10px; min-height: 44px; box-sizing: border-box; align-items: center; color: var(--text); }
 .panel-shell.phone .ps-group-head { padding-top: 10px; }
 .panel-shell.phone .ps-body { overflow: visible; padding: 4px 16px 24px; }

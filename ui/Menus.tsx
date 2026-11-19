@@ -211,6 +211,8 @@ function StepView({ step, query, onDone, push, back, canBack, autoFocusList, pop
               role={it.toggle ? "menuitemcheckbox" : "menuitem"}
               aria-checked={it.toggle ? !!it.checked : undefined}
               data-i={i}
+              data-id={it.id}
+              data-group={it.group}
               className={`menu-item${i === active ? " active" : ""}${it.danger ? " danger" : ""}${it.checked ? " checked" : ""}`}
               aria-disabled={!!it.disabled}
               title={it.disabled ?? ""}

@@ -7,7 +7,6 @@ import type { SettingsClient, SettingsData } from "../actions/types.ts";
 import { AutoSaveProvider } from "./settings/autosave.tsx";
 import { call } from "./api.ts";
 import { usePhone } from "./viewport.ts";
-import { PhoneReadOnly } from "./Phone.tsx";
 import { AdminPlace, NOT_ADMIN_TEXT, RETIRED_ADMIN_SECTIONS, useAdmin } from "./settings/Admin.tsx";
 import { PanelShell, useNarrow, type RailGroup } from "./PanelShell.tsx";
 import { useDeveloperLoop } from "./appenv.ts";
@@ -15,6 +14,7 @@ import { resolveSettings, sectionOf, SECTIONS, settingsHref, SETTINGS_GROUPS } f
 import { search } from "./settings/search.ts";
 import { openOf, SearchResults, SettingsSearch, type Open } from "./settings/SearchResults.tsx";
 import { takeLanding } from "./settings/landing.ts";
+import { MostUsed } from "./settings/MostUsed.tsx";
 import { ProfileSection } from "./settings/sections/Profile.tsx";
 import { HoursSection } from "./settings/sections/Hours.tsx";
 import { NotificationsSection } from "./settings/sections/Notifications.tsx";
@@ -168,10 +168,12 @@ function SettingsPanel(props: Props & { admin: boolean | null }) {
             railCurrent={current === "client" ? "clients" : current}
             onPick={(id) => go(id)}
             onClose={() => leave(props.onClose)}
-            onBack={current === "client" ? () => go("clients") : list && current !== null ? () => go("") : null}
-            backLabel={current === "client" ? "Clients" : "Settings"}
+            // SA-5: on the phone Back goes from a setting to its section, then to the list; the address follows.
+            onBack={current === "client" ? () => go("clients") : list && current !== null && setting && !inAdmin ? () => go(current) : list && current !== null ? () => go("") : null}
+            backLabel={current === "client" ? "Clients" : list && current !== null && setting && !inAdmin ? (def?.label ?? "Settings") : "Settings"}
             title={title}
             description={description}
+            railLead={current === null && data ? <MostUsed {...props} section="" data={data} onSavedData={saved} reload={reload} client={null} go={go} /> : undefined}
             railTop={<SettingsSearch q={q} setQ={(x) => (setQ(x), setAsking(null))} onEnter={onEnter} />}
             railOverride={q.trim() ? <SearchResults q={q} hits={hits} clients={data?.clients ?? []} admin={admin === true} demo={props.demo} dev={devLoop} phone={phone} asking={asking} setAsking={setAsking} onOpen={open} onGuide={props.onGuide} /> : undefined}
             railFoot={
@@ -206,13 +208,8 @@ function SettingsPanel(props: Props & { admin: boolean | null }) {
                   admin === null ? <p className="muted">Loading…</p> : <p className="muted">{NOT_ADMIN_TEXT}</p>
                 ) : (
                   data &&
-                  (phone && def?.phoneReadOnly ? (
-                    <PhoneReadOnly line="Changing these works best on a bigger screen">
-                      <SectionBody {...props} section={current} data={data} onSavedData={saved} reload={reload} client={client} go={go} />
-                    </PhoneReadOnly>
-                  ) : (
-                    <SectionBody {...props} section={current} data={data} onSavedData={saved} reload={reload} client={client} go={go} />
-                  ))
+                  // SA-5: every section works on the phone; none is read-only there.
+                  <SectionBody {...props} section={current} data={data} onSavedData={saved} reload={reload} client={client} go={go} />
                 )}
               </>
             )}

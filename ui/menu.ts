@@ -12,6 +12,7 @@ import { parseItemRef } from "../plan/lookup.ts";
 import { ACTIONS, type ActionName, type ActionSpec } from "../actions/registry.ts";
 import { TEXT_SIZES, THEME_NAMES, THEMES, type TextSize, type Theme } from "../config/schema.ts";
 import { TEXT_SIZE_NAMES } from "./textsize.ts";
+import { dayHoursInput } from "./day-hours.ts";
 import { hoursOn, VIEW_RANGE_NAMES, VIEW_RANGES, type TimeModel, type ViewRange } from "../week/hours.ts";
 import { canAddWork, dayRule } from "../plan/days.ts";
 import { pickTime, timeChoices } from "../plan/picktime.ts";
@@ -1103,8 +1104,7 @@ export function hoursForm(env: MenuEnv, date: IsoDate): MenuStep {
       { key: "eveEnd", label: "Evening to", type: "time", value: eve?.end ?? "", optional: true },
     ],
     save: (v) => {
-      const segments = [v.start && v.end ? `${v.start}-${v.end}` : null, v.eveStart && v.eveEnd ? `${v.eveStart}-${v.eveEnd}` : null].filter((x): x is string => !!x);
-      return env.runTime("hours.set_day", { date, segments, lunch: v.lunchStart && v.lunchEnd ? `${v.lunchStart}-${v.lunchEnd}` : "" });
+      return env.runTime("hours.set_day", dayHoursInput(date, v));
     },
   };
 }
