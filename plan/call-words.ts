@@ -288,6 +288,8 @@ export const FETCH_WORDS: Record<Exclude<FetchOutcome, "found">, string> = {
   chat_none: `Teams doesn't have this transcript, or it isn't ready yet. Try again in a few minutes. ${CHAT_WAY_ON}`,
   not_in_chat: "FocusTime shows a chat's calls to the Cooptimizers in that chat who follow its client. Upload the transcript with Add a call instead.",
 };
+/** MC-6: the refusal when a call started in a client's chat is given another client. */
+export const CHAT_OTHER_CLIENT = "A call started in a client's chat is about that client, or Internal. Choose one of those.";
 /** MC-2c: once, above the proposals and the Transcript, when Teams gave a chat call's transcript without speaker names. */
 export const CHAT_NO_SPEAKERS = "Teams gave this transcript without speaker names.";
 export const fetchFound = (lines: number, proposals: number, ran = true) => `Got the transcript from Teams (${lines} ${lines === 1 ? "line" : "lines"}). ${!ran ? `${CALL_STATE.aiFailed}.` : proposals ? `${proposals} ${proposals === 1 ? "proposal" : "proposals"} to review.` : "Nothing to propose from it."}`;

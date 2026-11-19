@@ -10,6 +10,7 @@
 //   - Hidden: the calendar calls I hid.
 // Pure: no I/O, no clock (the day and the zone are handed in). Nothing here reads or keeps anything: it only arranges
 // what meeting.mine, meeting.calls, meeting.calls_check and my hides already returned.
+import { INTERNAL_CLIENT } from "../week/follow.ts";
 import type { CallOutcome, OccurrenceView, OtherCallView, SeriesView } from "./meeting-views.ts";
 import { OTHER_CALL_DAYS } from "./calls.ts";
 import { CALL_LIST, CALL_STATE, callLabel, CALLS_TEXT, CLOSE_TEXT, LIST_TEXT, MARK_TEXT } from "./call-words.ts";
@@ -370,3 +371,13 @@ export function shortWhen(iso: string, day: string, today: string, zone: string)
 
 /** MC-5: a week row's mark, short ("Teams", "Pocket", "Teams · Pocket"), and its full words for its label and hover. */
 export const markShort = (m: CallMarkKind): { short: string; full: string } | null => (m ? { short: LIST_TEXT.mark[m], full: LIST_TEXT.markFull[m] } : null);
+
+/**
+ * MC-6: the clients a call may be filed under. A call started in a client's chat: that chat's client and Internal, in
+ * that order (the server refuses any other). Any other call: every client I follow; the call's client is mine to say.
+ */
+export function callClientChoices<C extends { clientKey: string }>(clients: readonly C[], chat: { clientKey: string } | null | undefined): C[] {
+  if (!chat) return [...clients];
+  const is = (c: C, k: string) => c.clientKey.toLowerCase() === k.toLowerCase();
+  return [...clients.filter((c) => is(c, chat.clientKey)), ...clients.filter((c) => is(c, INTERNAL_CLIENT) && !is(c, chat.clientKey))];
+}

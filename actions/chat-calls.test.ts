@@ -10,7 +10,7 @@ import { parseConfig } from "../config/schema.ts";
 import { STARTER_TOML } from "../fixtures/starter.ts";
 import { callRows } from "../plan/call-list.ts";
 import { pocketRows } from "../plan/call-list-pocket.ts";
-import { CHAT_NO_SPEAKERS, CHAT_WAY_ON, FETCH_WORDS } from "../plan/call-words.ts";
+import { CHAT_NO_SPEAKERS, CHAT_OTHER_CLIENT, CHAT_WAY_ON, FETCH_WORDS } from "../plan/call-words.ts";
 import { chatCallKey } from "../plan/cowork.ts";
 import type { OccurrenceView, OtherCallView, SeriesView } from "../plan/meeting-views.ts";
 import { createAdhocCallsClient, UNNAMED_FORMAT } from "../sources/graph/adhoc-calls.ts";
@@ -23,7 +23,7 @@ import { aChatMember } from "../test/builders/index.ts";
 import { addUsers, sqliteDb } from "../test/db.ts";
 import { createChatCallPresses } from "./chat-call-press.ts";
 import { chatCallsPort } from "./chat-calls-port.ts";
-import { meetingAction, type MeetingAction, type MeetingContext } from "./meeting-actions.ts";
+import { chatClientAllowed, meetingAction, type MeetingAction, type MeetingContext } from "./meeting-actions.ts";
 
 const ME = "11111111-1111-4111-8111-111111111111";
 const MATE = "33333333-3333-4333-8333-333333333333";
@@ -106,12 +106,12 @@ async function setup() {
       log: () => {},
     });
   const logs: LogRecord[] = [];
-  const ctxAs = (me: string, o: { noPort?: boolean } = {}): MeetingContext => ({
+  const ctxAs = (me: string, o: { noPort?: boolean; admin?: boolean } = {}): MeetingContext => ({
     meetings, conversations, plan: planStoreOn(db.conn, { now: () => Temporal.Instant.from(NOW).toZonedDateTimeISO("UTC"), userId: me }),
-    me: async () => me, isAdmin: async () => false, config: async () => cfg.config, now: () => NOW, homeDomains: async () => ["cooptimize.example"],
+    me: async () => me, isAdmin: async () => !!o.admin, config: async () => cfg.config, now: () => NOW, homeDomains: async () => ["cooptimize.example"],
     graph: () => ({ recentCalls: async () => [] }) as unknown as NonNullable<ReturnType<MeetingContext["graph"]>>,
     users: async () => users,
-    client: async (k) => (k.toLowerCase() === "contoso" ? { key: "contoso", name: "Contoso" } : k.toLowerCase() === "fabrikam" ? { key: "fabrikam", name: "Fabrikam" } : null),
+    client: async (k) => (k.toLowerCase() === "contoso" ? { key: "contoso", name: "Contoso" } : k.toLowerCase() === "fabrikam" ? { key: "fabrikam", name: "Fabrikam" } : k.toLowerCase() === "cooptimize" ? { key: "Cooptimize", name: "Cooptimize" } : null),
     leads: async () => [], capture: async () => null, ai: async () => null, canWrite: async () => false,
     log: (r) => logs.push(r), cooptimizer,
     chatPress: presses,
@@ -124,14 +124,14 @@ async function setup() {
       }),
     }),
   });
-  const act = (me: string, action: MeetingAction, input: unknown, o?: { noPort?: boolean }) => meetingAction(ctxAs(me, o), action, input);
+  const act = (me: string, action: MeetingAction, input: unknown, o?: { noPort?: boolean; admin?: boolean }) => meetingAction(ctxAs(me, o), action, input);
   const data = <T,>(r: Awaited<ReturnType<typeof act>>) => {
     if (!r.ok) throw new Error(`${r.status}: ${r.error}`);
     return r.data as T;
   };
   const others = async (me: string) => data<{ calls: OtherCallView[] }>(await act(me, "meeting.calls", {})).calls;
   const chatRows = async (me: string) => (await others(me)).filter((c) => c.chat);
-  const start = (me: string, callId = CALL_A, clientKey = "contoso") => act(me, "meeting.call_start", { key: chatCallKey(callId), startAt: "2026-11-10T14:00:00Z", endAt: "2026-11-10T14:40:00Z", clientKey });
+  const start = (me: string, callId = CALL_A, clientKey = "contoso", o?: { admin?: boolean }) => act(me, "meeting.call_start", { key: chatCallKey(callId), startAt: "2026-11-10T14:00:00Z", endAt: "2026-11-10T14:40:00Z", clientKey }, o);
   const fetchIt = (me: string, occurrenceId: number) => act(me, "meeting.call_fetch", { occurrenceId });
   return { db, teams, meetings, act, data, others, chatRows, start, fetchIt, sent, answers, follows, logs, presses };
 }
@@ -190,9 +190,9 @@ describe("MC-2c: Review and the press", () => {
     expect((await t.others(MATE)).find((c) => c.key === chatCallKey(CALL_A))!.occurrenceId).toBe(s.occurrenceId);
     // Pressing Review asked Microsoft nothing.
     expect(t.sent).toEqual([]);
-    // The client can be changed in the setup: another call kept for another client.
-    expect((await t.start(ME, CALL_D, "fabrikam")).ok).toBe(true);
-    expect((await t.meetings.callByKey(chatCallKey(CALL_D)))!.series.clientKey).toBe("fabrikam");
+    // The setup's other choice is Internal (MC-6): another chat call kept under Cooptimize Internal.
+    expect((await t.start(ME, CALL_D, "Cooptimize")).ok).toBe(true);
+    expect((await t.meetings.callByKey(chatCallKey(CALL_D)))!.series.clientKey).toBe("Cooptimize");
   });
 
   it("refused before anything is kept: not a Cooptimizer, not in the chat, not following, a call with no event, a live one", async () => {
@@ -244,6 +244,40 @@ describe("MC-2c: Review and the press", () => {
     await t.teams.removeChat(CHAT, ME);
     expect(await t.fetchIt(ME, occurrenceId)).toMatchObject({ ok: false, status: 403, code: "not_in_chat" });
     expect(t.sent).toEqual([]);
+  });
+});
+
+describe("MC-6: a chat call keeps its chat's client", () => {
+  it("Review with another client's key is refused for a reviewer, an attendee and an admin; nothing is kept and nothing asked", async () => {
+    const t = await setup();
+    // The reviewer-to-be, a teammate in the chat (an attendee once kept) and an admin: another client is refused.
+    for (const [who, o] of [[ME, {}], [MATE, {}], [ME, { admin: true }]] as const) {
+      expect(await t.start(who, CALL_A, "fabrikam", o), who).toMatchObject({ ok: false, status: 403, code: "chat_other_client", error: CHAT_OTHER_CLIENT });
+    }
+    expect(await t.meetings.callByKey(chatCallKey(CALL_A))).toBeNull();
+    expect(t.sent).toEqual([]);
+    expect(t.logs.filter((l) => l.op === "meeting_call_start").map((l) => l.kind)).toEqual(["chat_other_client", "chat_other_client", "chat_other_client"]);
+  });
+
+  it("the chat's client and Internal pass; once kept, another client's key is still refused and the call keeps its client", async () => {
+    const t = await setup();
+    expect((await t.start(ME, CALL_A, "contoso")).ok).toBe(true);
+    expect((await t.start(ME, CALL_D, "cooptimize")).ok).toBe(true);
+    expect((await t.meetings.callByKey(chatCallKey(CALL_D)))!.series.clientKey).toBe("Cooptimize");
+    // A later Review of the kept call, by its reviewer, a teammate or an admin, can't move it to another client.
+    for (const [who, o] of [[ME, {}], [MATE, {}], [MATE, { admin: true }]] as const) expect(await t.start(who, CALL_A, "fabrikam", o), who).toMatchObject({ ok: false, code: "chat_other_client" });
+    expect((await t.meetings.callByKey(chatCallKey(CALL_A)))!.series.clientKey).toBe("contoso");
+    // Nothing else changes a kept call's client: Admin's update refuses calls and takes no client.
+    const kept = (await t.meetings.callByKey(chatCallKey(CALL_A)))!;
+    expect(await t.act(MATE, "meeting.update", { seriesId: kept.series.id, name: "x" }, { admin: true })).toMatchObject({ ok: false, status: 404 });
+    expect((await t.act(MATE, "meeting.update", { seriesId: kept.series.id, clientKey: "fabrikam" }, { admin: true })).ok).toBe(false);
+  });
+
+  it("the rule asks the team's Internal answer when it has one", async () => {
+    expect(await chatClientAllowed({ isInternal: async (k) => k === "Inside" }, "contoso", "Inside")).toBe(true);
+    expect(await chatClientAllowed({ isInternal: async (k) => k === "Inside" }, "contoso", "Cooptimize")).toBe(false);
+    expect(await chatClientAllowed({}, "contoso", "CONTOSO")).toBe(true);
+    expect(await chatClientAllowed({}, "contoso", "fabrikam")).toBe(false);
   });
 });
 

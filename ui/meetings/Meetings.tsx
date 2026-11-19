@@ -24,7 +24,7 @@ import { rememberCallsList as remember, rememberedCallsList as remembered, reque
 import { useMenu } from "../Menus.tsx";
 import type { MenuItem, MenuStep } from "../menu.ts";
 import { CALL_ACTIONS, CALL_BAR, CALL_FILTERS, CALL_LIST, CALL_ROW, CALL_STATE, CALLS_TEXT, ADD_TEXT, CHAT_NO_SPEAKERS, CLOSE_TEXT, FETCH_WORDS, LIST_TEXT, PAGE_TEXT, POCKET_TEXT, rerunLine, SECTION_HEAD, TRANSCRIPT_TEXT, type CallFilter, type FetchOutcome, type ProposalCheck } from "../../plan/call-words.ts";
-import { callRows, chipClients, closedAtOf, closedLine, closedList, outcomeOfCall, weekOf, filterCounts, firstToOpen, hiddenList, hiddenMissing, LIST_FILTERS, openList, otherRowKey, hideKeyOf, type CallHides, type CallRow, type CheckState, type Entry, type ListedRecording, type ListFilter, type SeriesEntry } from "../../plan/call-list.ts";
+import { callClientChoices, callRows, chipClients, closedAtOf, closedLine, closedList, outcomeOfCall, weekOf, filterCounts, firstToOpen, hiddenList, hiddenMissing, LIST_FILTERS, openList, otherRowKey, hideKeyOf, type CallHides, type CallRow, type CheckState, type Entry, type ListedRecording, type ListFilter, type SeriesEntry } from "../../plan/call-list.ts";
 import { ClosedRow, HiddenRow, NeedsRow, SeriesRow, TickBar, WeekRow, whenOf, type RowStatus } from "./CallsList.tsx";
 import { pocketRows } from "../../plan/call-list-pocket.ts";
 import { POCKET_CALL_WORDS as PW, recordingLine } from "../../plan/pocket-words.ts";
@@ -809,7 +809,7 @@ function CallSetup({ call: c, clients, suggested, zone, pocket = [], startRec = 
       {/* MC-2c: a chat call: its start and end (or its start alone), where it came from, never a people count. */}
       <p className="muted">{c.chat ? `${chatWhen(c, zone)} · ${CALL_LIST.fromChat}` : `${whenLine(c.startAt, c.endAt, zone)} · ${CALLS_TEXT.people(c.people)}`}</p>
       <label className="mtg-setup-field" htmlFor="mtg-setup-client">{CALLS_TEXT.setupClient}</label>
-      <ClientPick id="mtg-setup-client" clients={clients} value={client} suggested={suggested} onChange={setClient} />
+      <ClientPick id="mtg-setup-client" clients={callClientChoices(clients, c.chat)} value={client} suggested={suggested} onChange={setClient} />
       <p className="muted mtg-setup-hint">{CALLS_TEXT.setupClientHint}</p>
       <fieldset className="mtg-setup-source">
         <legend>{CALLS_TEXT.setupSource}</legend>

@@ -1474,6 +1474,7 @@ export async function meetingContext(ctx: ActionContext): Promise<MeetingContext
     ...(ctx.meetings?.press ? { press: ctx.meetings.press } : {}),
     ...(ctx.meetings?.exists ? { exists: ctx.meetings.exists } : {}),
     ...(ctx.meetings?.cooptimizer ? { cooptimizer: ctx.meetings.cooptimizer } : {}),
+    isInternal: (k: string) => isInternalKey(ctx.org, k),
     // MC-2c: the calls started in my registered client chats (what the poll kept), and their press and client.
     ...(ctx.requests?.teams && ctx.meetings?.cooptimizer
       ? {

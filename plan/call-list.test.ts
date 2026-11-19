@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { anOccurrenceView, anOtherCall, aSeriesView, ZONE } from "../test/builders/index.ts";
 import { pocketRows } from "./call-list-pocket.ts";
-import { callRows, chipClients, closedAtOf, closedLine, closedList, dayHeading, filterCounts, firstToOpen, hiddenList, hiddenMissing, hideKeyOf, markShort, needsAction, needsNote, openList, outcomeOfCall, shortWhen, weekOf } from "./call-list.ts";
+import { callClientChoices, callRows, chipClients, closedAtOf, closedLine, closedList, dayHeading, filterCounts, firstToOpen, hiddenList, hiddenMissing, hideKeyOf, markShort, needsAction, needsNote, openList, outcomeOfCall, shortWhen, weekOf } from "./call-list.ts";
 import { CALL_STATE } from "./call-words.ts";
 
 // Thursday Nov 5: This week is Nov 2 to 8, Last week Oct 26 to Nov 1.
@@ -234,5 +234,17 @@ describe("MC-5: a row's one button, its short note, its when and its mark", () =
     expect(markShort("both")).toEqual({ short: "Teams · Pocket", full: "Transcript in Teams and your Pocket recording" });
     expect(markShort("teams")?.short).toBe("Teams");
     expect(markShort(null)).toBeNull();
+  });
+});
+
+describe("MC-6: a chat call's client choices", () => {
+  const clients = [{ clientKey: "Atlas" }, { clientKey: "Cooptimize" }, { clientKey: "northwind" }, { clientKey: "Harbor" }];
+  it("a chat call offers its chat's client, then Internal, and nothing else", () => {
+    expect(callClientChoices(clients, { clientKey: "Northwind" }).map((c) => c.clientKey)).toEqual(["northwind", "Cooptimize"]);
+    // A chat registered to Internal itself offers it once.
+    expect(callClientChoices(clients, { clientKey: "cooptimize" }).map((c) => c.clientKey)).toEqual(["Cooptimize"]);
+  });
+  it("any other call offers every client I follow", () => {
+    expect(callClientChoices(clients, null).map((c) => c.clientKey)).toEqual(["Atlas", "Cooptimize", "northwind", "Harbor"]);
   });
 });

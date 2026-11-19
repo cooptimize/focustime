@@ -6,7 +6,7 @@ import { clientColor } from "../labels.ts";
 import { Icon } from "../icons.tsx";
 import { lengthLabel } from "../../plan/calls.ts";
 import { CALL_LIST, CLOSE_TEXT, LIST_TEXT, MARK_TEXT } from "../../plan/call-words.ts";
-import { closedLine, markShort, markWords, needsAction, needsNote, shortWhen, type CallMarkKind, type CallRow, type SeriesEntry } from "../../plan/call-list.ts";
+import { callClientChoices, closedLine, markShort, markWords, needsAction, needsNote, shortWhen, type CallMarkKind, type CallRow, type SeriesEntry } from "../../plan/call-list.ts";
 import type { CaptureClient } from "../../plan/capture.ts";
 
 const timeOf = (iso: string, zone: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: zone });
@@ -135,7 +135,7 @@ export function WeekRow({ r, open, zone, today, colors, selecting, ticked, onTic
             <span className="sr-only">{LIST_TEXT.clientFor(r.name)}</span>
             <select className="plain-input" value={client ?? ""} onChange={(e) => onClient(e.target.value)} data-call-about="">
               {!client && <option value="">{LIST_TEXT.whichClient}</option>}
-              {clients.map((c) => <option key={c.clientKey} value={c.clientKey}>{nameOf(c.clientKey)}</option>)}
+              {callClientChoices(clients, r.other?.chat).map((c) => <option key={c.clientKey} value={c.clientKey}>{nameOf(c.clientKey)}</option>)}
             </select>
           </label>
         ) : r.occurrenceId !== null && !r.pocket.length ? (

@@ -13,6 +13,7 @@
 // try; a refusal says why in plain words and points to the upload. Nothing reads such a call in the background.
 //
 // Transcript text never goes to a log or an error message; logs carry ids-free counts and outcomes only.
+import { INTERNAL_CLIENT } from "../week/follow.ts";
 import type { CheckNowResult } from "../plan/meetings.ts";
 import type { ClientEntry } from "../ai/guard.ts";
 import type { AiService } from "../ai/service.ts";
@@ -20,7 +21,7 @@ import type { AppConfig } from "../config/schema.ts";
 import type { LogRecord } from "../log/logger.ts";
 import { fromPocket, unnamedSpeakers, attendeeIds, canConfirm, isCall, mayRead, commentLevelOk, defaultReviewers, detectSource, joinKey, lastReadLine, MEETING_ROLES, newOnly, nextRetry, nudgesFor, outcomeOf, parseOutcome, proposalOrder, retryable, ROLE_LABEL, toReview, type MeetingRole, type MeetingSeries, type Occurrence, type Proposal, type ProposalBody, type TranscriptKind, type TranscriptSource } from "../plan/meetings.ts";
 import { AnswersError, parseAnswers, type Answers } from "../plan/three-questions.ts";
-import { callWriteWords, CALL_LIST, CALL_ROW, FETCH_WORDS, fetchFound, type FetchOutcome, type ProposalCheck, type RequiredField } from "../plan/call-words.ts";
+import { callWriteWords, CALL_LIST, CALL_ROW, FETCH_WORDS, fetchFound, type FetchOutcome, type ProposalCheck, type RequiredField, CHAT_OTHER_CLIENT } from "../plan/call-words.ts";
 import { inWindow, isOtherCall, OTHER_CALL_DAYS, otherCallsWindow, type CalendarMeeting } from "../plan/calls.ts";
 import type { PressGrants } from "./call-press.ts";
 import { CHECK_CAP, type ExistsGrants, type ExistsHold, type HeldAnswer } from "./call-exists.ts";
@@ -109,6 +110,8 @@ export type MeetingContext = {
   press?: PressGrants;
   /** MC-2: a Cooptimizer by the people rule (never a guest or an automation account); absent: nobody is. */
   cooptimizer?: (userId: string) => Promise<boolean>;
+  /** MC-6: whether a key is Cooptimize Internal (clientAccounts()'s why "internal"); a chat call may be filed there. */
+  isInternal?: (clientKey: string) => Promise<boolean>;
   /** MC-2b: my own Pocket (my key, the one client), the shared 5 minute hold and my addresses; absent: not here. */
   pocket?: MeetingPocket;
   /** MC-4: the "exists" allowances the Graph gate lets through and the 15 minute memory of answers; absent: not checked here. */
@@ -1057,6 +1060,12 @@ const seenChatCalls = (me: string, calls: MeetingSeries[]): MeetingSeries[] => c
  * MC-2 keeps a call: I'm its reviewer, the other Cooptimizers in the chat who use FocusTime are on it, its event id the
  * call's key. Nothing is asked of Microsoft here.
  */
+/** MC-6: the clients a chat call may be filed under: its chat's registration's, and Internal. */
+export async function chatClientAllowed(ctx: Pick<MeetingContext, "isInternal">, chatClient: string, asked: string): Promise<boolean> {
+  if (asked.toLowerCase() === chatClient.toLowerCase()) return true;
+  return ctx.isInternal ? await ctx.isInternal(asked).catch(() => false) : asked.toLowerCase() === INTERNAL_CLIENT.toLowerCase();
+}
+
 async function startChatCall(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, me: string, key: string, clientKey: string): Promise<ActionResponse> {
   if (!ctx.cooptimizer || !(await ctx.cooptimizer(me).catch(() => false))) return { ok: false, status: 403, error: FETCH_WORDS.not_cooptimizer, code: "not_cooptimizer" };
   const callId = callIdOfKey(key);
@@ -1067,6 +1076,11 @@ async function startChatCall(ctx: MeetingContext, store: MeetingStore, cfg: AppC
   }
   const client = await clientOf(ctx, clientKey);
   if (isRefusal(client)) return client;
+  // MC-6: a call started in a client's chat is about that chat's client, or Internal; never another client, whoever asks.
+  if (!(await chatClientAllowed(ctx, c.clientKey, client.key))) {
+    ctx.log({ source: "plan", op: "meeting_call_start", kind: "chat_other_client" });
+    return { ok: false, status: 403, error: CHAT_OTHER_CLIENT, code: "chat_other_client" };
+  }
   const kept = await store.callByKey(key);
   if (kept) {
     // Someone else in the chat kept it first (their Review, perhaps refused): my own Review makes me a reviewer too, so
