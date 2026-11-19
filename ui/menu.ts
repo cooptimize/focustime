@@ -12,6 +12,7 @@ import { parseItemRef } from "../plan/lookup.ts";
 import { ACTIONS, type ActionName, type ActionSpec } from "../actions/registry.ts";
 import { TEXT_SIZES, THEME_NAMES, THEMES, type TextSize, type Theme } from "../config/schema.ts";
 import { TEXT_SIZE_NAMES } from "./textsize.ts";
+import { tabKey } from "./nav.ts";
 import { dayHoursInput } from "./day-hours.ts";
 import { hoursOn, VIEW_RANGE_NAMES, VIEW_RANGES, type TimeModel, type ViewRange } from "../week/hours.ts";
 import { canAddWork, dayRule } from "../plan/days.ts";
@@ -1826,11 +1827,12 @@ const askKey = (id: AskKeyId): void => void window.dispatchEvent(new CustomEvent
 /** Window commands that aren't server actions: views, week navigation, details. */
 function uiCommands(env: MenuEnv): MenuItem[] {
   return [
-    { id: "view.today", action: "view.today", group: "Views", label: "Day", aka: ["Today"], hint: "1", run: () => env.setView("today") },
-    { id: "view.week", action: "view.week", group: "Views", label: "Week", aka: ["Board"], hint: "2", run: () => env.setView("week") },
-    { id: "view.roadmap", action: "view.roadmap", aka: ["ahead", "roadmap", "grid"], group: "Views", label: "Backlog: every client's DevOps in rank order, Grid", hint: "3", run: () => env.setView("roadmap") },
-    { id: "view.status", action: "view.status", aka: ["status report", "Week › Status"], group: "Views", label: "Status: this week's feature updates for Monday's report", hint: "4", run: () => env.setView("status") },
-    { id: "view.inbox", action: "view.inbox", group: "Views", label: "Inbox: from chats, promises, captures", hint: "5", run: () => env.setView("inbox") },
+    // TB-1: the tabs in their order, each hint its number key (nav.ts tabKey).
+    { id: "view.today", action: "view.today", group: "Views", label: "Day", aka: ["Today"], hint: tabKey("today"), run: () => env.setView("today") },
+    { id: "view.week", action: "view.week", group: "Views", label: "Week", aka: ["Board"], hint: tabKey("week"), run: () => env.setView("week") },
+    { id: "view.roadmap", action: "view.roadmap", aka: ["ahead", "roadmap", "grid"], group: "Views", label: "Backlog: every client's DevOps in rank order, Grid", hint: tabKey("ahead"), run: () => env.setView("roadmap") },
+    { id: "view.inbox", action: "view.inbox", group: "Views", label: "Inbox: from chats, promises, captures", hint: tabKey("inbox"), run: () => env.setView("inbox") },
+    { id: "view.status", action: "view.status", aka: ["status report", "Week › Status"], group: "Views", label: "Status: this week's feature updates for Monday's report", hint: tabKey("status"), run: () => env.setView("status") },
     { id: "view.requests", action: "view.requests", group: "Views", label: "Inbox › From chats: conversations that need a DevOps item", run: () => env.setView("requests") },
     ...ASK_KEYS.map((k): MenuItem => ({ id: k.id, action: k.id, group: "Inbox", label: k.label, hint: k.hint, ...(env.asksOpen ? { run: () => askKey(k.id) } : { disabled: "Open the Inbox first" }) })),
     { id: "view.plan", action: "view.plan", aka: ["commit", "plan"], group: "Views", label: "Add work beside Week (on Backlog: Grid or Gantt)", hint: "P", run: env.openRitual },

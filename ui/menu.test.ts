@@ -8,6 +8,8 @@ import { config } from "../week/test-helpers.ts";
 import type { ClientWork, WorkItem } from "../week/types.ts";
 import type { CoworkData } from "../plan/cowork.ts";
 import { callItems, eventMenu, timeboxMenu, timerStep, timeboxStep, timeStep, commandList, dayMenu, HOLLOW, filterCommands, itemMenu, pickMenu, planDateStep, slotMenu, type MenuEnv, type MenuStep, flexForm, hoursForm, deployForm } from "./menu.ts";
+import { TABS, tabKey, type Tab } from "./nav.ts";
+import { KEYS } from "./keys.ts";
 
 const week = buildWeek({ weekStart: "2026-11-02", patterns: [], events: [], config, pto: { "2026-11-05": { date: "2026-11-05", minutes: 480, full: true, titles: ["Watch Kids"] } } });
 const item = (id: number, level: WorkItem["level"] = "story"): WorkItem => ({ id, title: `Item ${id}`, type: level === "story" ? "User Story" : "Feature", state: "New", stateCategory: "Proposed", level, order: id, parentId: null, changedAt: "", url: `https://dev.azure.com/org/P/_workitems/edit/${id}` });
@@ -669,5 +671,19 @@ describe("CO-1: every door into Ask to collaborate opens it with what it passed 
     const step = list.find((x) => x.action === "collab.check")!.next!() as MenuStep;
     await items(step)[0]!.run!();
     expect(helps().at(-1)).toEqual({ clientKey: "internal", title: "Item 1", url: pick.itemUrl, itemId: 1, pickId: 7, pinned: "2026-11-03" });
+  });
+
+  it("TB-1: the tabs' commands say each tab's number key, the same as the legend, in the tabs' order", () => {
+    const list = commandList({ ...env().e, showCode: () => {}, codeClients: [{ clientKey: "Northwind", name: "Northwind" }] });
+    const cmd: Record<Tab, string> = { today: "view.today", week: "view.week", ahead: "roadmap.load", inbox: "view.inbox", calls: "meeting.mine", status: "view.status", code: "code.clients" };
+    for (const t of TABS) {
+      expect(list.find((c) => c.id === cmd[t])?.hint, t).toBe(tabKey(t));
+      expect(KEYS.find((k) => k.command === cmd[t])?.keys[0], t).toBe(tabKey(t));
+    }
+    expect(TABS.map(tabKey)).toEqual(["1", "2", "3", "4", "5", "6", "7"]);
+    // The legend and the Views group list the tabs in the bar's order.
+    expect(KEYS.filter((k) => Object.values(cmd).includes(k.command ?? "")).map((k) => k.command)).toEqual(TABS.map((t) => cmd[t]));
+    const views = list.filter((c) => c.group === "Views" && ["view.today", "view.week", "view.roadmap", "view.inbox", "view.status"].includes(c.action ?? "")).map((c) => c.action);
+    expect(views).toEqual(["view.today", "view.week", "view.roadmap", "view.inbox", "view.status"]);
   });
 });

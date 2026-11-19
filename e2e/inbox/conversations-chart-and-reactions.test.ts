@@ -239,7 +239,7 @@ describe.skipIf(!CHROMIUM)("Conversations, CV-2", () => {
       // The Inbox (IB-4): Refresh on From chats reads the chats. A conversation shows as a suggestion only once it has
       // been quiet 4 working hours; the clock here is fixed, so its last work message is moved to last Thursday.
       // CV-4: the poll never reads images; they are read from Teams when shown, with the viewer's token.
-      await page.keyboard.press("5");
+      await page.keyboard.press("4");
       const main = await openInboxView(page, "chats");
       await main.getByRole("button", { name: "Refresh", exact: true }).click();
       await main.getByText("Checked your chats").first().waitFor();

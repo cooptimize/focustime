@@ -51,7 +51,7 @@ import { causeLines, sourceActions, sourceLabel, stateOf } from "./status.ts";
 import { WeekGrid, type PanelFocus, type Selection } from "./WeekGrid.tsx";
 import { TopTimer } from "./NowStrip.tsx";
 import { PersonChip, useAccountMenu, VM_MENU_EVENT, VmChip, VmProvider } from "./Account.tsx";
-import { stepWeekday, weekendStops, afterDone, addOf, weekOfAdd, defaultNav, hashOf, HOME, isPlanning, modeNav, navOf, parseHash, placeToKeep, arriveAt, locScreens, routeLoc, sameLoc, TAB_NAMES, tabForKey, TABS, toggleP, viewName, viewNav, type Loc, type ModeName, type Nav, type Tab } from "./nav.ts";
+import { stepWeekday, weekendStops, afterDone, addOf, weekOfAdd, defaultNav, hashOf, HOME, isPlanning, modeNav, navOf, parseHash, placeToKeep, arriveAt, locScreens, routeLoc, sameLoc, TAB_NAMES, tabForKey, tabKey, TABS, toggleP, viewName, viewNav, type Loc, type ModeName, type Nav, type Tab } from "./nav.ts";
 import { ModeArea, ModeSwitch, CardsTimelineSwitch, MeetingsSwitch, rememberedMeetingsAll, rememberMeetingsAll } from "./ModeSwitch.tsx";
 import { hasWorkOn, momentCard } from "../plan/modes.ts";
 import { sound } from "./sound.ts";
@@ -166,7 +166,7 @@ const TAB_TITLES: Record<Tab, string> = {
  * UC-3: a tab's tooltip ends with how to reach it by key, "Press 6", never "(6)" (beside a count it read as a second
  * one). Status's reason, when there is one, goes before it.
  */
-const tabTip = (title: string, key: number, more: string) => `${title}.${more ? ` ${more.replace(/\.?$/, ".")}` : ""} Press ${key}`;
+const tabTip = (title: string, key: string, more: string) => `${title}.${more ? ` ${more.replace(/\.?$/, ".")}` : ""} Press ${key}`;
 
 const shortDay = (d: IsoDate) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
@@ -1576,7 +1576,7 @@ export function App() {
         e.preventDefault();
         setSettingsAt("");
       } else if (tabForKey(k) && free && tabShown(tabForKey(k)!)) {
-        // Step 16.2: 1–6 are the tabs in order (T stays Today; RB-6: 6 is Code, where it shows).
+        // Step 16.2, TB-1: 1 to 7 are the tabs in order (T stays Day, L the Inbox; 7 is Code, where it shows).
         e.preventDefault();
         openTab(tabForKey(k)!);
       } else if ((k === "p" || k === "P" || k === "i" || k === "I") && free && settingsAt === null) {
@@ -2133,8 +2133,8 @@ export function App() {
           )}
         </div>
         {!phone && <nav className="views" aria-label="Tabs">
-          {TABS.filter(tabShown).map((t, n) => (
-            <button key={t} type="button" className="view-tab" aria-current={nav.tab === t && !loc.overlay ? "page" : undefined} onClick={() => openTab(t)} onPointerEnter={() => aheadOf(t)} onFocus={() => aheadOf(t)} title={tabTip(TAB_TITLES[t], n + 1, t === "status" && statusTone !== "none" ? statusText : "")} data-tour={t === "status" ? "tab-status" : undefined}>
+          {TABS.filter(tabShown).map((t) => (
+            <button key={t} type="button" className="view-tab" aria-current={nav.tab === t && !loc.overlay ? "page" : undefined} onClick={() => openTab(t)} onPointerEnter={() => aheadOf(t)} onFocus={() => aheadOf(t)} title={tabTip(TAB_TITLES[t], tabKey(t), t === "status" && statusTone !== "none" ? statusText : "")} data-tour={t === "status" ? "tab-status" : undefined}>
               <Icon name={TAB_ICONS[t]} />
               {TAB_NAMES[t]}
               {t === "inbox" && inboxCount > 0 && <span className="count" aria-label={`${inboxCount} need you`}>{inboxCount}</span>}

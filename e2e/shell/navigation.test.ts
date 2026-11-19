@@ -84,7 +84,7 @@ describe.skipIf(!CHROMIUM)("NV-1 navigation", () => {
     await shotAll(page, "nv1-ahead");
 
     // The Inbox (IB-4): three lists in one switch, no mode switch.
-    await page.keyboard.press("5");
+    await page.keyboard.press("4");
     await page.getByRole("main", { name: "Inbox" }).getByRole("tablist", { name: "Lists" }).waitFor();
     expect(await page.getByRole("navigation", { name: "Inbox modes" }).count()).toBe(0);
     await shotAll(page, "nv1-inbox");

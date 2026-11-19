@@ -20,7 +20,7 @@ const allDoes = [...Object.values(C.AREAS).flatMap((a) => a.does), ...Object.val
 
 describe("the sections", () => {
   it("are in nav order: Start here, Your first day, the tabs in the app's order (RB-6: Code last of them; MC-3: Calls before it), then the rest, with Renamed last", () => {
-    expect(SECTIONS.map((s) => s.id)).toEqual(["start", "first-day", "day", "week", "backlog", "status", "inbox", "calls", "code", "writing", "capture", "assistant", "ask", "teams", "settings", "renamed"]);
+    expect(SECTIONS.map((s) => s.id)).toEqual(["start", "first-day", "day", "week", "backlog", "inbox", "calls", "status", "code", "writing", "capture", "assistant", "ask", "teams", "settings", "renamed"]);
     for (const s of SECTIONS) expect(C.SECTION_LINES[s.id], s.id).toBeTruthy();
     for (const id of areaIds) expect(SECTIONS.some((s) => s.id === id), id).toBe(true);
   });

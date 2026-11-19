@@ -17,11 +17,11 @@ describe.skipIf(!CHROMIUM)("Navigation: tabs, modes and addresses (browser, demo
   }, 120_000);
   afterAll(async () => h?.stop());
 
-  it("seven tabs in order (Day · Week · Backlog · Status · Inbox · Calls · Code), no Plan or Team tab, no ritual chips, no context line; 1–7 and T switch them", async () => {
+  it("seven tabs in order (TB-1: Day · Week · Backlog | Inbox · Calls | Status · Code), no Plan or Team tab, no ritual chips, no context line; 1–7 and T switch them", async () => {
     const { page, errors } = await freshPage(h);
-    await expect(page.locator(".views .view-tab").allTextContents()).resolves.toEqual(["Day", "Week", "Backlog", "Status", expect.stringMatching(/^Inbox/), expect.stringMatching(/^Calls/), "Code"]);
+    await expect(page.locator(".views .view-tab").allTextContents()).resolves.toEqual(["Day", "Week", "Backlog", expect.stringMatching(/^Inbox/), expect.stringMatching(/^Calls/), "Status", "Code"]);
     await expect(page.locator(".ritual-bar, .context-line, .weeknav").count()).resolves.toBe(0);
-    for (const [k, name, h2] of [["2", "Week", "#/week"], ["3", "Backlog", "#/backlog"], ["4", "Status", "#/status"], ["5", "Inbox", "#/inbox"], ["t", "Day", "#/day"], ["6", "Calls", "#/calls"], ["7", "Code", "#/code"], ["1", "Day", "#/day"]] as const) {
+    for (const [k, name, h2] of [["2", "Week", "#/week"], ["3", "Backlog", "#/backlog"], ["6", "Status", "#/status"], ["4", "Inbox", "#/inbox"], ["t", "Day", "#/day"], ["5", "Calls", "#/calls"], ["7", "Code", "#/code"], ["1", "Day", "#/day"]] as const) {
       await page.keyboard.press(k);
       await expect.poll(() => tab(page)).toMatch(new RegExp(`^${name}`));
       // MC-3: Calls opens the call that needs me beside its list (#/calls/<id>).

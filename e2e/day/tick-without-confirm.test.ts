@@ -96,10 +96,10 @@ describe.skipIf(!CHROMIUM)("CF-1: no confirm, no musts (browser, demo mode)", ()
     await page.keyboard.press("3");
     await page.waitForTimeout(1500);
     await look("Ahead");
-    await page.keyboard.press("4");
+    await page.keyboard.press("6");
     await page.waitForTimeout(1500);
     await look("Status");
-    await page.keyboard.press("5");
+    await page.keyboard.press("4");
     await page.waitForTimeout(1500);
     await look("Inbox");
     // The command menu: every command's label, by searching for the old words.

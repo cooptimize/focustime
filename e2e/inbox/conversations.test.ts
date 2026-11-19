@@ -202,7 +202,7 @@ describe.skipIf(!CHROMIUM)("Conversations", () => {
 
       // The Inbox (IB-4): Refresh reads the chats now. Nothing is in From chats yet (the conversations are minutes old);
       // my two promises are in Promises.
-      await page.keyboard.press("5");
+      await page.keyboard.press("4");
       const main = await openInboxView(page, "chats");
       await main.getByRole("button", { name: "Refresh" }).click();
       await main.getByText("Nothing from your chats needs an item.").waitFor();
@@ -244,7 +244,7 @@ describe.skipIf(!CHROMIUM)("Conversations", () => {
       await shotBoth(page, "today-promise-after-blocks", page.getByRole("main", { name: "Day" }));
 
       // IB-1: no Make it a follow-up; the promise's Who is the person it was promised to (Evan), never me.
-      await page.keyboard.press("5");
+      await page.keyboard.press("4");
       await openInboxView(page, "promises");
       const card = await openInboxItem(page, "Rerun the Salesforce data from CRM_Silver");
       await expect(card.getByRole("button", { name: "Make it a follow-up" }).count()).resolves.toBe(0);

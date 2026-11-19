@@ -1,4 +1,4 @@
-// Step 16.2, NV-1, WD-1, RF-1, WD-2, BL-1, RB-6, MC-3: where the window is. Seven tabs (Day · Week · Backlog · Status · Inbox · Calls · Code), a view switch
+// Step 16.2, NV-1, WD-1, RF-1, WD-2, BL-1, RB-6, MC-3, TB-1: where the window is. Seven tabs (Day · Week · Backlog | Inbox · Calls | Status · Code), a view switch
 // on Backlog (Grid · Gantt; the code name stays "ahead"), Day's two flows, the block panel on Week and on Day, and the full-window overlays (the focus
 // screen, Settings, the Guide). Every place has an address (#/…) so browser back and reopening land in the same place.
 // Pure: no DOM, no React; App applies it. WD-1: the code keeps "today" as Day's tab id; people read "Day".
@@ -12,8 +12,17 @@ import { adminHref, oldAdminAt, parseAdminPath, adminPath, PART_NAME } from "./s
 import { LIST_FILTERS, OLD_FILTERS, type ListFilter } from "../plan/call-filters.ts";
 import { isBranchName } from "../plan/branch-name.ts";
 
-export const TABS = ["today", "week", "ahead", "status", "inbox", "calls", "code"] as const;
+/**
+ * TB-1: the tabs' one order, in three groups (your work; what is coming at you; looking out or up). The top bar, its
+ * dividers, the number keys, the tooltips, the key legend, the command menu and the Guide all read it from here.
+ * Replaces RF-1's and MC-3's order (Day, Week, Backlog, Status, Inbox, Calls, Code).
+ */
+export const TABS = ["today", "week", "ahead", "inbox", "calls", "status", "code"] as const;
 export type Tab = (typeof TABS)[number];
+/** TB-1: where the top bar draws a divider: before each of these tabs, never at either end. */
+export const GROUP_STARTS: readonly Tab[] = ["inbox", "status"];
+/** A tab's number key: its place in TABS (1 Day … 7 Code). Code is last, so a person without it keeps 1 to 6. */
+export const tabKey = (t: Tab): string => String(TABS.indexOf(t) + 1);
 /** WD-1: Today is called Day (the date word "today" stays), and Status is a tab of its own. */
 /** BL-1: the Ahead tab is called Backlog (its code name stays "ahead"). */
 /** RB-6: Code is a tab of its own (was a panel from More), shown only to a person who may read code. */

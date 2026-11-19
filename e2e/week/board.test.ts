@@ -191,7 +191,7 @@ describe.skipIf(!CHROMIUM)("WD-1: one Week (browser, demo)", () => {
     const { page } = await freshPage(h);
     const PLAN = /^(Plan|Plan it|Plan the day|Plan the week|Plan today)$/;
     const words = () => page.locator("button:visible, a:visible").evaluateAll((els) => els.map((e) => (e.textContent ?? "").trim()));
-    for (const [key, ready] of [["1", ".today-view"], ["2", ".half.card"], ["4", "main"], ["5", ".status-view, main"]] as const) {
+    for (const [key, ready] of [["1", ".today-view"], ["2", ".half.card"], ["6", ".status-view, main"], ["4", "main"]] as const) {
       await page.keyboard.press(key);
       await page.locator(ready).first().waitFor({ timeout: 30_000 });
       await page.waitForTimeout(300);
@@ -209,7 +209,7 @@ describe.skipIf(!CHROMIUM)("WD-1: one Week (browser, demo)", () => {
     const { page } = await freshPage(h);
     await expect(page.locator("nav.views .view-tab").allInnerTexts()).resolves.toEqual(expect.arrayContaining([expect.stringMatching(/^Day/), expect.stringMatching(/^Status/)]));
     const tabs = (await page.locator("nav.views .view-tab").allInnerTexts()).map((t) => t.replace(/\d+/g, "").trim());
-    expect(tabs).toEqual(["Day", "Week", "Backlog", "Status", "Inbox", "Calls", "Code"]); // RB-6: Code is a tab; MC-3: Calls before it.
+    expect(tabs).toEqual(["Day", "Week", "Backlog", "Inbox", "Calls", "Status", "Code"]); // RB-6, MC-3, TB-1: Status after Calls, Code last.
     // RF-1: no number on Status (its dot is e2e/shell/tab-order.test.ts's).
     expect(await page.locator("nav.views .view-tab", { hasText: "Status" }).locator(".count").count()).toBe(0);
     // The command menu: nothing named Team.

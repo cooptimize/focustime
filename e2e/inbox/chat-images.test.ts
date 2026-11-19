@@ -202,7 +202,7 @@ describe.skipIf(!CHROMIUM)("Chat images, CV-4", () => {
       graph.say(ME, "<p>Thanks Blake, I'll log a bug for the overnight refresh.</p>", 3);
 
       // Refresh on From chats: one AI request with the two readable images after their message's label.
-      await page.keyboard.press("5");
+      await page.keyboard.press("4");
       const main = await openInboxView(page, "chats");
       await main.getByRole("button", { name: "Refresh", exact: true }).click();
       await main.getByText("Checked your chats").first().waitFor();
