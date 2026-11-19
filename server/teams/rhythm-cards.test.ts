@@ -1,7 +1,7 @@
 // CF-1: the morning brief card says nothing about confirming the day, with work on today or none, and an earlier
 // card's Confirm today comes back as a plain notice.
 import { describe, expect, it } from "vitest";
-import { briefCard, type PickRow } from "./rhythm-cards.ts";
+import { briefCard, meetingsCard, type PickRow } from "./rhythm-cards.ts";
 
 const URL_ = "https://focustime.example.com";
 const pk = (id: number, title: string): PickRow => ({ id, title, client: "Northwind", state: "open", note: null });
@@ -17,5 +17,17 @@ describe("the morning brief card (CF-1)", () => {
   it("shows the plain notice for an earlier card's Confirm today", () => {
     const card = JSON.stringify(briefCard({ ...base, blocks: [], notice: "There's nothing to confirm now. Your plan is what's on your day." }, URL_));
     expect(card).toContain("There's nothing to confirm now. Your plan is what's on your day.");
+  });
+});
+
+// UC-3 item 1: the calls note's button says Calls and opens #/calls (the old #/meetings address still lands there).
+describe("the client calls note (UC-3)", () => {
+  it("with nothing to point at, opens Calls at #/calls; with a call, opens that call at #/calls/<id>", () => {
+    const none = JSON.stringify(meetingsCard({ kind: "meetings", occasion: "meetings:1", items: [] }, URL_));
+    expect(none).toContain('"title":"Open Calls"');
+    expect(none).toContain(`${URL_}/#/calls"`);
+    expect(none).not.toContain("#/meetings");
+    const one = JSON.stringify(meetingsCard({ kind: "meetings", occasion: "meetings:2", items: [{ clientName: "Adatum", meeting: "Adatum weekly", dateLabel: "Mon, Nov 2", upload: false, route: "#/calls/7" }] }, URL_));
+    expect(one).toContain(`${URL_}/#/calls/7`);
   });
 });

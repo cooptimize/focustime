@@ -380,7 +380,7 @@ export function createRhythm(d: RhythmDeps) {
     const r = await d.run(userId, "meeting.mine", {}).catch(() => null);
     if (!r?.ok) return null;
     const nudges = (r.data as { nudges: { key: string; kind: "review" | "upload" | "failed"; occurrenceId: number; clientName: string; meeting: string; dateLabel: string }[] }).nudges;
-    return nudges.map((n) => ({ key: n.key, item: { clientName: n.clientName, meeting: n.meeting, dateLabel: n.dateLabel, upload: n.kind === "upload", ...(n.kind === "failed" ? { failed: true } : {}), route: `#/meetings/${n.occurrenceId}` } }));
+    return nudges.map((n) => ({ key: n.key, item: { clientName: n.clientName, meeting: n.meeting, dateLabel: n.dateLabel, upload: n.kind === "upload", ...(n.kind === "failed" ? { failed: true } : {}), route: `#/calls/${n.occurrenceId}` } }));
   }
 
   /**
@@ -768,7 +768,7 @@ export function createRhythm(d: RhythmDeps) {
       } else if (kind === "status") model = await statusModel(userId, occasion, true).catch(() => null);
       else if (kind === "meetings") {
         const found = await meetingNudges(userId).catch(() => null);
-        model = found && { kind: "meetings", occasion, test: true, items: found.length ? found.map((n) => n.item) : [{ clientName: "a client", meeting: "Sample: weekly status call", dateLabel: "a sample: nothing to review", upload: false, route: "#/meetings" }] };
+        model = found && { kind: "meetings", occasion, test: true, items: found.length ? found.map((n) => n.item) : [{ clientName: "a client", meeting: "Sample: weekly status call", dateLabel: "a sample: nothing to review", upload: false, route: "#/calls" }] };
       }
       else model = await modelFor(kind, userId, occasion, today, true).catch(() => null);
       if (!model) {

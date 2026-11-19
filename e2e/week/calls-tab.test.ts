@@ -39,7 +39,7 @@ describe.skipIf(!CHROMIUM)("Calls is a tab (MC-3, browser, demo mode)", () => {
     await go(page, "#/week");
     await page.locator(".topbar .view-tab").first().waitFor({ timeout: 30_000 });
     await expect(tabNames(page)).resolves.toEqual(["Day", "Week", "Backlog", "Status", "Inbox", "Calls", "Code"]);
-    await expect(callsTab(page).getAttribute("title")).resolves.toMatch(/\(6\)$/);
+    await expect(callsTab(page).getAttribute("title")).resolves.toMatch(/\. Press 6$/);
     // The count: the calls that need me (MC-2's count), the same as To review; never the Inbox's.
     const inboxBefore = await page.locator(".topbar .view-tab").filter({ hasText: /^Inbox/ }).locator(".count").textContent();
     await expect.poll(() => callsTab(page).locator(".count").textContent(), { timeout: 30_000 }).toBe("1");

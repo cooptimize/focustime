@@ -36,6 +36,17 @@ export const NO_CLIENT = "No client";
  */
 export const needNoClient = (items: readonly { clientKey: string | null; views: readonly string[] }[]): number => items.filter((r) => !r.clientKey && r.views.includes("needs_you")).length;
 
+/**
+ * UC-3: a group heading's number says what needs me in that group, counted as the chips and the tab count, and adds
+ * the rows shown when they differ: "2 need you", "1 needs you · 3", "none need you · 3". A list nothing in it ever
+ * counts (Captures) shows only its rows (`need` null).
+ */
+export const headCount = (need: number | null, total: number): string => {
+  if (need === null) return String(total);
+  const verb = need === 1 ? "needs" : "need";
+  return need === total ? `${need} ${verb} you` : `${need === 0 ? "none" : need} ${verb} you · ${total}`;
+};
+
 /** A chip's name for a screen reader: the client, then its number when it has one ("Harbor, 2 need you"). */
 export const chipName = (name: string, n: number) => (n > 0 ? `${name}, ${n} ${n === 1 ? "needs" : "need"} you` : name);
 

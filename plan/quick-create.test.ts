@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 import { anAheadClient, anAheadItem, anAheadLoad, anAssignee } from "../test/builders/index.ts";
 import { DEFAULT_FILTERS, groups, hiddenBy } from "./ahead-model.ts";
-import { childTypesOf, cleanTitle, createLevels, createLevelsOf, draftLevelOf, formDefaults, missingRequired, parentProblem, parentTypesOf, TITLE_MAX, type CreateLevel } from "./quick-create.ts";
+import { aOr, childTypesOf, cleanTitle, createLevels, createLevelsOf, draftLevelOf, formDefaults, missingRequired, parentProblem, parentTypesOf, TITLE_MAX, type CreateLevel } from "./quick-create.ts";
 
 const agile = {
   requirementBacklog: { name: "Stories", workItemTypes: [{ name: "User Story" }] },
@@ -49,8 +49,10 @@ describe("the parent rule: one level up, or none", () => {
     expect(parentProblem(ladder, "Domain", "Epic")).toBeNull();
     expect(parentProblem(ladder, "Epic", "Capability")).toBeNull();
     expect(parentProblem(ladder, "Feature", "Bug")).toBeNull();
-    expect(parentProblem(ladder, "Epic", "Product Backlog Item")).toBe("A Product Backlog Item doesn't go under an Epic in this process. Under an Epic go: Feature, Capability");
-    expect(parentProblem(ladder, "Product Backlog Item", "Feature")).toBe("Nothing goes under a Product Backlog Item in this process's backlogs");
+    // UC-3 item 3: the move rule's words (UC-2): the project's process, no "a" or "an" before a type's name.
+    expect(parentProblem(ladder, "Epic", "Product Backlog Item", "Logistics")).toBe("In Logistics's process, Epic isn't the level above Product Backlog Item. Under Epic go: Feature, Capability");
+    expect(parentProblem(ladder, "Epic", "Product Backlog Item")).toBe("In this process, Epic isn't the level above Product Backlog Item. Under Epic go: Feature, Capability");
+    expect(parentProblem(ladder, "Product Backlog Item", "Feature", "Logistics")).toBe("In Logistics's process, nothing goes under Product Backlog Item");
     expect(parentProblem(ladder, "Epic", "Initiative")).toBe("Initiative isn't a level in this project's process");
   });
   it("parents and children of a type", () => {
@@ -128,5 +130,21 @@ describe("Ahead shows what I just created, and says which filters would hide it"
     expect(hiddenBy(load, { ...DEFAULT_FILTERS, owner: { Northwind: "all" }, q: "zzz" }, "Northwind:11")).toEqual(["Search"]);
     const out = anAheadLoad([anAheadClient({ items: [anAheadItem({ id: 12, inScope: false })] })]);
     expect(hiddenBy(out, { ...DEFAULT_FILTERS, owner: { Northwind: "all" } }, "Northwind:12")).toContain("Cooptimize's scope (Show the whole project)");
+  });
+});
+
+// UC-3 item 2: "a" or "an" follows how a type's name sounds, for any type a process has; no type's name is in the rule.
+describe("aOr: the article by sound (UC-3)", () => {
+  // A made-up process: names starting with a vowel sound and with a consonant sound, either spelling.
+  const vowelSounds = ["Outcome", "Initiative", "Enabler", "Upgrade Task", "Hour Block", "MVP", "FAQ Entry", "Item"];
+  const consonantSounds = ["User Story", "Unit Test", "Use Case", "Euro Task", "One-pager", "UAT Task", "Horizon", "Bug", "Product Backlog Item"];
+  it.each(vowelSounds)("an %s", (t) => expect(aOr(t)).toBe(`an ${t}`));
+  it.each(consonantSounds)("a %s", (t) => expect(aOr(t)).toBe(`a ${t}`));
+  it("in the rule's words, for a process whose top level is said with a consonant sound", () => {
+    const made = [["Unit Goal"], ["Outcome"], ["User Story"], ["Task"]];
+    const words = parentProblem(made, "Unit Goal", "User Story")!;
+    expect(words).toMatch(/\bUser Story\b/);
+    expect(words).not.toMatch(/\b[Aa]n U/);
+    expect(parentProblem(made, "Outcome", "Unit Goal")).not.toMatch(/\b[Aa]n U/);
   });
 });

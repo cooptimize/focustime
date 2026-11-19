@@ -24,7 +24,7 @@ import { usePhone } from "../viewport.ts";
 import { entryOf, useInboxData, type Entry } from "./data.ts";
 import { Detail, FormArea, Lead } from "./Detail.tsx";
 import { actsFor, ITEM_KEYS, type FormId } from "./ItemActions.tsx";
-import { chipHint, chipName, dueWords, lateText, needCounts, needNoClient, NO_CLIENT } from "./model.ts";
+import { chipHint, chipName, dueWords, headCount, lateText, needCounts, needNoClient, NO_CLIENT } from "./model.ts";
 import { SuggestionForms, SuggestionOpen, SuggestionWhy, suggestionActs, type SuggestionForm } from "./Suggestion.tsx";
 import { needsQueue } from "../../plan/phone-now.ts";
 import { screen } from "../screens.ts";
@@ -165,11 +165,17 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
   // UC-1: each chip's number is what needs me in that client, counted as the tab counts; All clients shows the tab's.
   // The phone's Inbox is unchanged: no numbers on its chips.
   const need = useMemo(() => (phone ? new Map<string, number>() : needCounts(items)), [items, phone]);
+  // UC-3: the rows the tab counts, for the group headings (the same rule as the chips').
+  const needKeys = useMemo(() => new Set(items.filter((r) => r.views.includes("needs_you")).map((r) => r.key)), [items]);
   const allNeed = phone ? 0 : (src.list?.needsYou ?? 0);
   // UC-2: what the tab counts with no client, as its own chip after the clients (so the chips add up to the tab).
   const noClientNeed = phone ? 0 : needNoClient(items);
   // The chosen No client goes only once nothing in any list lacks a client (its rows may no longer need me but still show).
-  const anyNoClient = !phone && items.some((i) => !i.clientKey);
+  const anyNoClient = items.some((i) => !i.clientKey);
+  // UC-3: the phone has the No client chip too, without a number like its other chips, while something in its lists
+  // has no client; the computer's shows while something with no client needs me, as before.
+  const phoneNoClient = phone && items.some((i) => !i.clientKey && !i.done && i.views.length > 0);
+  const showNoClient = noClientNeed > 0 || phoneNoClient || noClient;
   useEffect(() => {
     if (!anyNoClient && noClient) setNoClient(false);
   }, [anyNoClient, noClient]);
@@ -421,15 +427,16 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
       <span className="ib4-chev"><Icon name={openKey === key ? "up" : "next"} /></span>
     </button>
   );
-  const groupHead = (name: string, n: number) => (
+  // UC-3: a heading counts what needs me there, as its chip and the tab do, and adds its rows when they differ.
+  const groupHead = (name: string, n: number, need: number | null) => (
     <h3 className="ib4-group-head">
-      {name} <span className="muted">{n}</span>
+      {name} <span className="muted">{headCount(need, n)}</span>
     </h3>
   );
 
   const chatsList = chatGroups.map((g) => (
     <section key={g.clientKey ?? ""} className="ib4-group" aria-label={g.name}>
-      {groupHead(g.name, g.rows.length)}
+      {groupHead(g.name, g.rows.length, g.rows.filter((s) => needKeys.has(`v${s.id}`)).length)}
       <ul className="ib4-rows">
         {g.rows.map((s) => {
           const key = `v${s.id}`;
@@ -462,10 +469,10 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
     </section>
   ));
 
-  const rowList = (groups: Group<InboxItemView>[], label: (r: InboxItemView) => ReactNode) =>
+  const rowList = (groups: Group<InboxItemView>[], label: (r: InboxItemView) => ReactNode, counts = true) =>
     groups.map((g) => (
       <section key={g.clientKey ?? ""} className="ib4-group" aria-label={g.name}>
-        {groupHead(g.name, g.rows.length)}
+        {groupHead(g.name, g.rows.length, counts ? g.rows.filter((r) => needKeys.has(r.key)).length : null)}
         <ul className="ib4-rows">
           {g.rows.map((r) => {
             const isOpen = openKey === r.key;
@@ -501,9 +508,9 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
         <CaptureBox data={data} onChanged={() => void reloadAll()} defaultClient={clients.length === 1 ? clients[0]! : null} large={!phone} />
       </section>
       {sortGroups.length > 0 && <h2 className="ib4-section">To sort</h2>}
-      {rowList(sortGroups, (r) => <Stamp at={r.at} tz={tz} today={today} />)}
+      {rowList(sortGroups, (r) => <Stamp at={r.at} tz={tz} today={today} />, false)}
       {draftGroups.length > 0 && <h2 className="ib4-section">Drafts</h2>}
-      {rowList(draftGroups, (r) => r.where ?? "Draft")}
+      {rowList(draftGroups, (r) => r.where ?? "Draft", false)}
     </>
   );
 
@@ -663,7 +670,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
           ))}
         </div>
       </header>
-      {chipClients.length + (noClientNeed > 0 || noClient ? 1 : 0) > 1 && (
+      {chipClients.length + (showNoClient ? 1 : 0) > 1 && (
         <div className="ib4-chips" role="group" aria-label="Clients">
           <button type="button" className={`ib4-chip${clients.length || noClient ? "" : " on"}`} aria-pressed={!clients.length && !noClient} aria-label={chipName("All clients", allNeed)} title={chipHint(null, allNeed) ?? undefined} onClick={() => toggleClient(null)}>
             All clients
@@ -676,10 +683,10 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
               {(need.get(k) ?? 0) > 0 && <span className="ib4-count">{need.get(k)}</span>}
             </button>
           ))}
-          {(noClientNeed > 0 || noClient) && (
+          {showNoClient && (
             <button type="button" className={`ib4-chip ib4-chip-none${noClient ? " on" : ""}`} data-chip="no-client" aria-pressed={noClient} aria-label={chipName(NO_CLIENT, noClientNeed)} title={chipHint(NO_CLIENT, noClientNeed) ?? undefined} onClick={() => setNoClient((v) => !v)}>
               {NO_CLIENT}
-              <span className="ib4-count">{noClientNeed}</span>
+              {noClientNeed > 0 && <span className="ib4-count">{noClientNeed}</span>}
             </button>
           )}
         </div>
