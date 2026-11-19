@@ -23,3 +23,5 @@ Each is the reading that changes less, taken so the step could run to the end wi
   - Copy link's "Copied" doesn't name the branch, though the link carries it.
   - After "isn't on main, so this is <folder>", the tree is open at that folder but the right side says "Choose a file", and the address has no folder (a folder has no address in Code).
   - Fixed from it: Search inside files names the branch on a repo's results ("sales-analytics on dev"), and its footer no longer says only the default branch is searched.
+- **CI, not RB-7's own:** `e2e/day/timeline.test.ts` (TY-1, SZ-1) drags by pixel position and fails under load: 14 of 40 in a local shake, and in CI on three branches before RB-7 (Nov 18 and 19). RB-7's two new browser files land in the same shard (6 of 6), which makes it fail there more often. Left for its owner: waiting for the timeline to settle before each drag, not a retry.
+- **Settings search's browser test** read each hit once with no wait, and failed when the page before it was a client's Code tab still reading its branches. It now waits up to 5 seconds per hit (40 of 40 in a shake).
