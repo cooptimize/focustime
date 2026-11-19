@@ -32,13 +32,15 @@ export const creatableTypes = (levels: readonly CreateLevel[]): string[] => leve
  * The parent rule: a type goes under any type one level up (the next backlog level), as DevOps' backlogs nest them.
  * With no parent it is fine at any level: DevOps itself never needs one (the project's default area and iteration).
  */
-export function parentProblem(ladder: readonly (readonly string[])[], parentType: string, type: string): string | null {
+export function parentProblem(ladder: readonly (readonly string[])[], parentType: string, type: string, /** The project's name, for "In <project>'s process"; "this process" without one. */ project?: string | null): string | null {
   const p = rungOfType(ladder, parentType);
   const t = rungOfType(ladder, type);
   if (t < 0) return `${type} isn't a level in this project's process`;
   if (p >= 0 && p + 1 === t) return null;
   const under = p >= 0 && p + 1 < ladder.length - 1 ? ladder[p + 1]! : [];
-  return under.length ? `${cap(aOr(type))} doesn't go under ${aOr(parentType)} in this process. Under ${aOr(parentType)} go: ${under.join(", ")}` : `Nothing goes under ${aOr(parentType)} in this process's backlogs`;
+  // UC-3: the move rule's words (UC-2), with no "a" or "an" before a type's name, then what does go there.
+  const inProcess = project ? `In ${project}'s process` : "In this process";
+  return under.length ? `${inProcess}, ${parentType} isn't the level above ${type}. Under ${parentType} go: ${under.join(", ")}` : `${inProcess}, nothing goes under ${parentType}`;
 }
 
 /** "a Feature", "an Epic", "a User Story", "an MVP": the article by how the type's name sounds (UC-3). */
@@ -60,7 +62,6 @@ export function vowelSound(name: string): boolean {
   if (/^u[bcdfgjklmnpqrstvwxz][aeiou]/.test(l) && !/^un|^up/.test(l)) return false;
   return /^[aeiou]/.test(l);
 }
-const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /** The parent types a type can have (one level up), in ladder order; empty at the top. */
 export const parentTypesOf = (ladder: readonly (readonly string[])[], type: string): string[] => {
@@ -158,5 +159,7 @@ export type NewOptions = {
   levels: (CreateLevel & { default: string })[];
   parents: NewParent[];
   problem: string | null;
+  /** UC-3: the client's DevOps project, for the parent rule's words; absent when the process can't be read. */
+  project?: string;
 };
 

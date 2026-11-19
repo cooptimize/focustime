@@ -1292,7 +1292,8 @@ describe("QC-1: new_item, the New form's create", () => {
 
   it("refuses in plain words, before anything is sent: wrong level under a parent, unknown type, closed parent, another project", async () => {
     const r1 = await s.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", title: "Story under epic", type: "User Story", parentId: 600 } });
-    expect(r1).toMatchObject({ status: 409, error: expect.stringContaining("doesn't go under an Epic") });
+    // UC-3 item 3: the move rule's words (UC-2), no "a" or "an" before a type's name.
+    expect(r1).toMatchObject({ status: 409, error: expect.stringMatching(/^In .+'s process, Epic isn't the level above User Story\. Under Epic go: Feature$/) });
     expect((await s.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", title: "X", type: "Initiative" } })).error).toMatch(/isn't a level in .*It has: Epic, Feature, User Story/);
     s.dv.add(700, { "System.WorkItemType": "Epic", "System.Title": "Old", "System.State": "Closed" });
     expect((await s.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", title: "X", type: "Feature", parentId: 700 } })).error).toContain("only under open parents");
@@ -1317,7 +1318,7 @@ describe("QC-1: new_item, the New form's create", () => {
     expect(t.dv.items.get(d.entry.itemId!)!.fields["System.WorkItemType"]).toBe("Domain");
     const e = await t.write({ kind: "new_item", title: "Card payments", type: "Epic", parentId: d.entry.itemId });
     expect(t.dv.items.get(e.entry.itemId!)!.fields["System.Parent"]).toBe(d.entry.itemId);
-    expect((await t.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", title: "X", type: "Feature", parentId: d.entry.itemId } })).error).toContain("Under a Domain go: Epic");
+    expect((await t.fail("devops.preview", { clientKey: COOP, change: { kind: "new_item", title: "X", type: "Feature", parentId: d.entry.itemId } })).error).toContain("Under Domain go: Epic");
   });
 
   it("a required field FocusTime doesn't fill is refused at the preview, never half-created", async () => {

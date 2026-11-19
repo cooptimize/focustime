@@ -76,7 +76,7 @@ describe("Save as draft, at any level", () => {
   it("checks the type and the parent against the process", async () => {
     const s = setup();
     expect(await s.refused("draft.add", { clientKey: "Northwind", title: "X", type: "Initiative" })).toContain("isn't a level");
-    expect(await s.refused("draft.add", { clientKey: "Northwind", title: "X", type: "Bug", parentItemId: 2 })).toContain("doesn't go under an Epic");
+    expect(await s.refused("draft.add", { clientKey: "Northwind", title: "X", type: "Bug", parentItemId: 2 })).toMatch(/^In (this|.+'s) process, Epic isn't the level above Bug\. Under Epic go: /);
     // A parent outside the pool is kept as chosen (the create's preview checks it).
     expect((await s.run<{ draft: { parentItemId: number } }>("draft.add", { clientKey: "Northwind", title: "X", type: "Epic", parentItemId: 99 })).draft.parentItemId).toBe(99);
     expect(await s.refused("draft.add", { clientKey: "Northwind", title: "   ", type: "Epic" })).toBe("Type a title");

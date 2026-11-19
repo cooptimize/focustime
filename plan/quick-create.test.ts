@@ -49,8 +49,10 @@ describe("the parent rule: one level up, or none", () => {
     expect(parentProblem(ladder, "Domain", "Epic")).toBeNull();
     expect(parentProblem(ladder, "Epic", "Capability")).toBeNull();
     expect(parentProblem(ladder, "Feature", "Bug")).toBeNull();
-    expect(parentProblem(ladder, "Epic", "Product Backlog Item")).toBe("A Product Backlog Item doesn't go under an Epic in this process. Under an Epic go: Feature, Capability");
-    expect(parentProblem(ladder, "Product Backlog Item", "Feature")).toBe("Nothing goes under a Product Backlog Item in this process's backlogs");
+    // UC-3 item 3: the move rule's words (UC-2): the project's process, no "a" or "an" before a type's name.
+    expect(parentProblem(ladder, "Epic", "Product Backlog Item", "Logistics")).toBe("In Logistics's process, Epic isn't the level above Product Backlog Item. Under Epic go: Feature, Capability");
+    expect(parentProblem(ladder, "Epic", "Product Backlog Item")).toBe("In this process, Epic isn't the level above Product Backlog Item. Under Epic go: Feature, Capability");
+    expect(parentProblem(ladder, "Product Backlog Item", "Feature", "Logistics")).toBe("In Logistics's process, nothing goes under Product Backlog Item");
     expect(parentProblem(ladder, "Epic", "Initiative")).toBe("Initiative isn't a level in this project's process");
   });
   it("parents and children of a type", () => {
