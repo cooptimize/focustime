@@ -365,3 +365,51 @@ describe("MC-4: Review from the row", () => {
     expect(t.providerCalls).toEqual([]);
   });
 });
+
+describe("MC-6: Dismiss, a kept call's way out when it has no transcript", () => {
+  type Mine = { occurrences: { id: number; state: string }[] };
+  const stateOf = async (t: Awaited<ReturnType<typeof setup>>, id: number) => t.data<Mine>(await t.act(ME, "meeting.mine", {})).occurrences.find((o) => o.id === id)?.state ?? null;
+
+  it("removes a call I added by hand, for me only, with Undo; never one that has a transcript", async () => {
+    const t = await setup();
+    const { occurrenceId } = t.data<{ occurrenceId: number }>(await t.act(ME, "meeting.call_add", { name: "Teammates' Contoso huddle", date: "2026-11-06", start: "11:00", minutes: 30, clientKey: "contoso" }));
+    // Someone else can't, whoever they are; closing isn't removing.
+    expect(await t.act(MATE, "meeting.call_remove", { occurrenceId })).toMatchObject({ ok: false });
+    const gone = t.data<{ removed: boolean; seriesId: number; message: string }>(await t.act(ME, "meeting.call_remove", { occurrenceId }));
+    expect(gone).toMatchObject({ removed: true, message: "Removed: Teammates' Contoso huddle" });
+    expect(await stateOf(t, occurrenceId)).toBeNull();
+    expect(await t.act(MATE, "meeting.call_restore", { seriesId: gone.seriesId })).toMatchObject({ ok: false, status: 403 });
+    expect(t.data(await t.act(ME, "meeting.call_restore", { seriesId: gone.seriesId }))).toEqual({ restored: true });
+    expect(await stateOf(t, occurrenceId)).not.toBeNull();
+    // With a transcript it stays: Skip all and close is the way.
+    const [s] = await t.meetings.callsSince("2026-10-01");
+    expect(await uploadTranscript(t.ctxAs(ME), { seriesId: s!.id, date: "2026-11-06", bytes: new TextEncoder().encode(transcriptVtt(SAID)) })).toMatchObject({ ok: true });
+    expect(await t.act(ME, "meeting.call_remove", { occurrenceId })).toMatchObject({ ok: false, status: 409, error: "This call has a transcript. Skip all and close closes it." });
+    expect(await t.act(ME, "meeting.call_close_none", { occurrenceId })).toMatchObject({ ok: false, status: 409 });
+    // Nothing went to Teams or the AI for the Dismiss itself.
+    expect(t.graphCalls).toEqual([]);
+  });
+
+  it("closes any other kept call as No transcript, its reviewer only, with Undo; adding a transcript opens it again; never Remove", async () => {
+    const t = await setup([aMeeting({ joinUrl: null })]);
+    const { occurrenceId } = t.data<{ occurrenceId: number }>(await t.start());
+    const before = await stateOf(t, occurrenceId);
+    // Not added by hand: never removed, by anyone.
+    expect(await t.act(ME, "meeting.call_remove", { occurrenceId })).toMatchObject({ ok: false, status: 403, error: "Only a call you added by hand can be removed, and only by you." });
+    // The mate on the invite looks; they don't close it.
+    expect(await t.act(MATE, "meeting.call_close_none", { occurrenceId })).toMatchObject({ ok: false });
+    const c = t.data<{ closed: boolean; prior: string; message: string }>(await t.act(ME, "meeting.call_close_none", { occurrenceId }));
+    expect(c).toMatchObject({ closed: true, message: "Closed with no transcript: Contoso data review" });
+    expect(await stateOf(t, occurrenceId)).toBe("no_transcript");
+    expect(t.data(await t.act(ME, "meeting.call_reopen", { occurrenceId, state: c.prior }))).toEqual({ reopened: true });
+    expect(await stateOf(t, occurrenceId)).toBe(before);
+    // Undo only from Closed; only to a state with no transcript.
+    expect(await t.act(ME, "meeting.call_reopen", { occurrenceId, state: c.prior })).toMatchObject({ ok: false, status: 409 });
+    expect(await t.act(ME, "meeting.call_reopen", { occurrenceId, state: "ready" })).toMatchObject({ ok: false, status: 400 });
+    // Closed again, then a transcript: open again for review.
+    t.data(await t.act(ME, "meeting.call_close_none", { occurrenceId }));
+    const [s] = await t.meetings.callsSince("2026-10-01");
+    expect(await uploadTranscript(t.ctxAs(ME), { seriesId: s!.id, date: "2026-11-09", bytes: new TextEncoder().encode(transcriptVtt(SAID)) })).toMatchObject({ ok: true });
+    expect(await stateOf(t, occurrenceId)).toBe("ready");
+  });
+});

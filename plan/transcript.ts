@@ -178,6 +178,12 @@ export function clock(seconds: number): string {
   return h ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` : `${m}:${String(s).padStart(2, "0")}`;
 }
 
+/** MC-6: the seconds in a "1:02:03" or "2:03" time (the reverse of clock), or null for "" or anything else. */
+export function secondsOf(at: string): number | null {
+  const m = /^(?:(\d+):)?(\d+):(\d\d)$/.exec(at.trim());
+  return m ? Number(m[1] ?? 0) * 3600 + Number(m[2]) * 60 + Number(m[3]) : null;
+}
+
 /** Quotes for a proposal: at most 2 of the cited lines (in range, in order), each cut to 200 characters. */
 export const QUOTE_LINES = 2;
 export const QUOTE_CHARS = 200;

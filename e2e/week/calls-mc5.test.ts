@@ -64,7 +64,8 @@ describe.skipIf(!CHROMIUM)("MC-5: Calls made scannable (browser, demo mode)", ()
     await calls(page);
     // The header: Calls, Add a call and the menu; no subtitle.
     await expect(page.locator(".calls-head").textContent()).resolves.toBe("CallsAdd a call");
-    await page.getByRole("button", { name: "More for Calls" }).click();
+    // The page may still be wiring the button up on the first press: press again until the menu opens.
+    await expect.poll(async () => (await page.getByRole("menuitem").count()) > 0 || (await page.getByRole("button", { name: "More for Calls" }).click(), false), { timeout: W }).toBe(true);
     for (const name of ["Refresh", "Check Pocket", "Select calls"]) await expect.poll(() => page.getByRole("menuitem", { name: new RegExp(`^${name}`) }).count(), { message: name, timeout: W }).toBe(1);
     await page.keyboard.press("Escape");
     // The Client row: All first and pressed, a chip a client, and No client because a call here has none.
@@ -111,12 +112,15 @@ describe.skipIf(!CHROMIUM)("MC-5: Calls made scannable (browser, demo mode)", ()
 
     // Skip all shows on a row with focus, skips with Undo, and writes nothing to DevOps.
     const row = needs(page).filter({ has: page.locator("[data-call-left]") }).first();
-    const skipAll = row.locator("[data-call-act='skip-all']");
     await page.mouse.move(5, 890);
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     const rowClass = await row.getAttribute("class");
-    if (!/\bopen\b/.test(rowClass ?? "")) await expect(skipAll.isVisible(), rowClass ?? "").resolves.toBe(false);
+    // MC-6: the call open beside the list has its Skip all in its own header only; another row shows its own on focus.
+    const isOpen = /\bopen\b/.test(rowClass ?? "");
+    const skipAll = isOpen ? page.locator(".calls-beside [data-call-act='skip-all']") : row.locator("[data-call-act='skip-all']");
+    if (!isOpen) await expect(skipAll.isVisible(), rowClass ?? "").resolves.toBe(false);
     await row.locator("[data-call-row]").focus();
+    if (isOpen) await expect(row.locator("[data-call-act='skip-all']").isVisible()).resolves.toBe(false);
     await expect.poll(() => skipAll.isVisible()).toBe(true);
     sent.length = 0;
     await skipAll.click();
@@ -260,13 +264,17 @@ describe.skipIf(!CHROMIUM)("MC-5: Calls made scannable (browser, demo mode)", ()
     const recs = add.locator("[data-rec-pick] label");
     await expect.poll(() => recs.count()).toBeGreaterThan(1);
     // Newest first; each line its title, when and length.
-    await expect(recs.first().textContent()).resolves.toMatch(/^Call with the carrier.*Nov 3.*25 min/);
+    await expect(recs.first().textContent()).resolves.toMatch(/^Call with the carrier.*Nov 3.*25m/);
     // One that fits a listed call says which.
     await expect(recs.filter({ hasText: "Sprint planning" }).locator(".mtg-rec-fits").textContent()).resolves.toBe("Goes with Harbor sprint planning Review that call");
-    // Choosing one fills the name and the time (not typed); the client is mine to choose and marked until chosen.
-    await recs.first().click();
-    await expect(add.getByLabel("Name", { exact: true }).inputValue()).resolves.toBe("Call with the carrier");
-    await expect(add.locator("[data-add-when]").textContent()).resolves.toMatch(/Nov 3/);
+    // MC-6: that one already has its own row ("In your list"); a recording with none is a new call.
+    await expect(recs.first().locator(".mtg-in-list").textContent()).resolves.toBe("In your list");
+    const fresh = recs.filter({ has: page.locator("[data-rec-name]", { hasText: /^Proposal review$/ }) }).first();
+    // Choosing one fills the name and takes its time (not typed); the client is mine to choose and marked until chosen.
+    await fresh.click();
+    await expect.poll(() => add.getByLabel("Name", { exact: true }).inputValue(), { timeout: W }).toBe("Proposal review");
+    // MC-6: its time is said once, on its line above.
+    await expect(add.locator("[data-add-when]").count()).resolves.toBe(0);
     await expect(add.locator("input[type=date], input[type=time]").count()).resolves.toBe(0);
     await expect(add.locator(".mtg-add-field.needed").count()).resolves.toBe(1);
     const press = add.getByRole("button", { name: "Add and review" });
@@ -276,7 +284,7 @@ describe.skipIf(!CHROMIUM)("MC-5: Calls made scannable (browser, demo mode)", ()
     expect(lists()).toBe(listedBefore);
     sent.length = 0;
     await press.click();
-    await page.getByRole("heading", { level: 2, name: "Call with the carrier" }).waitFor({ timeout: W });
+    await page.getByRole("heading", { level: 2, name: "Proposal review" }).waitFor({ timeout: W });
     expect(sent.map((s) => s.action).filter((a) => /pocket/.test(a))).toEqual(["meeting.pocket_add", "meeting.pocket_bring"]);
     await expect.poll(() => page.locator("[data-call-origin]").textContent(), { timeout: W }).toBe("Pocket");
 
@@ -298,7 +306,8 @@ describe.skipIf(!CHROMIUM)("MC-5: Calls made scannable (browser, demo mode)", ()
     await add.locator("[data-choice='file']").click();
     await expect(add.locator(".mtg-dropzone").count()).resolves.toBe(1);
     await expect(add.locator(".mtg-drop-words").textContent()).resolves.toBe("Drop a Teams transcript or a Pocket export, or choose a file");
-    await expect(add.locator("[data-add-start]").inputValue()).resolves.toBe("16:30");
+    // MC-6: the app's own time field.
+    await expect(add.locator("[data-add-start]").getAttribute("data-add-start")).resolves.toBe("16:30");
     await expect(add.getByRole("button", { name: "Add and review" }).count()).resolves.toBe(1);
     // Later: Add; it lands on its page with the choices, and in Needs you with Add transcript.
     await add.locator("[data-choice='later']").click();
@@ -311,7 +320,7 @@ describe.skipIf(!CHROMIUM)("MC-5: Calls made scannable (browser, demo mode)", ()
     const choices = page.locator("[data-no-transcript]");
     await expect(choices.locator("[data-choice='pocket']").getAttribute("aria-pressed")).resolves.toBe("true");
     await choices.locator("[data-rec-pick] label").filter({ hasText: "Call with the carrier" }).click();
-    await expect(choices.locator("[data-takes-time]").textContent()).resolves.toMatch(/^The call takes the recording's time: Tue, Nov 3 · 4:30 PM · 25 min\.$/);
+    await expect(choices.locator("[data-takes-time]").textContent()).resolves.toMatch(/^The call takes the recording's time: Tue, Nov 3 · 4:30 PM · 25m\.$/);
     sent.length = 0;
     await choices.getByRole("button", { name: "Use this recording" }).click();
     await expect.poll(() => page.locator("[data-call-meta]").textContent(), { timeout: W }).toMatch(/Nov 3/);
@@ -376,7 +385,7 @@ describe.skipIf(!CHROMIUM)("MC-5: Calls made scannable (browser, demo mode)", ()
     await page.close();
   }, T);
 
-  it("sizes at 390 by 844: rows keep two lines, the Show row scrolls sideways in one line, every control 44 px, the stuck header smaller", async () => {
+  it("sizes at 390 by 844: rows keep two lines, the Show chips scroll sideways in one line, every control 44 px, the stuck header smaller", async () => {
     const page = await phonePage(h, 390);
     await page.setViewportSize({ width: 390, height: 844 });
     expect((await call(page, "pocket.connect", { key: "pk_demo_fine" })).ok).toBe(true);
@@ -393,7 +402,8 @@ describe.skipIf(!CHROMIUM)("MC-5: Calls made scannable (browser, demo mode)", ()
     }
     await needs(page).filter({ hasText: "Northwind weekly status call" }).locator("[data-call-row]").click();
     await page.getByRole("heading", { level: 2, name: "Northwind weekly status call" }).waitFor({ timeout: W });
-    const show = await page.locator(".mtg-show").evaluate((el) => ({ sw: el.scrollWidth, cw: el.clientWidth, h: el.getBoundingClientRect().height, chip: el.querySelector(".ib4-chip")!.getBoundingClientRect().height, x: getComputedStyle(el).overflowX }));
+    // MC-6: the chips scroll sideways in one line; "N of M decided" is its own line under them.
+    const show = await page.locator(".mtg-show-chips").evaluate((el) => ({ h: el.getBoundingClientRect().height, chip: el.querySelector(".ib4-chip")!.getBoundingClientRect().height, x: getComputedStyle(el).overflowX }));
     expect(show.x).toBe("auto");
     expect(show.h).toBeLessThan(show.chip * 2);
     for (const b of await page.locator("[data-call-head] button, .mtg-show button, .mtg-prop:not(.is-open) .mtg-p1 button, .mtg-prop:not(.is-open) .mtg-tick").all()) {

@@ -1,12 +1,12 @@
 // MC-4: the pieces of Calls' list: a call's mark, Needs you's two-line rows, a week's one-line rows (a meeting that
 // repeats as one row with its menu), the Closed and Hidden rows, and the bar for ticked rows. The state lives in
 // CallsPage (ui/meetings/Meetings.tsx); these only draw it and say what was pressed. Every word is plan/call-words.ts's.
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { clientColor } from "../labels.ts";
 import { Icon } from "../icons.tsx";
 import { lengthLabel } from "../../plan/calls.ts";
-import { CALL_LIST, CLOSE_TEXT, LIST_TEXT, MARK_TEXT } from "../../plan/call-words.ts";
-import { closedLine, markShort, markWords, needsAction, needsNote, shortWhen, type CallMarkKind, type CallRow, type SeriesEntry } from "../../plan/call-list.ts";
+import { CALL_LIST, CLOSE_TEXT, DISMISS_TEXT, LIST_TEXT, MARK_TEXT } from "../../plan/call-words.ts";
+import { callClientChoices, closedLine, dismissOf, markShort, markWords, needsAction, needsNote, shortWhen, type CallMarkKind, type CallRow, type SeriesEntry } from "../../plan/call-list.ts";
 import type { CaptureClient } from "../../plan/capture.ts";
 
 const timeOf = (iso: string, zone: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: zone });
@@ -24,6 +24,31 @@ export function TranscriptMark({ mark, check }: { mark: CallMarkKind; check?: Ca
       {words}
     </span>
   );
+}
+
+/**
+ * MC-6: a week row whose title doesn't fit on its line beside the picker and the mark. The title is first laid out on one
+ * line and measured; when it is wider than its room the row is "long": the title takes the whole row (wrapping if it
+ * must) and the picker and the mark go under it. Measured again when the row's width or the title changes.
+ */
+function useLongTitle(title: string) {
+  const row = useRef<HTMLLIElement>(null);
+  const name = useRef<HTMLSpanElement>(null);
+  const [on, setOn] = useState(false);
+  const [width, setWidth] = useState(0);
+  useLayoutEffect(() => {
+    const li = row.current;
+    if (!li || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver((es) => setWidth(Math.round(es[0]!.contentRect.width)));
+    ro.observe(li);
+    return () => ro.disconnect();
+  }, []);
+  useLayoutEffect(() => setOn(false), [width, title]);
+  useLayoutEffect(() => {
+    const n = name.current;
+    if (!on && n && n.scrollWidth > n.clientWidth + 1) setOn(true);
+  });
+  return { row, name, on };
 }
 
 /** A tick for a row that can be done together with others (Hide, or Skip all and close); only while selecting. */
@@ -61,10 +86,11 @@ const Square = ({ color }: { color: string | null }) => <span className={`swatch
  * once something is decided or the short amber note; Skip all is a quiet button there on the selected, hovered or focused
  * row (not on the phone: there it is only in the call's header). A click anywhere on the row or Enter opens the call.
  */
-export function NeedsRow({ r, open, zone, today, colors, selecting, ticked, onTick, onOpen, onAction, onSkipAll, phone = false }: RowActs & { r: CallRow; onAction: (kind: "upload" | "pocket" | "retry") => void; onSkipAll: () => void; phone?: boolean }) {
+export function NeedsRow({ r, open, zone, today, colors, selecting, ticked, onTick, onOpen, onAction, onSkipAll, onDismiss, phone = false, refused = false }: RowActs & { r: CallRow; onAction: (kind: "upload" | "pocket" | "retry") => void; onSkipAll: () => void; /** MC-6: Dismiss, on a kept call with no transcript. */ onDismiss?: () => void; phone?: boolean; /** MC-6: Teams refused this call's transcript. */ refused?: boolean }) {
   const color = r.clientKey ? clientColor(r.clientKey, colors) : null;
   const act = needsAction(r);
   const note = needsNote(r, today);
+  const dismiss = dismissOf(r);
   return (
     <li className={`calls-row need-row${open ? " open" : ""}${selecting ? " selecting" : ""}`} style={color ? ({ "--c": color } as CSSProperties) : undefined} data-row={r.key}>
       {selecting && (r.left?.open ? <Tick on={ticked} name={r.name} onTick={onTick} /> : <span className="calls-tick" aria-hidden="true" />)}
@@ -78,6 +104,8 @@ export function NeedsRow({ r, open, zone, today, colors, selecting, ticked, onTi
       <span className="calls-meta">{shortWhen(r.startAt, r.day, today, zone)} · {r.clientName ?? CALL_LIST.noClient}{!act && !r.state.needsMe ? <span data-call-state=""> · {r.state.label}</span> : null}</span>
       <span className="calls-row-end two">
         {r.left?.open && !phone ? <button type="button" className="mini quiet calls-skip" onClick={onSkipAll} data-call-act="skip-all">{r.left.open === r.left.all ? LIST_TEXT.skipAll : LIST_TEXT.skipLast(r.left.open)}</button> : null}
+        {dismiss && onDismiss ? <button type="button" className="mini quiet calls-dismiss" onClick={onDismiss} title={dismiss === "remove" ? DISMISS_TEXT.hintRemove : DISMISS_TEXT.hintClose} aria-label={`${DISMISS_TEXT.dismiss}: ${r.name}`} data-call-act="dismiss" data-dismiss={dismiss}>{DISMISS_TEXT.dismiss}</button> : null}
+        {refused && act?.kind === "upload" ? <span className="calls-amber" data-call-refused="">{LIST_TEXT.teamsRefused}</span> : null}
         {note && "amber" in note ? <span className="calls-amber" data-call-note="">{note.amber}</span> : note ? <Bar done={note.done} /> : null}
       </span>
     </li>
@@ -88,8 +116,8 @@ export function NeedsRow({ r, open, zone, today, colors, selecting, ticked, onTi
 export type RowStatus = { busy: string | null; error: string | null; occurrenceId: number | null };
 
 /** MC-5: a week row's mark, short, with its full words as its label and on hover. */
-export function MarkShort({ mark, check, from }: { mark: CallMarkKind; check?: CallRow["check"]; /** MC-2c: where the call came from ("From a chat"), said in the mark's label and hover. */ from?: string | undefined }) {
-  const m = markShort(mark);
+export function MarkShort({ mark, check, from, chat = false }: { mark: CallMarkKind; check?: CallRow["check"]; /** MC-6: a chat call: its transcript is in the chat. */ chat?: boolean; /** MC-2c: where the call came from ("From a chat"), said in the mark's label and hover. */ from?: string | undefined }) {
+  const m = markShort(mark, chat);
   // No mark yet: while Teams is asked, "Checking…"; past the cap, "Not checked" (MC-4's words, kept).
   if (!m) {
     const w = check === "checking" ? MARK_TEXT.checking : check === "unchecked" ? MARK_TEXT.unchecked : null;
@@ -121,13 +149,14 @@ export function WeekRow({ r, open, zone, today, colors, selecting, ticked, onTic
   const canHide = (!!r.other && r.occurrenceId === null) || !!r.recording;
   const picks = (!!r.other && r.occurrenceId === null) || !!r.recording;
   const nameOf = (k: string) => clients.find((c) => c.clientKey === k)?.clientName ?? k;
+  const long = useLongTitle(r.name);
   return (
-    <li className={`calls-row one${open ? " open" : ""}${inSeries ? " in-series" : ""}${selecting ? " selecting" : ""}`} style={color ? ({ "--c": color } as CSSProperties) : undefined} data-row={r.key}>
+    <li ref={long.row} className={`calls-row one${open ? " open" : ""}${inSeries ? " in-series" : ""}${selecting ? " selecting" : ""}${long.on ? " long" : ""}`} style={color ? ({ "--c": color } as CSSProperties) : undefined} data-row={r.key}>
       {selecting && (canHide ? <Tick on={ticked} name={r.name} onTick={onTick} /> : <span className="calls-tick" aria-hidden="true" />)}
       <span className="calls-time">{inSeries ? dayOf(r.startAt, zone) : shortWhen(r.startAt, r.day, today, zone)}{r.other?.chat && r.other.endKnown ? ` to ${timeOf(r.endAt, zone)}` : ""}</span>
       <Square color={color} />
       <button type="button" className="calls-row-main" title={r.name} aria-current={open ? "true" : undefined} data-call-row={r.key} data-bucket={r.bucket} disabled={!!status?.busy} onClick={onOpen}>
-        <span className="calls-name">{inSeries ? timeOf(r.startAt, zone) : r.name}</span>
+        <span className="calls-name" ref={long.name}>{inSeries ? timeOf(r.startAt, zone) : r.name}</span>
       </button>
       <span className="calls-row-end">
         {picks ? (
@@ -135,7 +164,7 @@ export function WeekRow({ r, open, zone, today, colors, selecting, ticked, onTic
             <span className="sr-only">{LIST_TEXT.clientFor(r.name)}</span>
             <select className="plain-input" value={client ?? ""} onChange={(e) => onClient(e.target.value)} data-call-about="">
               {!client && <option value="">{LIST_TEXT.whichClient}</option>}
-              {clients.map((c) => <option key={c.clientKey} value={c.clientKey}>{nameOf(c.clientKey)}</option>)}
+              {callClientChoices(clients, r.other?.chat).map((c) => <option key={c.clientKey} value={c.clientKey}>{nameOf(c.clientKey)}</option>)}
             </select>
           </label>
         ) : r.occurrenceId !== null && !r.pocket.length ? (
@@ -143,7 +172,7 @@ export function WeekRow({ r, open, zone, today, colors, selecting, ticked, onTic
           <span className="calls-state" data-call-state="">{r.state.label}</span>
         ) : null}
         {/* MC-2c: a chat call says where it came from in its mark's label and hover, so its name keeps the room. */}
-        <MarkShort mark={r.mark} check={r.check} from={r.other?.chat && r.occurrenceId === null ? CALL_LIST.fromChat : undefined} />
+        <MarkShort mark={r.mark} check={r.check} chat={!!r.other?.chat} from={r.other?.chat && r.occurrenceId === null ? CALL_LIST.fromChat : undefined} />
         {canHide && <button type="button" className="mini quiet calls-hide" onClick={onHide} data-call-act="hide">{CLOSE_TEXT.hide}</button>}
       </span>
       {status?.busy && <p className="calls-row-status muted" role="status">{status.busy}</p>}
@@ -225,7 +254,7 @@ export function ClosedRow({ r, open, zone, today, colors, onOpen }: { r: CallRow
       </button>
       <span className="calls-row-end">
         <span className="calls-state" data-closed-line="">{r.closed ? closedLine(r.closed) : ""}</span>
-        <MarkShort mark={r.mark} check={r.check} />
+        <MarkShort mark={r.mark} check={r.check} chat={!!r.other?.chat} />
       </span>
     </li>
   );

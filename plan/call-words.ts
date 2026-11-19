@@ -4,6 +4,7 @@
 // same words. Pure: no I/O, no clock.
 import { AI_MESSAGES } from "../ai/types.ts";
 import { AI_RETRIES, parseOutcome, type OccurrenceState } from "./meetings.ts";
+import { aOr, vowelSound } from "./quick-create.ts";
 
 /**
  * DY-1: how a meeting is marked where it is drawn (Day, Week, the block panel, the phone): "Repeats" for one of a series
@@ -73,9 +74,13 @@ export const CALL_FILTERS = [
   { key: "comment", label: "Comments" },
 ] as const;
 export type CallFilter = (typeof CALL_FILTERS)[number]["key"];
-export const SECTION_HEAD = { gap: "New in DevOps", commitment: "Promises", comment: "Comments on stories" } as const;
+/** A group's head: its name only (MC-6: the counts are on the Show chips, which use the same names). */
+export const SECTION_HEAD = { gap: "New in DevOps", commitment: "Promises", comment: "Comments" } as const;
 
 /** QC-1's own words for a required field the form can't fill (the New form says the same, then its own next step). */
+/** MC-6: the gap form's hover on No parent: "a" or "an" by how the type's name sounds as written (UC-3), then the name in lower case. */
+export const topNoParent = (type: string) => `${vowelSound(type) ? "An" : "A"} ${type.toLowerCase()} is at the top: no parent`;
+
 export const processNeeds = (project: string, names: readonly string[], type: string) => `${project}'s process needs ${names.join(", ")} on a new ${type}, which FocusTime doesn't fill.`;
 
 export const CALL_ROW = {
@@ -89,9 +94,18 @@ export const CALL_ROW = {
   /** A required field the form fills, still empty: on the row, before any preview. */
   needs: (names: readonly string[], type: string | null = null) => `${names.join(" and ")} ${names.length === 1 ? "is" : "are"} needed: this client's process requires ${names.length === 1 ? "it" : "them"} on a new ${type ?? "item of this type"}.`,
   cantFill: (project: string, names: readonly string[], type: string) => `${processNeeds(project, names, type)} Create this one in DevOps, then skip it here.`,
-  commentAboveStory: (type: string) => `This comment is on a ${type}, above story level. Status is reported on features, so a call's comment never goes there: it won't be sent. Skip it.`,
+  commentAboveStory: (type: string) => `This comment is on ${aOr(type)}, above story level. Status is reported on features, so a call's comment never goes there: it won't be sent. Skip it.`,
   noParent: "No parent yet. Choose one, or leave it without",
   keptPromise: (who: string) => `Added to ${who.split(/\s+/)[0]}'s Promises`,
+  /** MC-6: my own promise, by the server's word that it is mine (never a name compared). */
+  keptMine: "Added to your Promises",
+  inMine: "in your Promises",
+  inTheirs: (who: string) => `in ${who.split(/\s+/)[0]}'s Promises`,
+  /** MC-6: one Undo message at a time, each saying what it undoes. */
+  undoKept: (title: string) => `Kept: ${title}`,
+  undoKeptMany: (n: number) => `Kept: ${n} promises`,
+  undoSkipped: (title: string) => `Skipped: ${title}`,
+  undoSkippedMany: (n: number) => `Skipped: ${n} proposals`,
   keptNote: (who: string) => `Noted with this call: ${who}`,
   /** PK-1: a promise from a Pocket export whose words don't say whose it is. */
   noOwner: "Pocket didn't say who",
@@ -288,6 +302,25 @@ export const FETCH_WORDS: Record<Exclude<FetchOutcome, "found">, string> = {
   chat_none: `Teams doesn't have this transcript, or it isn't ready yet. Try again in a few minutes. ${CHAT_WAY_ON}`,
   not_in_chat: "FocusTime shows a chat's calls to the Cooptimizers in that chat who follow its client. Upload the transcript with Add a call instead.",
 };
+/** MC-6: the refusal when a call started in a client's chat is given another client. */
+/**
+ * MC-6: Dismiss, a kept call's way out when it has no transcript (Add transcript or Use Pocket recording): a call I
+ * added by hand is removed (it exists nowhere else); any other closes as No transcript, in Closed until a transcript
+ * comes. One Undo message says which.
+ */
+export const DISMISS_TEXT = {
+  dismiss: "Dismiss",
+  hintRemove: "Remove this call: you added it, and it's nowhere else",
+  hintClose: "Close it with no transcript. Adding one later opens it again",
+  removed: (name: string) => `Removed: ${name}`,
+  closed: (name: string) => `Closed with no transcript: ${name}`,
+  hasTranscript: "This call has a transcript. Skip all and close closes it.",
+  notMine: "Only a call you added by hand can be removed, and only by you.",
+  notACall: "Dismiss is for a call in Calls. A registered client call says No transcript this week from its menu.",
+  notClosed: "This call isn't closed with no transcript now, so there's nothing to undo.",
+} as const;
+
+export const CHAT_OTHER_CLIENT = "A call started in a client's chat is about that client, or Internal. Choose one of those.";
 /** MC-2c: once, above the proposals and the Transcript, when Teams gave a chat call's transcript without speaker names. */
 export const CHAT_NO_SPEAKERS = "Teams gave this transcript without speaker names.";
 export const fetchFound = (lines: number, proposals: number, ran = true) => `Got the transcript from Teams (${lines} ${lines === 1 ? "line" : "lines"}). ${!ran ? `${CALL_STATE.aiFailed}.` : proposals ? `${proposals} ${proposals === 1 ? "proposal" : "proposals"} to review.` : "Nothing to propose from it."}`;
@@ -323,6 +356,8 @@ export const POCKET_TEXT = {
 
 /** The Transcript view's words. */
 export const TRANSCRIPT_TEXT = {
+  /** MC-6: a line's time is time into the call; its clock time on hover, the same for a quote and the Transcript. */
+  clockAt: (clock: string) => `${clock} on the clock`,
   tabProposals: "Proposals",
   tab: "Transcript",
   filter: "Filter the transcript",
@@ -418,11 +453,12 @@ export const CLOSE_TEXT = {
   showEach: "Show each one",
   showEachHint: "Its calls as rows of their own",
   hideSeveral: (n: number) => `Hide ${n}`,
-  hidden: (n: number) => `${n} ${n === 1 ? "meeting" : "meetings"} hidden`,
+  /** MC-6: a hidden row is a call (a chat call, a Pocket recording or a calendar call), so the count says calls. */
+  hidden: (n: number) => `${n} ${n === 1 ? "call" : "calls"} hidden`,
   hiddenEvery: (name: string) => `Every ${name} hidden`,
   putBack: "Put back",
   putBackAll: "Put back all",
-  hiddenGone: (n: number) => `${n} hidden ${n === 1 ? "meeting has" : "meetings have"} no call in the last 14 days.`,
+  hiddenGone: (n: number) => `${n} you hid ${n === 1 ? "isn't" : "aren't"} in the last 14 days.`,
   hiddenWhy: "Only you see what you hid. Hiding never changes the meeting in Outlook or what anyone else sees.",
   hiddenEveryLine: "Every one, from now on",
   /** Closing a call. */
@@ -490,6 +526,8 @@ export const LIST_TEXT = {
   noClient: "No client",
   /** Needs you's one button by state. */
   addTranscript: "Add transcript",
+  /** MC-6: a chat call's row, after Teams refused its transcript (the call's page says the whole of it). */
+  teamsRefused: "Teams refused it",
   usePocket: "Use Pocket recording",
   tryAgain: "Try again",
   left: (n: number) => `${n} left`,
@@ -504,6 +542,8 @@ export const LIST_TEXT = {
   /** A week row's mark, short, with its full words as its label. */
   mark: { teams: "Teams", pocket: "Pocket", both: "Teams · Pocket" },
   markFull: { teams: "Transcript in Teams", pocket: "Your Pocket recording", both: "Transcript in Teams and your Pocket recording" },
+  /** MC-6: a chat call's transcript is found in its chat. */
+  markChat: { teams: "Transcript in the chat", pocket: "Your Pocket recording", both: "Transcript in the chat and your Pocket recording" },
   whichClient: CLOSE_TEXT.whichClient,
   clientFor: (name: string) => `Client for ${name}`,
   /** Said on the fold's hover (it was the line under it). */
@@ -560,6 +600,8 @@ export const PAGE_TEXT = {
   takesTime: (when: string) => `The call takes the recording's time: ${when}.`,
   fits: (call: string) => `Goes with ${call}`,
   reviewThat: "Review that call",
+  /** MC-6: a recording that already has its own row in Calls (choosing it opens that row). */
+  inYourList: "In your list",
 } as const;
 
 /** MC-5: Add a call, one panel, one step. */

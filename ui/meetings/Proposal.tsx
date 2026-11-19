@@ -15,18 +15,22 @@ import { GapFields, type useNewOptions } from "./GapFields.tsx";
 const dayLabel = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
 /** Line 2: a new item's level, parent, assignee and date; a promise's whose and by when; a comment's story. */
-export function fieldsLine(p: Proposal): string {
+export function fieldsLine(p: Proposal, mine = false): string {
   const b = p.body;
   if (b.kind === "gap") {
     const who = b.assignTo === undefined || b.assignTo === "me" ? PAGE_TEXT.me : b.assignTo ? b.assignTo : PAGE_TEXT.nobody;
     return [b.type, b.parentId !== null ? PAGE_TEXT.under(b.parentId, b.parentTitle ?? null) : PAGE_TEXT.noParent, who, b.date ? dayLabel(b.date) : PAGE_TEXT.noDate].join(" · ");
   }
   if (b.kind === "commitment")
-    return [`${b.side === "unknown" ? CALL_ROW.noOwner : b.who}${b.toName ? ` to ${b.toName}` : ""}`, b.due ? PAGE_TEXT.by(dayLabel(b.due)) : PAGE_TEXT.noDate, b.side === "cooptimize" ? `in ${b.who.split(/\s+/)[0]}'s Promises` : "noted with this call"].filter(Boolean).join(" · ");
+    return [`${b.side === "unknown" ? CALL_ROW.noOwner : b.who}${b.toName ? ` to ${b.toName}` : ""}`, b.due ? PAGE_TEXT.by(dayLabel(b.due)) : PAGE_TEXT.noDate, b.side === "cooptimize" ? (mine ? CALL_ROW.inMine : CALL_ROW.inTheirs(b.who)) : "noted with this call"].filter(Boolean).join(" · ");
   return PAGE_TEXT.on(b.itemId, b.itemTitle);
 }
 
 export type ProposalProps = {
+  /** MC-6: the server said this promise goes to my own Promises. */
+  mine?: boolean;
+  /** MC-6: a quote's clock time ("1:05 PM on the clock") from its time into the call, for its hover. */
+  clockOf?: (at: string) => string | null;
   p: Proposal;
   check: ProposalCheck | undefined;
   err: string | null;
@@ -50,7 +54,7 @@ export type ProposalProps = {
   onQuote?: ((line: number) => void) | undefined;
 };
 
-export function ProposalRow({ p, check, err, ticked, editable, can, busy, clientKey, opts, today, open, onOpen, onTick, onEdit, onSend, onSendBreakDown, onKeep, onSkip, onEnable, onQuote }: ProposalProps) {
+export function ProposalRow({ p, check, err, ticked, editable, can, busy, clientKey, opts, today, open, onOpen, onTick, onEdit, onSend, onSendBreakDown, onKeep, onSkip, onEnable, onQuote, clockOf, mine = false }: ProposalProps) {
   const b = p.body;
   // RQ-1: a new item at the feature tier (the lowest portfolio level of the client's process, never a type's name).
   const featureTier = b.kind === "gap" && isFeatureTier(opts?.levels, b.type);
@@ -100,14 +104,14 @@ export function ProposalRow({ p, check, err, ticked, editable, can, busy, client
         </button>
       </div>
       {!open && (
-        <button type="button" className="mtg-p2" onClick={() => onOpen(true)} aria-label={`${PAGE_TEXT.details}: ${fieldsLine(p)}`}>
-          {fieldsLine(p)}
+        <button type="button" className="mtg-p2" onClick={() => onOpen(true)} aria-label={`${PAGE_TEXT.details}: ${fieldsLine(p, mine)}`}>
+          {fieldsLine(p, mine)}
         </button>
       )}
       {q ? (
         <button type="button" className="mtg-p3" disabled={!onQuote} onClick={() => onQuote?.(q.n)} aria-label={PAGE_TEXT.openQuote(q.speaker)} title={q.text}>
           <span className="mtg-who">{q.speaker}</span>
-          {q.at && <span className="mtg-at">{q.at}</span>}
+          {q.at && <span className="mtg-at" title={clockOf?.(q.at) ?? undefined}>{q.at}</span>}
           <span className="mtg-said">{q.text}</span>
         </button>
       ) : p.quotes === null ? (
@@ -118,7 +122,7 @@ export function ProposalRow({ p, check, err, ticked, editable, can, busy, client
           {b.kind === "gap" ? (
             <GapFields b={b} id={p.id} clientKey={clientKey} opts={opts} today={today} editable={editable && live} check={check} onEdit={onEdit} />
           ) : (
-            <p className="muted mtg-where">{fieldsLine(p)}</p>
+            <p className="muted mtg-where">{fieldsLine(p, mine)}</p>
           )}
           {live && editable && can && featureTier && onSendBreakDown && !failed && !blocked && (
             <button type="button" className="mini mtg-breakdown" disabled={busy || stuck} title={stuck ? "Fill in what's needed first" : CALL_ROW.createAndBreakDownWhy} onClick={onSendBreakDown}>{CALL_ROW.createAndBreakDown}</button>

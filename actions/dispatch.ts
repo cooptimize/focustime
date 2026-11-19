@@ -1474,6 +1474,7 @@ export async function meetingContext(ctx: ActionContext): Promise<MeetingContext
     ...(ctx.meetings?.press ? { press: ctx.meetings.press } : {}),
     ...(ctx.meetings?.exists ? { exists: ctx.meetings.exists } : {}),
     ...(ctx.meetings?.cooptimizer ? { cooptimizer: ctx.meetings.cooptimizer } : {}),
+    isInternal: (k: string) => isInternalKey(ctx.org, k),
     // MC-2c: the calls started in my registered client chats (what the poll kept), and their press and client.
     ...(ctx.requests?.teams && ctx.meetings?.cooptimizer
       ? {
@@ -2794,6 +2795,10 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "meeting.call_unhide":
     case "meeting.skip_all":
     case "meeting.unskip_all":
+    case "meeting.call_remove":
+    case "meeting.call_restore":
+    case "meeting.call_close_none":
+    case "meeting.call_reopen":
       return meetingAction(await meetingContext(ctx), action as MeetingAction, req.input);
     default: {
       const unhandled: never = action;

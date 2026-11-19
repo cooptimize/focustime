@@ -13,6 +13,7 @@
 // try; a refusal says why in plain words and points to the upload. Nothing reads such a call in the background.
 //
 // Transcript text never goes to a log or an error message; logs carry ids-free counts and outcomes only.
+import { INTERNAL_CLIENT } from "../week/follow.ts";
 import type { CheckNowResult } from "../plan/meetings.ts";
 import type { ClientEntry } from "../ai/guard.ts";
 import type { AiService } from "../ai/service.ts";
@@ -20,7 +21,7 @@ import type { AppConfig } from "../config/schema.ts";
 import type { LogRecord } from "../log/logger.ts";
 import { fromPocket, unnamedSpeakers, attendeeIds, canConfirm, isCall, mayRead, commentLevelOk, defaultReviewers, detectSource, joinKey, lastReadLine, MEETING_ROLES, newOnly, nextRetry, nudgesFor, outcomeOf, parseOutcome, proposalOrder, retryable, ROLE_LABEL, toReview, type MeetingRole, type MeetingSeries, type Occurrence, type Proposal, type ProposalBody, type TranscriptKind, type TranscriptSource } from "../plan/meetings.ts";
 import { AnswersError, parseAnswers, type Answers } from "../plan/three-questions.ts";
-import { callWriteWords, CALL_LIST, CALL_ROW, FETCH_WORDS, fetchFound, type FetchOutcome, type ProposalCheck, type RequiredField } from "../plan/call-words.ts";
+import { callWriteWords, CALL_LIST, CALL_ROW, FETCH_WORDS, fetchFound, type FetchOutcome, type ProposalCheck, type RequiredField, CHAT_OTHER_CLIENT, DISMISS_TEXT } from "../plan/call-words.ts";
 import { inWindow, isOtherCall, OTHER_CALL_DAYS, otherCallsWindow, type CalendarMeeting } from "../plan/calls.ts";
 import type { PressGrants } from "./call-press.ts";
 import { CHECK_CAP, type ExistsGrants, type ExistsHold, type HeldAnswer } from "./call-exists.ts";
@@ -52,7 +53,7 @@ import { closedAtOf, outcomeOfCall } from "../plan/call-list.ts";
 export type { MeetingNudgeView, OccurrenceView, OtherCallView, SeriesView } from "../plan/meeting-views.ts";
 import type { ActionResponse } from "./types.ts";
 
-export const MEETING_ACTIONS = ["meeting.list", "meeting.candidates", "meeting.register", "meeting.update", "meeting.remove", "meeting.mine", "meeting.review", "meeting.edit", "meeting.no_transcript", "meeting.keep", "meeting.unkeep", "meeting.rerun", "meeting.check_now", "meeting.transcript", "meeting.calls", "meeting.call_start", "meeting.call_fetch", "meeting.call_add", "meeting.pocket_list", "meeting.pocket_bring", "meeting.pocket_add", "meeting.pocket_address_add", "meeting.pocket_address_remove", "meeting.calls_check", "meeting.call_hides", "meeting.call_hide", "meeting.call_unhide", "meeting.skip_all", "meeting.unskip_all"] as const;
+export const MEETING_ACTIONS = ["meeting.list", "meeting.candidates", "meeting.register", "meeting.update", "meeting.remove", "meeting.mine", "meeting.review", "meeting.edit", "meeting.no_transcript", "meeting.keep", "meeting.unkeep", "meeting.rerun", "meeting.check_now", "meeting.transcript", "meeting.calls", "meeting.call_start", "meeting.call_fetch", "meeting.call_add", "meeting.pocket_list", "meeting.pocket_bring", "meeting.pocket_add", "meeting.pocket_address_add", "meeting.pocket_address_remove", "meeting.calls_check", "meeting.call_hides", "meeting.call_hide", "meeting.call_unhide", "meeting.skip_all", "meeting.unskip_all", "meeting.call_remove", "meeting.call_restore", "meeting.call_close_none", "meeting.call_reopen"] as const;
 export type MeetingAction = (typeof MEETING_ACTIONS)[number];
 
 /** A FocusTime user as registration matches them: id, name and every address that is them. */
@@ -109,6 +110,8 @@ export type MeetingContext = {
   press?: PressGrants;
   /** MC-2: a Cooptimizer by the people rule (never a guest or an automation account); absent: nobody is. */
   cooptimizer?: (userId: string) => Promise<boolean>;
+  /** MC-6: whether a key is Cooptimize Internal (clientAccounts()'s why "internal"); a chat call may be filed there. */
+  isInternal?: (clientKey: string) => Promise<boolean>;
   /** MC-2b: my own Pocket (my key, the one client), the shared 5 minute hold and my addresses; absent: not here. */
   pocket?: MeetingPocket;
   /** MC-4: the "exists" allowances the Graph gate lets through and the 15 minute memory of answers; absent: not checked here. */
@@ -410,6 +413,24 @@ export async function meetingAction(ctx: MeetingContext, action: MeetingAction, 
       }
       // MC-4: Skip all and close (one call or several I review), and its Undo. Nothing is written to DevOps or kept as a promise.
       case "meeting.skip_all": return await skipAll(store, me, input, ctx);
+      case "meeting.call_remove":
+      case "meeting.call_close_none": return await dismissCall(ctx, store, me, input, action === "meeting.call_remove" ? "remove" : "close");
+      case "meeting.call_restore": {
+        const o = obj(input, ["seriesId"]);
+        if (!(await store.restoreHandCall(id(o.seriesId, "seriesId"), me))) return bad(DISMISS_TEXT.notMine, 403);
+        ctx.log({ source: "plan", op: "meeting_call_restored", count: 1 });
+        return { ok: true, data: { restored: true } };
+      }
+      case "meeting.call_reopen": {
+        const o = obj(input, ["occurrenceId", "state"]);
+        const state = o.state === "needs_upload" || o.state === "waiting" ? o.state : null;
+        if (!state) throw new Invalid("state must be needs_upload or waiting");
+        const { o: occ, series } = await store.viewer(me).reviewer(id(o.occurrenceId, "occurrenceId"));
+        if (!isCall(series) || occ.state !== "no_transcript" || occ.dismissedBy?.toLowerCase() !== me.toLowerCase() || occ.transcriptAt) return bad(DISMISS_TEXT.notClosed, 409);
+        await store.viewer(me).updateOccurrence(occ.id, { state, dismissedBy: null });
+        ctx.log({ source: "plan", op: "meeting_call_reopened", count: 1 });
+        return { ok: true, data: { reopened: true } };
+      }
       case "meeting.unskip_all": return await unskipAll(store, me, input, ctx);
       // MC-2b, PK-4: only from Calls' opening, its Refresh, Check Pocket again, and Continue on a setup.
       case "meeting.pocket_list": {
@@ -577,6 +598,9 @@ function edited(b: ProposalBody, o: Record<string, unknown>): ProposalBody {
   return { ...b, ...(o.text !== undefined ? { text: text(o.text, "text", 2000)! } : {}) };
 }
 
+/** MC-6: a promise that goes to my own Promises: a Cooptimizer's, and that Cooptimizer is me. */
+const isMine = (p: Proposal, me: string) => p.body.kind === "commitment" && p.body.side === "cooptimize" && !!p.body.whoId && p.body.whoId.toLowerCase() === me.toLowerCase();
+
 /** The review screen: the call, the occurrence, its proposals in order with quotes, and what I may do. */
 async function review(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, me: string, input: unknown): Promise<ActionResponse> {
   const o = obj(input, ["occurrenceId"]);
@@ -609,6 +633,8 @@ async function review(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, 
       meeting: viewOf(r.series, (await namesOf(ctx, [r.series.clientKey]))(r.series.clientKey), users, me),
       occurrence: occView(r.o, { counts: { all: ps.length, open: ps.filter(toReview).length }, hasTranscript: !!lines, retriesHere: !!ctx.retriesHere, zone: userZone(cfg) }),
       proposals: ps,
+      // MC-6: which promises are mine ("your Promises"), said by the server; the page never compares a name.
+      mine: ps.filter((p) => isMine(p, me)).map((p) => p.id),
       transcript: lines ? { lines: lines.length, speakers: [...new Set(lines.map((l) => l.speaker))].length } : null,
       // MC-2: what was discussed and decided (at most 5 lines), on every call; null for one reviewed before MC-2.
       summary: lines ? await store.summary(r.o.id) : null,
@@ -662,7 +688,7 @@ async function keep(ctx: MeetingContext, store: MeetingStore, me: string, input:
     conversationId: null, chatId: `${MEETING_CHAT}${series.id}`, clientKey: series.clientKey, whoId: b.side === "cooptimize" ? b.whoId : null, whoName: b.side === "unknown" ? CALL_ROW.someone : b.who, toId: b.side === "cooptimize" ? null : me, toName: b.side === "cooptimize" ? b.toName : null,
     what: b.what, dueAt: null, dueDate: b.due, impliesItem: false, messageIds: [], reason: `From ${series.name}, ${occ.date}`, closeHow: null, closeNote: null,
   });
-  const message = b.side === "cooptimize" ? CALL_ROW.keptPromise(b.who) : b.side === "unknown" ? CALL_ROW.keptNobody : CALL_ROW.keptNote(b.who);
+  const message = b.side === "cooptimize" ? (isMine(p, me) ? CALL_ROW.keptMine : CALL_ROW.keptPromise(b.who)) : b.side === "unknown" ? CALL_ROW.keptNobody : CALL_ROW.keptNote(b.who);
   const next = await store.updateProposal(p.id, { state: "confirmed", result: { commitmentId: k.id, message }, decidedBy: me, decidedAt: ctx.now() });
   await settledCall(store, occ.id, me);
   ctx.log({ source: "plan", op: "meeting_kept", count: 1 });
@@ -714,6 +740,30 @@ type Skipped = { id: number; was: "open" | "failed"; skippedAt: string; by: stri
  * for its fix) on calls I review is skipped, and each call closes. Nothing goes to DevOps, no promise is kept, and the
  * answer says what each was, for Undo.
  */
+/**
+ * MC-6: Dismiss on a kept call with no transcript (any reviewer of it). Remove: a call I added by hand, by me only, goes
+ * (removed_at; it exists nowhere else). Close: any other kept call closes as No transcript (in Closed until a transcript
+ * comes: the pass sets it ready again). Both refuse a call with a transcript (Skip all and close closes that one).
+ * Nothing is read, sent or written anywhere but this call's own row.
+ */
+async function dismissCall(ctx: MeetingContext, store: MeetingStore, me: string, input: unknown, kind: "remove" | "close"): Promise<ActionResponse> {
+  const o = obj(input, ["occurrenceId"]);
+  const { o: occ, series } = await store.viewer(me).reviewer(id(o.occurrenceId, "occurrenceId"));
+  if (!isCall(series)) return bad(DISMISS_TEXT.notACall, 409);
+  if (occ.transcriptAt || (await store.transcript(occ.id))) return bad(DISMISS_TEXT.hasTranscript, 409);
+  if (kind === "remove") {
+    if (series.callKind !== "hand" || series.registrantId.toLowerCase() !== me.toLowerCase()) return bad(DISMISS_TEXT.notMine, 403);
+    const seriesId = await store.removeHandCall(occ.id, me);
+    if (seriesId === null) return bad(DISMISS_TEXT.notMine, 403);
+    ctx.log({ source: "plan", op: "meeting_call_removed", count: 1 });
+    return { ok: true, data: { removed: true, seriesId, message: DISMISS_TEXT.removed(series.name) } };
+  }
+  const prior = occ.state === "waiting" ? "waiting" : "needs_upload";
+  if (occ.state !== "no_transcript") await store.viewer(me).updateOccurrence(occ.id, { state: "no_transcript", dismissedBy: me, nextCheckAt: null });
+  ctx.log({ source: "plan", op: "meeting_call_closed_none", count: 1 });
+  return { ok: true, data: { closed: true, prior, message: DISMISS_TEXT.closed(series.name) } };
+}
+
 async function skipAll(store: MeetingStore, me: string, input: unknown, ctx: MeetingContext): Promise<ActionResponse> {
   const o = obj(input, ["occurrenceIds"]);
   if (!Array.isArray(o.occurrenceIds) || !o.occurrenceIds.length || o.occurrenceIds.length > 30) throw new Invalid("Close 1 to 30 calls at a time");
@@ -1057,6 +1107,12 @@ const seenChatCalls = (me: string, calls: MeetingSeries[]): MeetingSeries[] => c
  * MC-2 keeps a call: I'm its reviewer, the other Cooptimizers in the chat who use FocusTime are on it, its event id the
  * call's key. Nothing is asked of Microsoft here.
  */
+/** MC-6: the clients a chat call may be filed under: its chat's registration's, and Internal. */
+export async function chatClientAllowed(ctx: Pick<MeetingContext, "isInternal">, chatClient: string, asked: string): Promise<boolean> {
+  if (asked.toLowerCase() === chatClient.toLowerCase()) return true;
+  return ctx.isInternal ? await ctx.isInternal(asked).catch(() => false) : asked.toLowerCase() === INTERNAL_CLIENT.toLowerCase();
+}
+
 async function startChatCall(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, me: string, key: string, clientKey: string): Promise<ActionResponse> {
   if (!ctx.cooptimizer || !(await ctx.cooptimizer(me).catch(() => false))) return { ok: false, status: 403, error: FETCH_WORDS.not_cooptimizer, code: "not_cooptimizer" };
   const callId = callIdOfKey(key);
@@ -1067,6 +1123,11 @@ async function startChatCall(ctx: MeetingContext, store: MeetingStore, cfg: AppC
   }
   const client = await clientOf(ctx, clientKey);
   if (isRefusal(client)) return client;
+  // MC-6: a call started in a client's chat is about that chat's client, or Internal; never another client, whoever asks.
+  if (!(await chatClientAllowed(ctx, c.clientKey, client.key))) {
+    ctx.log({ source: "plan", op: "meeting_call_start", kind: "chat_other_client" });
+    return { ok: false, status: 403, error: CHAT_OTHER_CLIENT, code: "chat_other_client" };
+  }
   const kept = await store.callByKey(key);
   if (kept) {
     // Someone else in the chat kept it first (their Review, perhaps refused): my own Review makes me a reviewer too, so
@@ -1110,6 +1171,11 @@ async function fetchChatCall(ctx: MeetingContext, store: MeetingStore, cfg: AppC
   const callId = series.eventId ? callIdOfKey(series.eventId) : null;
   const c = callId ? await ctx.chatCalls.one(callId) : null;
   if (!c || c.chatId !== chatIdOf(series)) return say("not_in_chat", 403);
+  // MC-6: a chat call kept under another client before the rule is never read again under it: nothing is asked of Teams and nothing goes to the AI.
+  if (!(await chatClientAllowed(ctx, c.clientKey, series.clientKey))) {
+    ctx.log({ source: "plan", op: "meeting_call_fetch", kind: "chat_other_client" });
+    return { ok: false, status: 403, error: CHAT_OTHER_CLIENT, code: "chat_other_client" };
+  }
   const client = ctx.adhoc?.(cfg) ?? null;
   if (!client) return say("signin");
   const press = ctx.chatPress.open(me, c.callId);

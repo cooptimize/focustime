@@ -10,6 +10,7 @@
 //   - Hidden: the calendar calls I hid.
 // Pure: no I/O, no clock (the day and the zone are handed in). Nothing here reads or keeps anything: it only arranges
 // what meeting.mine, meeting.calls, meeting.calls_check and my hides already returned.
+import { INTERNAL_CLIENT } from "../week/follow.ts";
 import type { CallOutcome, OccurrenceView, OtherCallView, SeriesView } from "./meeting-views.ts";
 import { OTHER_CALL_DAYS } from "./calls.ts";
 import { CALL_LIST, CALL_STATE, callLabel, CALLS_TEXT, CLOSE_TEXT, LIST_TEXT, MARK_TEXT } from "./call-words.ts";
@@ -73,6 +74,8 @@ export type CallRow = {
   seriesKey: string | null;
   /** MC-4: the client FocusTime suggests for a calendar call (the person decides), or null: "Which client?". */
   suggested: string | null;
+  /** MC-6: a call kept in Calls (not a registered client call): "hand" when I added it by hand, else "call". */
+  kept?: "hand" | "call";
 };
 
 /** MC-4: my hides: single meetings by their calendar key, and series ("every one") by their series key. */
@@ -151,6 +154,7 @@ export function callRows(x: CallListInput): CallRow[] {
       bucket: closed ? "closed" : "open", place: state.needsMe ? "needs" : "week", review: s.mine.review, pocket: [], recording: null,
       mark: null, check: null, left: o.proposals ? { open: o.open, all: o.proposals } : null,
       closed: closed ? { at: o.closedAt ?? null, done: o.done ?? null, noTranscript: o.state === "no_transcript" } : null, seriesKey: null, suggested: null,
+      ...(s.call ? { kept: s.call === "hand" ? ("hand" as const) : ("call" as const) } : {}),
     };
     all.push(row);
     if (s.mine.review && !o.hasTranscript && o.state !== "reviewed") takes.add(row);
@@ -197,6 +201,7 @@ export function forClient(rows: readonly CallRow[], client: string | null): Call
 /**
  * Each filter's count for a client choice: the calls (a repeating meeting's row counts each of its calls), except that
  * Hidden counts what its list shows: a meeting hidden every one is one, however many of its calls are in the window.
+ * Open leaves out the calls in the no-transcript fold (MC-6).
  */
 export function filterCounts(rows: readonly CallRow[], client: string | null, hiddenMissing = 0, hiddenSeries: ReadonlySet<string> = new Set()): Record<ListFilter, number> {
   const out: Record<ListFilter, number> = { open: 0, closed: 0, hidden: client === null ? hiddenMissing : 0 };
@@ -206,6 +211,8 @@ export function filterCounts(rows: readonly CallRow[], client: string | null, hi
       if (seen.has(r.seriesKey)) continue;
       seen.add(r.seriesKey);
     }
+    // MC-6: Open counts the calls outside the no-transcript fold; the fold says its own number.
+    if (r.bucket === "open" && r.place === "fold") continue;
     out[r.bucket]++;
   }
   return out;
@@ -343,6 +350,17 @@ export function chipClients(rows: readonly CallRow[], nameOf: (key: string) => s
  * Use Pocket recording (my recording fits), or Try again (a pass failed). Null: nothing to press (waiting on someone else).
  */
 export type NeedsAction = { kind: "left"; text: string } | { kind: "upload" | "pocket" | "retry"; text: string } | null;
+/**
+ * MC-6: Dismiss, on a row I review that FocusTime keeps as a call (not a registered client call) whose one button is Add
+ * transcript or Use Pocket recording: Remove for a call I added by hand, else Close with no transcript.
+ */
+export function dismissOf(r: Pick<CallRow, "kept" | "review" | "left" | "state" | "pocket" | "occurrenceId">): "remove" | "close" | null {
+  if (!r.kept || !r.review || r.occurrenceId === null) return null;
+  const a = needsAction(r);
+  if (a?.kind !== "upload" && a?.kind !== "pocket") return null;
+  return r.kept === "hand" ? "remove" : "close";
+}
+
 export function needsAction(r: Pick<CallRow, "left" | "state" | "pocket">): NeedsAction {
   if (r.left?.open) return { kind: "left", text: LIST_TEXT.left(r.left.open) };
   if (r.state.label === CALL_STATE.aiFailed) return { kind: "retry", text: LIST_TEXT.tryAgain };
@@ -369,4 +387,14 @@ export function shortWhen(iso: string, day: string, today: string, zone: string)
 }
 
 /** MC-5: a week row's mark, short ("Teams", "Pocket", "Teams · Pocket"), and its full words for its label and hover. */
-export const markShort = (m: CallMarkKind): { short: string; full: string } | null => (m ? { short: LIST_TEXT.mark[m], full: LIST_TEXT.markFull[m] } : null);
+export const markShort = (m: CallMarkKind, chat = false): { short: string; full: string } | null => (m ? { short: LIST_TEXT.mark[m], full: (chat ? LIST_TEXT.markChat : LIST_TEXT.markFull)[m] } : null);
+
+/**
+ * MC-6: the clients a call may be filed under. A call started in a client's chat: that chat's client and Internal, in
+ * that order (the server refuses any other). Any other call: every client I follow; the call's client is mine to say.
+ */
+export function callClientChoices<C extends { clientKey: string }>(clients: readonly C[], chat: { clientKey: string } | null | undefined): C[] {
+  if (!chat) return [...clients];
+  const is = (c: C, k: string) => c.clientKey.toLowerCase() === k.toLowerCase();
+  return [...clients.filter((c) => is(c, chat.clientKey)), ...clients.filter((c) => is(c, INTERNAL_CLIENT) && !is(c, chat.clientKey))];
+}

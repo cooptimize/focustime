@@ -48,14 +48,25 @@
 .calls-left-bar { width: 40px; height: 3px; }
 .calls-amber { color: var(--watch); font-size: var(--fs-2); }
 .calls-row-end .mini { min-height: 26px; }
-/* Skip all: a quiet button on the selected, hovered or focused row only. */
+/* Skip all: a quiet button on a hovered or focused row that isn't the call open beside the list (MC-6: the open call's
+   Skip all is in its own header, said once). */
 .need-row .calls-skip { display: none; min-height: 0; padding: 0 4px; font-size: var(--fs-2); }
-.need-row:is(:hover, :focus-within, .open) .calls-skip { display: inline-flex; }
+.need-row:not(.open):is(:hover, :focus-within) .calls-skip { display: inline-flex; }
+/* MC-6: Dismiss, the same: on a hovered or focused row (the open call's is in its menu), always on touch. */
+.need-row .calls-dismiss { display: none; min-height: 0; padding: 0 4px; font-size: var(--fs-2); }
+.need-row:not(.open):is(:hover, :focus-within) .calls-dismiss, .app.phone .need-row .calls-dismiss { display: inline-flex; }
 
 /* A week's rows: one line each: when, the square, the name, the client, the mark and Hide (on hover or focus). */
 .calls-row.one { grid-template-columns: [tick] auto [time] auto [sq] auto [main] minmax(0, 1fr) [end] auto; padding: 3px 8px; border-left: 1px solid transparent; }
 .calls-row.one .calls-sq, .calls-row.one .calls-time, .calls-row.one .calls-row-main, .calls-row.one .calls-row-end { grid-row: 1; }
 .calls-row.one .calls-row-main { grid-column: main; }
+/* MC-6: a week row's title is never cut: it takes the row's free space (the picker and the mark take only what they
+   need, the end column being auto) and goes to a second line when it still doesn't fit. */
+.calls-row.one .calls-name { text-overflow: clip; }
+.calls-row.one.long { grid-template-rows: auto auto; align-items: baseline; }
+.calls-row.one.long .calls-row-main { grid-column: main / -1; }
+.calls-row.one.long .calls-name { white-space: normal; overflow: visible; overflow-wrap: anywhere; }
+.calls-row.one.long .calls-row-end { grid-column: main / -1; grid-row: 2; justify-content: flex-start; margin-left: 0; }
 .calls-row.one:hover { background: var(--wash-1); }
 .calls-row.one.open { background: color-mix(in oklab, var(--c, var(--accent)) 10%, transparent); }
 .calls-row.in-series { border-left-style: none; }
@@ -82,6 +93,11 @@
 .app.phone .calls-row.one { grid-template-columns: [tick] auto [time] auto [sq] auto [main] minmax(0, 1fr); grid-template-rows: auto auto; padding: 4px 4px; }
 .app.phone .calls-row.one .calls-row-end { grid-column: time / -1; grid-row: 2; justify-content: flex-start; margin-left: 0; }
 .app.phone .calls-row.one .calls-row-main { min-height: 28px; }
+/* MC-6: on the phone a long title has the whole first line, its time and square the next, its client and mark the last. */
+.app.phone .calls-row.one.long .calls-row-main { grid-column: time / -1; grid-row: 1; }
+.app.phone .calls-row.one.long .calls-time, .app.phone .calls-row.one.long .calls-sq { grid-row: 2; align-self: center; }
+.app.phone .calls-row.one.long { grid-template-rows: auto auto auto; }
+.app.phone .calls-row.one.long .calls-row-end { grid-column: time / -1; grid-row: 3; }
 .app.phone .calls-row.closed .calls-row-end, .app.phone .calls-row.hidden-row .calls-row-end { grid-row: 2; }
 .app.phone .calls-row-main { min-height: 0; }
 .app.phone .calls-filters { display: inline-flex; }
@@ -96,8 +112,11 @@
 .mtg-head .mtg-back { grid-area: back; }
 .mtg-head h2 { grid-area: title; margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-4); font-weight: 600; }
 .mtg-head-acts { grid-area: acts; display: inline-flex; align-items: center; gap: 8px; }
-.mtg-meta { grid-area: meta; display: flex; flex-wrap: wrap; align-items: center; gap: 0 6px; margin: 0; color: var(--text-muted); font-size: var(--fs-2); }
-.mtg-meta > span:not(.calls-sq):not(:nth-child(2))::before { content: "·"; margin-right: 6px; color: var(--text-faint, var(--text-muted)); }
+/* MC-6: each piece after the first carries its separator in front (12px); the line is drawn 12px to the left and that
+   strip clipped, so a piece that wraps to the start of a line never shows a separator first. */
+.mtg-meta { grid-area: meta; display: flex; flex-wrap: wrap; align-items: center; gap: 0 6px; margin: 0 0 0 -12px; clip-path: inset(0 0 0 12px); color: var(--text-muted); font-size: var(--fs-2); }
+.mtg-meta > :first-child { margin-left: 12px; }
+.mtg-meta > span:not(.calls-sq):not(:nth-child(2))::before { content: "·"; display: inline-block; width: 12px; color: var(--text-faint, var(--text-muted)); }
 .mtg-meta > span[title] { cursor: help; text-decoration: underline dotted; text-decoration-color: var(--border-strong); text-underline-offset: 3px; }
 /* The Show row: the kinds as chips with their counts (the only place the count is), and how much is decided. */
 .mtg-show { display: flex; align-items: center; gap: 8px; min-width: 0; }
@@ -109,9 +128,12 @@
 .mtg-run-line { margin: 0; font-size: var(--fs-2); }
 .mtg-look { margin: 0; font-size: var(--fs-2); }
 /* A group: its name as a section label, its count and a quiet Select all. */
-.mtg-sec-head { padding: 2px 12px; min-height: 0; font-size: var(--fs-1); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
+/* MC-6: the size of the page's other section labels (What was said, Client), over the older .mtg-group h3 rule. */
+.mtg-group .mtg-sec-head, .mtg-sec-head { padding: 2px 12px; min-height: 0; font-size: var(--fs-1); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
 .mtg-sec-head .mini { text-transform: none; letter-spacing: 0; font-weight: 500; min-height: 24px; }
 .mtg-sec-count { margin-left: 6px; font-variant-numeric: tabular-nums; }
+/* MC-6: a group's card has no colored left stripe (style guide section 11). */
+.calls-page .mtg-group { border-left: 1px solid var(--border); }
 
 /* A proposal folded: three lines. */
 .mtg-prop.mc5 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; padding: 6px 0; position: relative; }
@@ -168,8 +190,10 @@
 .app.phone .mtg-head-acts > [data-call-menu] { grid-area: menu; }
 .app.phone .mtg-head .mtg-back { min-width: var(--tap, 44px); padding: 0; justify-content: center; }
 .app.phone .mtg-head .mtg-back .mtg-back-word { display: none; }
-.app.phone .mtg-show { overflow-x: auto; scrollbar-width: none; }
-.app.phone .mtg-show-chips { flex: none; overflow: visible; }
+/* MC-6: the chips scroll on their own; "N of M decided" is its own line under them, always in view. */
+.app.phone .mtg-show { flex-wrap: wrap; row-gap: 4px; overflow: visible; }
+.app.phone .mtg-show-chips { flex: 1 1 100%; overflow-x: auto; scrollbar-width: none; }
+.app.phone .mtg-decided { margin-left: 0; flex: 1 1 100%; }
 .app.phone .mtg-head h2 { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .app.phone .mtg-meta { row-gap: 0; }
 .app.phone .mtg-prop.mc5 label.mtg-tick { min-width: 30px; min-height: var(--tap, 44px); align-items: center; }
@@ -198,3 +222,8 @@
 .mtg-rec-fits { font-size: var(--fs-2); color: var(--text-muted); }
 .mtg-rec-fits .link-btn { min-height: 0; padding: 0; }
 .app.phone .mtg-recs label, .app.phone .mtg-rec-fits .link-btn, .app.phone .mtg-add.mc5 :is(input, select, .mini) { min-height: var(--tap, 44px); }
+
+/* MC-6: a recording in Add a call that already has its own row in the list. */
+.mtg-in-list { display: inline-block; vertical-align: baseline; margin-left: 8px; padding: 0 6px; border: 1px solid var(--border); border-radius: 999px; font-size: var(--fs-1); font-weight: 500; color: var(--muted); }
+@media (hover: none) { .need-row .calls-dismiss { display: inline-flex; } }
+.app.phone .need-row .calls-dismiss { min-height: 44px; padding: 0 8px; }

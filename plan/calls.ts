@@ -5,6 +5,7 @@
 //   - The client a call is about, as a suggestion only (the person picks; FocusTime never decides): a client named in
 //     the call's title (the way a capture's @tag names one), else the client of the focus block the call starts in.
 //   - Who may press: a Cooptimizer the call is on the calendar of (on the invite), not declined; for that one call.
+import { hm } from "./fit.ts";
 import type { CaptureClient } from "./capture.ts";
 
 /** The last this many of the person's own local days (today included). */
@@ -76,9 +77,8 @@ export function suggestClient(title: string, clients: readonly CaptureClient[], 
   return null;
 }
 
-/** "45 min" or "1 h 30 min". */
+/** "45m", "1h" or "1h 30m". */
 export function lengthLabel(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return h ? `${h} h${m ? ` ${m} min` : ""}` : `${m} min`;
+  // MC-6: the app's own words for a length ("25m", "1h", "2h 15m").
+  return hm(minutes);
 }

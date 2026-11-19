@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { anOccurrenceView, anOtherCall, aSeriesView, ZONE } from "../test/builders/index.ts";
 import { pocketRows } from "./call-list-pocket.ts";
-import { callRows, chipClients, closedAtOf, closedLine, closedList, dayHeading, filterCounts, firstToOpen, hiddenList, hiddenMissing, hideKeyOf, markShort, needsAction, needsNote, openList, outcomeOfCall, shortWhen, weekOf } from "./call-list.ts";
+import { callClientChoices, dismissOf, callRows, chipClients, closedAtOf, closedLine, closedList, dayHeading, filterCounts, firstToOpen, hiddenList, hiddenMissing, hideKeyOf, markShort, needsAction, needsNote, openList, outcomeOfCall, shortWhen, weekOf } from "./call-list.ts";
 import { CALL_STATE } from "./call-words.ts";
 
 // Thursday Nov 5: This week is Nov 2 to 8, Last week Oct 26 to Nov 1.
@@ -57,7 +57,9 @@ describe("MC-4: Calls' list", () => {
     const c = filterCounts(rows, null, gone.keys.length);
     expect(c.closed).toBe(1);
     expect(c.hidden).toBe(2);
-    expect(c.open + c.closed + c.hidden - gone.keys.length).toBe(rows.length);
+    // MC-6: the no-transcript fold says its own number; Open counts the rest.
+    const fold = openList(rows, null, TODAY).foldCount;
+    expect(c.open + fold + c.closed + c.hidden - gone.keys.length).toBe(rows.length);
     expect(closedList(rows, null).map((r) => r.occurrenceId)).toEqual([13]);
     expect(hiddenList(rows, null).map((r) => r.key)).toEqual(["chid"]);
   });
@@ -169,7 +171,7 @@ describe("MC-2b: my Pocket recordings in the list", () => {
       ["puntitled", "Pocket recording", "2026-11-04", "open", "Not reviewed"],
       ["pno-call", "Call with the carrier", "2026-11-01", "open", "Not reviewed"],
     ]);
-    expect(filterCounts(rows, null).open).toBe(rows.filter((r) => r.bucket === "open").length);
+    expect(filterCounts(rows, null).open).toBe(rows.filter((r) => r.bucket === "open" && r.place !== "fold").length);
   });
 
   it("MC-4: Hidden counts a meeting hidden every one once, as its list shows it", () => {
@@ -232,7 +234,53 @@ describe("MC-5: a row's one button, its short note, its when and its mark", () =
   });
   it("the mark, short, with its full words", () => {
     expect(markShort("both")).toEqual({ short: "Teams · Pocket", full: "Transcript in Teams and your Pocket recording" });
+    // MC-6: a chat call's transcript is in its chat.
+    expect(markShort("teams", true)).toEqual({ short: "Teams", full: "Transcript in the chat" });
     expect(markShort("teams")?.short).toBe("Teams");
     expect(markShort(null)).toBeNull();
+  });
+});
+
+describe("MC-6: a chat call's client choices", () => {
+  const clients = [{ clientKey: "Atlas" }, { clientKey: "Cooptimize" }, { clientKey: "northwind" }, { clientKey: "Harbor" }];
+  it("a chat call offers its chat's client, then Internal, and nothing else", () => {
+    expect(callClientChoices(clients, { clientKey: "Northwind" }).map((c) => c.clientKey)).toEqual(["northwind", "Cooptimize"]);
+    // A chat registered to Internal itself offers it once.
+    expect(callClientChoices(clients, { clientKey: "cooptimize" }).map((c) => c.clientKey)).toEqual(["Cooptimize"]);
+  });
+  it("any other call offers every client I follow", () => {
+    expect(callClientChoices(clients, null).map((c) => c.clientKey)).toEqual(["Atlas", "Cooptimize", "northwind", "Harbor"]);
+  });
+});
+
+describe("MC-6: Open's number", () => {
+  it("counts the calls outside the no-transcript fold; the fold keeps its own number", () => {
+    const row = (key: string, place: "needs" | "week" | "fold") => ({ key, bucket: "open", place, seriesKey: null, clientKey: null, suggested: null }) as unknown as Parameters<typeof filterCounts>[0][number];
+    const rows = [row("a", "needs"), row("b", "week"), row("c", "fold"), row("d", "fold")];
+    expect(filterCounts(rows, null).open).toBe(2);
+  });
+});
+
+describe("MC-6: words for chat calls and Pocket recordings", () => {
+  it("a hidden row is a call, not a meeting", async () => {
+    const { CLOSE_TEXT } = await import("./call-words.ts");
+    expect(CLOSE_TEXT.hidden(1)).toBe("1 call hidden");
+    expect(CLOSE_TEXT.hidden(3)).toBe("3 calls hidden");
+    expect(CLOSE_TEXT.hiddenGone(2)).toBe("2 you hid aren't in the last 14 days.");
+  });
+});
+
+describe("MC-6: which rows have Dismiss", () => {
+  const base: Parameters<typeof dismissOf>[0] = { review: true, left: null, pocket: [], occurrenceId: 7, state: { label: CALL_STATE.upload, needsMe: true } };
+  it("a kept call I review whose one button is Add transcript or Use Pocket recording: Remove when I added it, else Close", () => {
+    expect(dismissOf({ ...base, kept: "hand" })).toBe("remove");
+    expect(dismissOf({ ...base, kept: "call" })).toBe("close");
+    expect(dismissOf({ ...base, kept: "call", state: { label: "Ready", needsMe: true }, pocket: [{ id: "r1" } as never] })).toBe("close");
+  });
+  it("never a registered client call, a call I only look at, one with proposals left or a calendar call nobody kept", () => {
+    expect(dismissOf({ ...base })).toBeNull();
+    expect(dismissOf({ ...base, kept: "call", review: false })).toBeNull();
+    expect(dismissOf({ ...base, kept: "call", left: { open: 2, all: 3 } })).toBeNull();
+    expect(dismissOf({ ...base, kept: "call", occurrenceId: null })).toBeNull();
   });
 });

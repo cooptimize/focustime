@@ -1851,24 +1851,24 @@ Readings taken where the brief left room (the one that changes less), each open 
 - **On the phone Skip all reads "Skip all" or "Skip last N"** in the call's header, its full words as its label, so the header keeps one row.
 - **CLAUDE.md's Pocket sentence** changes only to name the presses as they are now and the hand-added call; it is quoted in the pull request for the product owner's OK.
 - **From the demo walkthrough, left for a later step** (each would reach past MC-5's brief or into words other screens share):
-  - My own promise reads "in Alex's Promises" and the toast "Added to Alex's Promises" (MC-1's words). "your Promises" needs my id on each proposal.
-  - With a call open, Skip all is on its selected row and in its header. The brief puts it on the selected row; hiding it there while the same call is open would say it once.
-  - The Show chips' counts repeat their group heads' counts ("New in DevOps 3" and "NEW IN DEVOPS 3"), and the chip says "Comments" where the head says "Comments on stories".
-  - Add a call offers a recording that already has a row ("Which client?"). Choosing the client on that row is shorter. Leaving rows with a client question out of Add a call's list would be a change to what Add a call offers.
-  - In Add a call, a chosen recording's time shows on its card and again beside About.
-  - A quote says time into the call ("1:05"), the Transcript says clock time ("1:01 PM").
+  - (Answered by MC-6, item 13.) My own promise reads "in Alex's Promises" and the toast "Added to Alex's Promises" (MC-1's words). "your Promises" needs my id on each proposal.
+  - (Answered by MC-6, item 7.) With a call open, Skip all is on its selected row and in its header. The brief puts it on the selected row; hiding it there while the same call is open would say it once.
+  - (Answered by MC-6, item 6.) The Show chips' counts repeat their group heads' counts ("New in DevOps 3" and "NEW IN DEVOPS 3"), and the chip says "Comments" where the head says "Comments on stories".
+  - (Answered by MC-6, item 19.) Add a call offers a recording that already has a row ("Which client?"). Choosing the client on that row is shorter. Leaving rows with a client question out of Add a call's list would be a change to what Add a call offers.
+  - (Answered by MC-6, item 8.) In Add a call, a chosen recording's time shows on its card and again beside About.
+  - (Answered by MC-6, item 11.) A quote says time into the call ("1:05"), the Transcript says clock time ("1:01 PM").
   - "2 people" counts the invite; a Pocket transcript names "Speaker 2" with no way to name a speaker.
-  - The Undo toast from Keep stays through a later Skip, so its Undo can look like it undoes the Skip.
-  - "Open 24" counts the calls in the folds too.
+  - (Answered by MC-6, item 10.) The Undo toast from Keep stays through a later Skip, so its Undo can look like it undoes the Skip.
+  - (Answered by MC-6, item 14.) "Open 24" counts the calls in the folds too.
 - **From the pictures review, left for a later step:**
-  - Week row titles are cut at 1440 ("Northwind data model ...") where they showed whole before: the time, the picker and the mark take a fixed share of the row. Section 11 says nothing is cut to make a row one line; letting the title wrap to a second line would answer it.
-  - On the phone the line under a call's title wraps with its separator at the start of the next line ("· Reviewers see it").
-  - On the phone the Show row scrolls, so "0 of 11 decided" is past its right edge until scrolled.
-  - Group heads ("NEW IN DEVOPS 3") are a size above the page's other section labels, and each group card keeps its colored left stripe (MC-1's look).
-  - Add a call's Day and Starts are the browser's own date and time fields ("11/05/2026", "04:30 PM"), as MC-1's form was.
-  - Durations read "2 h 15 min" (MC-2b's Pocket words) where the time words elsewhere are "2h 15m".
+  - (Answered by MC-6, item 2.) Week row titles are cut at 1440 ("Northwind data model ...") where they showed whole before: the time, the picker and the mark take a fixed share of the row. Section 11 says nothing is cut to make a row one line; letting the title wrap to a second line would answer it.
+  - (Answered by MC-6, item 3.) On the phone the line under a call's title wraps with its separator at the start of the next line ("· Reviewers see it").
+  - (Answered by MC-6, item 4.) On the phone the Show row scrolls, so "0 of 11 decided" is past its right edge until scrolled.
+  - (Answered by MC-6, item 5.) Group heads ("NEW IN DEVOPS 3") are a size above the page's other section labels, and each group card keeps its colored left stripe (MC-1's look).
+  - (Answered by MC-6, item 18.) Add a call's Day and Starts are the browser's own date and time fields ("11/05/2026", "04:30 PM"), as MC-1's form was.
+  - (Answered by MC-6, item 12.) Durations read "2 h 15 min" (MC-2b's Pocket words) where the time words elsewhere are "2h 15m".
   - The Transcript view's "Kept 30 days, for this call's reviewers and attendees only. Read only." (MC-2) is kept: it says how long, which the header doesn't.
-  - "Done selecting" is drawn as the ticked rows' bar's button before anything is ticked.
+  - (Answered by MC-6, item 9.) "Done selecting" is drawn as the ticked rows' bar's button before anything is ticked.
 ## MC-2c: Calls started in a client's chat (Nov 18)
 
 - **The event's `callId` as the ad hoc call's id.** No Microsoft page says they are the same. If production answers 404 for every list and content request, this is the first thing to check.
@@ -1884,8 +1884,8 @@ Readings taken where the brief left room (the one that changes less), each open 
 - **A chat's call kept under another client.** The brief makes the chat's client a suggestion the presser can change. Then the transcript goes to the AI under the chosen client's Allow AI, and its proposals go to that client's DevOps, though the words came from another client's chat. Should Review on a chat call keep the chat's own client only (a client-facing chat certainly), or allow Internal only as the other choice?
 - **A reviewer after leaving the chat.** The presser keeps seeing the call and its transcript (MC-2's reviewer), even after leaving its chat or no longer following its client; Get it from Teams checks again. The others on it don't.
 - **Following, for the others on a kept chat call's promises.** The conversation store's membership checks that they're in the chat now; whether they follow the client can't be read there (only for the signed-in person), so only the chat is checked for promises. The call's own page checks both.
-- **Calendar words elsewhere in Calls.** Calls' header ("The calls you were on"), the Hide toast ("1 meeting hidden"), the Hidden filter's note about Outlook and the footer ("Only you see the calls from your calendar") are MC-4's, written for calendar calls; they now sit beside chat calls too. Left as they are here (less change); worth one wording pass across Calls.
-- **A refused chat call's row.** After a refusal it moves to Needs you as "Upload the transcript", like any kept call without one; it doesn't say Teams refused. Left as MC-2's states.
+- (Answered by MC-6, item 15, for the Hide message and the chat call's mark.) **Calendar words elsewhere in Calls.** Calls' header ("The calls you were on"), the Hide toast ("1 meeting hidden"), the Hidden filter's note about Outlook and the footer ("Only you see the calls from your calendar") are MC-4's, written for calendar calls; they now sit beside chat calls too. Left as they are here (less change); worth one wording pass across Calls.
+- (Answered by MC-6, item 16.) **A refused chat call's row.** After a refusal it moves to Needs you as "Upload the transcript", like any kept call without one; it doesn't say Teams refused. Left as MC-2's states.
 
 ## SA-5: Settings search that finds things, and all of Settings on the phone (Nov 18)
 
@@ -1946,3 +1946,18 @@ Readings taken where the brief left room (the one that changes less), for the pr
 - **A Bearer challenge with no error word.** Logged as `challenge=none`, the same as no header at all: the list has no word for "a challenge without an error", and adding one would widen it. Taken as the reading that changes less. A scheme other than Bearer is "other".
 - **What the words will show.** Nothing here was seen on production: the next stretch of refusals is the test. `cause` is set by Azure Resource Manager on some refusals only; when it's absent it reads none, which says the header wasn't there, not that nothing failed.
 - **Two edges from the review (nothing leaks, nothing changes).** VM-6's `challengeNamesToken` has no word boundary after the error word, so `error="invalid_tokenX"` is still read as a sign-in while VM-7 logs it `other`; and both read an `error=` written inside another parameter's value. Tightening VM-6's reading would change what a refusal does, so it's left for its own step.
+
+## MC-6: Calls polish after the redesign, and a chat call keeps its chat's client (Nov 18)
+
+- **Chat calls kept under another client before MC-6** stay as they are; a new transcript read on one is refused (its words would go to the AI under that client), and one already read keeps its proposals. This branch can't count them (no real data here); the pull request gives the query an admin can run against the plan store, which returns a number only.
+- **Dismiss on a registered client call.** Item 20 names kept calls; a registered weekly call keeps MC-1's "No transcript this week" in its menu, and the server's Dismiss refuses it. Whether its row should get the same quiet Dismiss is left for the product owner.
+- **Rows in Open that still have no one-press way out** (step 0 of item 20): a kept call whose AI pass failed with nothing proposed ("Try again"; it has a transcript, so Dismiss refuses and Skip all has nothing to skip), a kept call I only look at (its reviewer decides), a kept call still waiting on Teams (no button yet), and a registered client call (its menu's No transcript this week, two presses).
+- **Teams' refusal is held by the page, not stored** (item 16). Storing it would change what a transcript read keeps; after a reload the row says Add transcript only, and the call's page says the rest on the next press.
+- **A day outside Add a call's last 14 days** comes back inside them: the app's date field has no bounds of its own, and adding them would change a field other screens share.
+- **The stuck header at 390 is 25 px taller** (243 against 218): the "N of M decided" line item 4 asks for. Everything else in it is unchanged; the chips keep their 44 px.
+- **At 1280, 8 of 9 rows show without scrolling** (was 9): a whole title takes more lines than a cut one (item 2). At 1440 and 390 as many rows show as before.
+- **On the phone a long title takes three lines in all** (the title, its time, its client and mark), so nothing on its second line runs off the edge.
+- **"checked 5 min ago"** (when Pocket was checked) keeps its words: it is a time ago, not a length (item 12).
+- **A hand-added call can also be closed as No transcript** by its adder (the server allows it); the row offers only Remove, as item 20 says.
+- **From the diff review, left as they are:** the page offers Internal by its key "Cooptimize" while the server asks the team's Internal answer (the page can only offer less); Dismiss's Close checks for a transcript and then writes in its own transaction, so a transcript landing in between could be closed with (it reopens on the next pass); Close on a call with several reviewers closes it for all of them, as No transcript this week does; Undo's state comes from the page, limited to Waiting or Needs upload.
+- **From the pictures review, left as they are** (each was so before MC-6, or is item 2's whole title): the open call's name, client and time on its row and in its header; "11 left" and "0 of 11 decided"; a chip's name over its group; "1 closed" beside Last week and the Closed chip; a chat call's client in its whole title and on its picker; Add a call's chosen recording in Name; "Goes with" naming a row in view; the Transcript's "12 lines".

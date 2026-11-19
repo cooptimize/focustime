@@ -44,7 +44,9 @@ describe.skipIf(!CHROMIUM)("a call's transcript (browser, demo mode)", () => {
     // The transcript loads when the view opens.
     await lines.first().waitFor({ timeout: 30_000 });
     await expect.poll(() => lines.count()).toBe(12);
-    await expect(lines.first().textContent()).resolves.toMatch(/^\d+:\d\d (AM|PM)\s*Alex Rivera\s*Morning everyone/);
+    // MC-6: a line's time is time into the call, as its quotes say; the clock time on hover.
+    await expect(lines.first().textContent()).resolves.toMatch(/^\d+:\d\d\s*Alex Rivera\s*Morning everyone/);
+    await expect(lines.first().locator(".mtg-line-at").getAttribute("title")).resolves.toMatch(/^\d+:\d\d (AM|PM) on the clock$/);
     await expect.poll(() => page.locator(".mtg-lines li.marked").count()).toBeGreaterThan(0);
     // The filter: words or a name.
     const filter = page.getByRole("searchbox", { name: "Filter the transcript" });

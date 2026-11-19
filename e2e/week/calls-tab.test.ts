@@ -180,9 +180,13 @@ describe.skipIf(!CHROMIUM)("Calls is a tab (MC-3, browser, demo mode)", () => {
     await page.locator('[data-calls-filter="open"]').click();
     const chips = page.locator(".calls-chips .ib4-chip");
     const allOpen = await count("open");
+    const foldN = async () => Number(((await page.locator("[data-calls-fold='no-transcript'] > .link-btn").textContent()) ?? "").match(/\d+/)?.[0] ?? 0);
+    const allFold = await foldN();
     await chips.filter({ hasText: "Northwind" }).click();
     await expect.poll(() => hash(page)).toMatch(/[?&]client=northwind/i);
-    await expect.poll(() => count("open")).toBeLessThan(allOpen);
+    // MC-6: Open counts the calls outside the no-transcript fold (here all Northwind's); the fold's number follows the chip.
+    await expect.poll(() => count("open")).toBeLessThanOrEqual(allOpen);
+    await expect.poll(foldN).toBeLessThan(allFold);
     // Both kept on a reload, and remembered when Calls opens again from the tab.
     await page.locator('[data-calls-filter="hidden"]').click();
     const kept = await hash(page);
@@ -219,16 +223,19 @@ describe.skipIf(!CHROMIUM)("Calls is a tab (MC-3, browser, demo mode)", () => {
     // Scroll the list a little, then choose a call further down: the list keeps its place and filter.
     const scroll = page.locator("[data-calls-list] .calls-scroll");
     await scroll.evaluate((el) => (el.scrollTop = 120));
-    const before = await scroll.evaluate((el) => el.scrollTop);
+    await scroll.evaluate((el) => el.scrollTop);
     // MC-5: a call with no client on its row ("Which client?") opens its setup; it's in the no-transcript fold.
     await page.locator("[data-calls-fold='no-transcript'] > .link-btn").click();
     const model = page.locator("[data-calls-list] [data-call-row]").filter({ hasText: "Proposal review with Jordan" }).first();
+    // MC-6: titles wrap, so the list is taller; where the list is once the row is in view is the place it keeps.
+    await model.scrollIntoViewIfNeeded();
+    const inView = await scroll.evaluate((el) => el.scrollTop);
     actions.length = 0;
     await model.click();
     const setup = page.getByRole("region", { name: /^Review Proposal review with Jordan/ });
     await setup.waitFor();
     await expect(model.getAttribute("aria-current")).resolves.toBe("true");
-    expect(Math.abs((await scroll.evaluate((el) => el.scrollTop)) - before)).toBeLessThan(400);
+    expect(Math.abs((await scroll.evaluate((el) => el.scrollTop)) - inView)).toBeLessThan(400);
     // Nothing read, kept or sent about the call yet; nothing of it in the address.
     expect(actions.filter((a) => /^meeting\.(call_start|call_fetch|call_add|transcript|review)$/.test(a))).toEqual([]);
     expect(await hash(page)).toBe("#/calls");
@@ -360,8 +367,11 @@ describe.skipIf(!CHROMIUM)("Calls is a tab (MC-3, browser, demo mode)", () => {
       expect(await hash(page)).toMatch(/^#\/calls(\?|$)/);
       if (label === "phone") {
         // MC-5: a row is pressed anywhere on it (its button stretches over it), so the row is what is measured.
-        for (const b of await page.locator("[data-calls-list] li[data-row], [data-calls-list] .calls-row-acts button, [data-calls-list] .calls-row-acts select, [data-calls-list] .calls-tick, [data-calls-list] .calls-filters .seg-btn, [data-calls-list] .calls-chips .ib4-chip, [data-calls-list] .calls-head button").all())
-          expect((await b.boundingBox())!.height, (await b.textContent()) ?? "").toBeGreaterThanOrEqual(44);
+        // Measured in one pass once the marks are in, so a row that re-renders between finding and measuring can't drop out (MC-6).
+        await expect.poll(() => page.locator("[data-calls-list]").textContent(), { timeout: 30_000 }).not.toMatch(/Checking…/);
+        const small = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>("[data-calls-list] li[data-row], [data-calls-list] .calls-row-acts button, [data-calls-list] .calls-row-acts select, [data-calls-list] .calls-tick, [data-calls-list] .calls-filters .seg-btn, [data-calls-list] .calls-chips .ib4-chip, [data-calls-list] .calls-head button")]
+          .filter((e) => e.offsetParent).map((e) => ({ text: (e.textContent ?? "").trim().slice(0, 40), h: e.getBoundingClientRect().height })).filter((x) => x.h < 44));
+        expect(small).toEqual([]);
         await expect(page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).resolves.toBe(true);
       }
       await page.locator("[data-calls-list] [data-section='needs'] [data-call-row]").first().click();

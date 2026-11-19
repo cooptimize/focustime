@@ -1660,6 +1660,10 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "meeting.call_unhide":
     case "meeting.skip_all":
     case "meeting.unskip_all":
+    case "meeting.call_remove":
+    case "meeting.call_restore":
+    case "meeting.call_close_none":
+    case "meeting.call_reopen":
       return { run: () => env.setView("meetings") };
     case "weekplan.proposal":
     case "weekplan.carry_decide":
