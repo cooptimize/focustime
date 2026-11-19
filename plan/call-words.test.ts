@@ -76,3 +76,15 @@ describe("MC-1d: a call's state in words", () => {
     expect(n.body).not.toMatch(/ready to review/);
   });
 });
+
+describe("MC-6: the gap form's a or an follows UC-3's rule (how the name sounds as written)", () => {
+  it("chooses from the type's own spelling, not its lower case", async () => {
+    const { topNoParent, CALL_ROW } = await import("./call-words.ts");
+    expect(topNoParent("Epic")).toBe("An epic is at the top: no parent");
+    expect(topNoParent("MVP")).toBe("An mvp is at the top: no parent");
+    expect(topNoParent("UAT Task")).toBe("A uat task is at the top: no parent");
+    expect(topNoParent("User Story")).toBe("A user story is at the top: no parent");
+    expect(CALL_ROW.commentAboveStory("Epic")).toMatch(/^This comment is on an Epic,/);
+    expect(CALL_ROW.commentAboveStory("Feature")).toMatch(/^This comment is on a Feature,/);
+  });
+});

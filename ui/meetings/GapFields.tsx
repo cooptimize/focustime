@@ -6,8 +6,8 @@
 // (meeting.edit); the write itself goes only through the one DevOps preview.
 import { isAboveStory } from "../../plan/needed.ts";
 import { useEffect, useMemo, useState } from "react";
-import { aOr, parentTypesOf, type NewOptions } from "../../plan/quick-create.ts";
-import { CALL_ROW, PAGE_TEXT, type ProposalCheck } from "../../plan/call-words.ts";
+import { parentTypesOf, type NewOptions } from "../../plan/quick-create.ts";
+import { CALL_ROW, PAGE_TEXT, topNoParent, type ProposalCheck } from "../../plan/call-words.ts";
 import type { GapProposal } from "../../plan/meetings.ts";
 import { NO_ANSWERS, type Answers } from "../../plan/three-questions.ts";
 import { PeopleField } from "../ahead/People.tsx";
@@ -96,7 +96,7 @@ export function GapFields({ b, id, clientKey, opts, today, editable, check, onEd
         <span className={cell(null)}>
           <span className="set-label">Parent</span>
           {opts && types.length && !allowed.size ? (
-            <span className="muted" title={`${aOr(b.type.toLowerCase()).replace(/^a/, "A")} is at the top: no parent`}>{PAGE_TEXT.noParent}</span>
+            <span className="muted" title={topNoParent(b.type)}>{PAGE_TEXT.noParent}</span>
           ) : (
             <span className="nf-parent" title={b.parentId === null ? CALL_ROW.noParent : parents.length ? `Any open ${parentWords}` : `No open ${parentWords} to choose`}>
               <SelectField label={`Parent for ${b.title}`} value={b.parentId === null ? "" : String(b.parentId)} options={parentOptions} onChange={(k) => {

@@ -4,6 +4,7 @@
 // same words. Pure: no I/O, no clock.
 import { AI_MESSAGES } from "../ai/types.ts";
 import { AI_RETRIES, parseOutcome, type OccurrenceState } from "./meetings.ts";
+import { aOr, vowelSound } from "./quick-create.ts";
 
 /**
  * DY-1: how a meeting is marked where it is drawn (Day, Week, the block panel, the phone): "Repeats" for one of a series
@@ -77,6 +78,9 @@ export type CallFilter = (typeof CALL_FILTERS)[number]["key"];
 export const SECTION_HEAD = { gap: "New in DevOps", commitment: "Promises", comment: "Comments" } as const;
 
 /** QC-1's own words for a required field the form can't fill (the New form says the same, then its own next step). */
+/** MC-6: the gap form's hover on No parent: "a" or "an" by how the type's name sounds as written (UC-3), then the name in lower case. */
+export const topNoParent = (type: string) => `${vowelSound(type) ? "An" : "A"} ${type.toLowerCase()} is at the top: no parent`;
+
 export const processNeeds = (project: string, names: readonly string[], type: string) => `${project}'s process needs ${names.join(", ")} on a new ${type}, which FocusTime doesn't fill.`;
 
 export const CALL_ROW = {
@@ -90,7 +94,7 @@ export const CALL_ROW = {
   /** A required field the form fills, still empty: on the row, before any preview. */
   needs: (names: readonly string[], type: string | null = null) => `${names.join(" and ")} ${names.length === 1 ? "is" : "are"} needed: this client's process requires ${names.length === 1 ? "it" : "them"} on a new ${type ?? "item of this type"}.`,
   cantFill: (project: string, names: readonly string[], type: string) => `${processNeeds(project, names, type)} Create this one in DevOps, then skip it here.`,
-  commentAboveStory: (type: string) => `This comment is on a ${type}, above story level. Status is reported on features, so a call's comment never goes there: it won't be sent. Skip it.`,
+  commentAboveStory: (type: string) => `This comment is on ${aOr(type)}, above story level. Status is reported on features, so a call's comment never goes there: it won't be sent. Skip it.`,
   noParent: "No parent yet. Choose one, or leave it without",
   keptPromise: (who: string) => `Added to ${who.split(/\s+/)[0]}'s Promises`,
   /** MC-6: my own promise, by the server's word that it is mine (never a name compared). */
