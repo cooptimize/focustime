@@ -108,6 +108,12 @@ describe.skipIf(!CHROMIUM)("MC-7: paste a transcript or your notes into a call (
     await choices.locator("[data-choice='paste']").click();
     await choices.getByLabel("Paste a transcript or your notes").fill([...NOTES_LINES, INSTRUCTION].join("\n"));
     await expect.poll(() => choices.locator("[data-paste-took]").textContent(), { timeout: W }).toBe("Notes: 6 lines");
+    // Read as a transcript, notes name nobody: said so, and Use this waits; the switch back reads them as notes again.
+    await choices.getByRole("button", { name: "Read it as a transcript" }).click();
+    await expect.poll(() => choices.locator("[data-paste-no-names]").textContent()).toContain("No names found, so it can't be read as a transcript.");
+    await expect(choices.getByRole("button", { name: "Use this" }).isDisabled()).resolves.toBe(true);
+    await choices.getByRole("button", { name: "Read it as notes" }).click();
+    await expect.poll(() => choices.locator("[data-paste-took]").textContent()).toBe("Notes: 6 lines");
     await choices.getByRole("button", { name: "Use this" }).click();
     await expect.poll(() => page.locator("[data-call-origin]").textContent(), { timeout: W }).toBe("Pasted notes");
     await expect.poll(() => page.locator("[data-group]").count(), { timeout: W }).toBeGreaterThan(0);

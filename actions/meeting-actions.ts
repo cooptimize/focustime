@@ -1059,9 +1059,9 @@ async function savePaste(ctx: MeetingContext, x: { store: MeetingStore; me: stri
   }
   const read = readPaste(text, x.as);
   const kind: TranscriptKind = x.as === "notes" ? "pasted_notes" : "pasted";
-  if (read.tooLong || read.tooShort) {
-    ctx.log({ source: "plan", op: "meeting_paste_refused", kind: read.tooLong ? "long" : "short", count: read.lines.length });
-    return bad(read.tooLong ? PASTE_TEXT.tooLong : PASTE_TEXT.tooShort, 422);
+  if (read.tooLong || read.tooShort || read.noNames) {
+    ctx.log({ source: "plan", op: "meeting_paste_refused", kind: read.tooLong ? "long" : read.tooShort ? "short" : "no_names", count: read.lines.length });
+    return bad(read.tooLong ? PASTE_TEXT.tooLong : read.tooShort ? PASTE_TEXT.tooShort : PASTE_TEXT.noNames, 422);
   }
   const v = x.store.viewer(x.me);
   const start = Temporal.PlainDate.from(x.date).toZonedDateTime({ timeZone: x.series.zone, plainTime: Temporal.PlainTime.from(x.series.start) });

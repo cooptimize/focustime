@@ -353,7 +353,7 @@ function rowOf(line: string, next: string | undefined): Row {
 }
 
 /** What reading a pasted text gives: its lines, how many speakers, and the counts that decide which reading it is. */
-export type PasteRead = { as: PasteAs; lines: TranscriptLine[]; speakers: number; numbered: boolean; tooLong: boolean; tooShort: boolean };
+export type PasteRead = { as: PasteAs; lines: TranscriptLine[]; speakers: number; numbered: boolean; tooLong: boolean; tooShort: boolean; noNames: boolean };
 
 /**
  * A pasted transcript's cues, as a file's would be: a pasted .vtt as the .vtt; otherwise each line is "Name: words",
@@ -402,11 +402,11 @@ function pastedCues(text: string): { cues: Cue[]; marked: number; sure: number; 
   return { cues, marked: marks.length, sure, loose, vtt: false };
 }
 
-/** Notes: each line the reviewer wrote, bullet marks and blank lines dropped; no speaker, no time. */
+/** Notes: each line the reviewer wrote, bullet and heading marks and blank lines dropped; no speaker, no time. */
 function noteLines(text: string, cap: number): TranscriptLine[] {
   const out: TranscriptLine[] = [];
   for (const row of text.replace(/^﻿/, "").replace(/\r\n?/g, "\n").split("\n")) {
-    let rest = clean(row.replace(/^\s*(?:[-*•‣◦▪●○·–—>]+|\d{1,3}[.)]|[a-zA-Z][.)]|\[[ xX]?\])\s+/, ""));
+    let rest = clean(row.replace(/^\s*(?:[-*•‣◦▪●○·–—>#]+|\d{1,3}[.)]|[a-zA-Z][.)]|\[[ xX]?\])\s+/, ""));
     while (rest.length > MAX_LINE_CHARS) {
       const cut = rest.lastIndexOf(". ", MAX_LINE_CHARS);
       const at = cut > MAX_LINE_CHARS / 2 ? cut + 1 : MAX_LINE_CHARS;
@@ -423,7 +423,7 @@ function noteLines(text: string, cap: number): TranscriptLine[] {
  * MC-7: a pasted text read as a transcript or as notes. Without `as`, it is taken for a transcript when most of its
  * lines carry a speaker (a pasted .vtt always), at least two do, and most of those are sure (the speaker speaks again,
  * or the line has a time); otherwise for notes. `tooLong`: over MAX_LINES lines (or the bytes a file may be);
- * `tooShort`: fewer than a few words. Speakers' names are kept as pasted; `numbered` when any is a numbered voice.
+ * `tooShort`: fewer than a few words; `noNames`: read as a transcript, yet no line names a speaker. Speakers' names are kept as pasted; `numbered` when any is a numbered voice.
  */
 export function readPaste(text: string, as?: PasteAs): PasteRead {
   const words = (text.match(/[\p{L}\p{N}]+/gu) ?? []).length;
@@ -440,5 +440,8 @@ export function readPaste(text: string, as?: PasteAs): PasteRead {
     numbered: [...speakers].some(numberedSpeaker),
     tooLong: lines.length > MAX_LINES || bytes > MAX_TRANSCRIPT_BYTES,
     tooShort: words < PASTE_MIN_WORDS || !lines.length,
+    // Read as a transcript, it must name someone: notes switched to a transcript with no name in them would be one
+    // line nobody said.
+    noNames: took === "transcript" && speakers.size === 0,
   };
 }

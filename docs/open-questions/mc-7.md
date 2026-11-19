@@ -9,3 +9,10 @@
 - **A file over 4000 lines** is still cut at 4000 without a word; a paste over 4000 is refused, as the brief asks. Making a file say so too would change the upload.
 - **The brief puts browser tests in e2e/calls/**, which doesn't exist; Calls' browser tests are in `e2e/week/`, so `e2e/week/calls-paste.test.ts` sits beside them.
 - **The demo's two pasted calls are closed** so that no count elsewhere in the demo moves; an open one would need 27 browser tests' counts changed. They show how a pasted call reads; the screenshots of an open one come from a paste in the browser.
+- **From the demo review, left as they are** (each is Calls as it was, or the brief's own words):
+  - "142 lines" for a transcript counts what was said in turns (a speaker's run of lines is one), as the Transcript view does; the brief's words are kept. "4 turns" would say it better if wanted.
+  - A pasted transcript's speaker with my own name isn't taken for me unless I'm on the call's invite; a hand-added call has no invite, so my own promise is "noted with this call". The same as an uploaded file; matching a speaker's name to the signed-in person would change who owns a promise everywhere.
+  - Speaker 1 and Speaker 2 stay unnamed (naming them is outside this step).
+  - Who sees it is said three ways ("Only you see it" in the header; "for this call's reviewers and attendees only" in the Transcript and notes views). On a call I added by hand they mean the same person (me); one sentence everywhere is a Calls change.
+  - A paste the AI finds nothing in closes the call (Calls' rule since MC-4) and its page says "Nothing to propose from this call."; the call leaves Needs you for Closed.
+  - What Keep, Create and Skip all do is the review's, unchanged.

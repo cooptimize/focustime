@@ -369,6 +369,7 @@ export const PASTE_TEXT = {
   asTranscript: "Read it as a transcript",
   tooLong: "That is longer than FocusTime can read for one call. Paste the part that matters.",
   tooShort: "Paste at least a few words.",
+  noNames: "No names found, so it can't be read as a transcript.",
   use: "Use this",
   reading: "Reading…",
   cancel: "Cancel",

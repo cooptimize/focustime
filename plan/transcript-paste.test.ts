@@ -115,3 +115,19 @@ describe("readPaste: limits", () => {
     expect(over.lines.length).toBe(MAX_LINES);
   });
 });
+
+describe("MC-7 review: a transcript must name someone; heading marks are dropped from notes", () => {
+  it("notes switched to a transcript with no names are refused, and the switch back reads them again", () => {
+    const notes = "Decide the export format\nthe accountants want a PDF each month\nsend the filter by Thursday";
+    expect(readPaste(notes).as).toBe("notes");
+    expect(readPaste(notes).noNames).toBe(false);
+    const forced = readPaste(notes, "transcript");
+    expect(forced.speakers).toBe(0);
+    expect(forced.noNames).toBe(true);
+    expect(readPaste(notes, "notes").noNames).toBe(false);
+    expect(readPaste("Ana Example: hello there\nBen Sample: hello to you too", "transcript").noNames).toBe(false);
+  });
+  it("a Markdown heading's marks go, as bullets do", () => {
+    expect(readPaste("## Statements\n- the accountants want a PDF\n# Next\n- send the filter", "notes").lines.map((l) => l.text)).toEqual(["Statements", "the accountants want a PDF", "Next", "send the filter"]);
+  });
+});

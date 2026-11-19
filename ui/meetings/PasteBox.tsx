@@ -17,7 +17,7 @@ export function usePaste(initial = "") {
   const later = useDeferredValue(text);
   const read: PasteRead | null = useMemo(() => (later.trim() ? readPaste(later, as ?? undefined) : null), [later, as]);
   // Settled on what is in the box now (the deferred reading can lag a keystroke).
-  const ok = !!read && later === text && !read.tooLong && !read.tooShort;
+  const ok = !!read && later === text && !read.tooLong && !read.tooShort && !read.noNames;
   // Leaving the page (a reload, closing the tab) with text in the box asks first.
   const dirty = !!text.trim();
   useEffect(() => {
@@ -49,14 +49,17 @@ export function PasteField({ p, autoFocus = false, children }: { p: PasteState; 
       <label htmlFor={`${id}-box`} className="mtg-paste-label">{PASTE_TEXT.label}</label>
       <TextBox id={`${id}-box`} className="mtg-paste-box" minRows={12} maxRows={24} value={p.text} onChange={(e) => p.setText(e.target.value)} autoComplete="off" spellCheck={false} autoFocus={autoFocus} aria-describedby={`${id}-hint ${id}-line`} data-paste-box="" />
       <span id={`${id}-hint`} className="mtg-drop-kinds">{PASTE_TEXT.hint}</span>
-      <p id={`${id}-line`} className="mtg-paste-line" role="status" aria-live="polite" data-paste-line={r ? (r.tooLong ? "long" : r.tooShort ? "short" : r.as) : ""}>
+      <p id={`${id}-line`} className="mtg-paste-line" role="status" aria-live="polite" data-paste-line={r ? (r.tooLong ? "long" : r.tooShort ? "short" : r.noNames ? "no-names" : r.as) : ""}>
         {!r ? null : r.tooLong ? (
           <span className="error-line">{PASTE_TEXT.tooLong}</span>
         ) : (
           <>
             <span data-paste-took={r.as}>{r.as === "transcript" ? PASTE_TEXT.transcript(r.lines.length, r.speakers) : PASTE_TEXT.notes(r.lines.length)}</span>
             {r.tooShort ? <span className="muted"> {PASTE_TEXT.tooShort}</span> : (
+              <>
+              {r.noNames && <span className="mtg-paste-warn" data-paste-no-names=""> {PASTE_TEXT.noNames}</span>}
               <button type="button" className="link-btn mtg-paste-flip" onClick={p.flip} data-paste-flip="">{r.as === "transcript" ? PASTE_TEXT.asNotes : PASTE_TEXT.asTranscript}</button>
+              </>
             )}
           </>
         )}

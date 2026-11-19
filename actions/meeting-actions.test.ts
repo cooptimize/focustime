@@ -586,6 +586,7 @@ describe("MC-7: a pasted transcript or notes", () => {
     expect(await uploadTranscript(ctxAs(ADMIN), { seriesId: m.id, date: "2026-11-10", bytes: enc("ok"), paste: "notes" })).toMatchObject({ ok: false, status: 422, error: "Paste at least a few words." });
     const long = Array.from({ length: 4001 }, (_, i) => `- note ${i}`).join("\n");
     expect(await uploadTranscript(ctxAs(ADMIN), { seriesId: m.id, date: "2026-11-10", bytes: enc(long), paste: "notes" })).toMatchObject({ ok: false, status: 422, error: "That is longer than FocusTime can read for one call. Paste the part that matters." });
+    expect(await uploadTranscript(ctxAs(ADMIN), { seriesId: m.id, date: "2026-11-10", bytes: enc("the accountants want a PDF each month\nsend the filter by Thursday"), paste: "transcript" })).toMatchObject({ ok: false, status: 422, error: "No names found, so it can't be read as a transcript." });
     expect(await uploadTranscript(ctxAs(ADMIN), { seriesId: m.id, date: "2026-11-10", bytes: enc(NOTES), paste: "bad" })).toMatchObject({ ok: false, status: 400 });
     expect(await meetings.occurrencesOf(m.id)).toEqual([]);
   });

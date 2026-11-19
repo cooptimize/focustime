@@ -746,6 +746,7 @@ From `ui/status-states.ts` (`STATE_NAME`, `STATE_KEY`, `ST_WORDS`, `LINE_NOTE`).
 | The switch | Read it as notes · Read it as a transcript |
 | Too long | That is longer than FocusTime can read for one call. Paste the part that matters. |
 | Too short | Paste at least a few words. |
+| A transcript with no names | No names found, so it can't be read as a transcript. |
 | The button | Add and review (Add a call) · Use this (a call's page) · Reading… |
 | The call's menu | Paste a transcript or notes (under Upload a transcript) |
 | Replacing | Replace the Teams transcript? (the pasted transcript, the pasted notes, the Pocket transcript) and Propose again's words |
