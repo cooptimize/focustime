@@ -100,3 +100,26 @@ describe("the demo's fake of DevOps's code search (RB-4 B)", () => {
     }
   });
 });
+
+describe("the demo's branches (RB-7 G)", () => {
+  const sales = async () => (await git.repos("Northwind")).find((r) => r.name === "sales-analytics")!;
+  it("sales-analytics has main, dev and three more; the other repos have only main", async () => {
+    expect((await git.branches("Northwind", await sales())).names).toEqual(["dev", "feature/returns-model", "feature/store-region-dimension-cleanup-before-the-quarterly-refresh", "main", "release/2026-11"]);
+    const portal = (await git.repos("Northwind")).find((r) => r.name === "store-portal")!;
+    expect((await git.branches("Northwind", portal)).names).toEqual(["main"]);
+  });
+  it("a branch has its own files; one it doesn't have is not found", async () => {
+    const r = await sales();
+    const only = "/lake/Gold.Warehouse/rpt/Views/vReturnsByStore.sql";
+    expect((await git.files("Northwind", r, "dev")).paths).toContain(only);
+    expect((await git.files("Northwind", r, "main")).paths).not.toContain(only);
+    expect((await git.file("Northwind", r, "/README.md", "dev")).text).toContain("On dev");
+    await expect(git.folder("Northwind", r, "/", "nope")).rejects.toThrow(/not_found/);
+  });
+  it("code search looks in main and dev only, and says which branches a file was found on", async () => {
+    const r = await git.search("Northwind", "vReturnsByStore", 50);
+    expect(r.hits.map((h) => [h.path, h.branches])).toEqual([["/lake/Gold.Warehouse/rpt/Views/vReturnsByStore.sql", ["dev"]]]);
+    const rate = await git.search("Northwind", "vReturnRate", 50);
+    expect(rate.hits).toEqual([]);
+  });
+});
