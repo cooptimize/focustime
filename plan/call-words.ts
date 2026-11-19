@@ -73,7 +73,8 @@ export const CALL_FILTERS = [
   { key: "comment", label: "Comments" },
 ] as const;
 export type CallFilter = (typeof CALL_FILTERS)[number]["key"];
-export const SECTION_HEAD = { gap: "New in DevOps", commitment: "Promises", comment: "Comments on stories" } as const;
+/** A group's head: its name only (MC-6: the counts are on the Show chips, which use the same names). */
+export const SECTION_HEAD = { gap: "New in DevOps", commitment: "Promises", comment: "Comments" } as const;
 
 /** QC-1's own words for a required field the form can't fill (the New form says the same, then its own next step). */
 export const processNeeds = (project: string, names: readonly string[], type: string) => `${project}'s process needs ${names.join(", ")} on a new ${type}, which FocusTime doesn't fill.`;

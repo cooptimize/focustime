@@ -135,4 +135,43 @@ describe.skipIf(!CHROMIUM)("MC-6: Calls polish (browser, demo mode)", () => {
     expect(sizes.left).toBe("1px");
     expect(sizes.leftColor).toBe(sizes.top);
   }, T);
+
+  it("6: the counts are on the Show chips once; group heads carry their name only, the same as their chip's", async () => {
+    const { page } = await open();
+    await weeklyCall(page);
+    const chips = await page.locator("[data-show]").evaluateAll((bs) => bs.map((b) => ({ key: b.getAttribute("data-show"), label: (b.firstChild?.textContent ?? "").trim(), n: b.querySelector(".seg-count")?.textContent ?? null })));
+    const heads = await page.locator(".mtg-sec-head").evaluateAll((hs) => hs.map((x) => ({ group: x.closest("[data-group]")?.getAttribute("data-group"), text: (x.firstElementChild?.textContent ?? "").trim() })));
+    for (const h of heads) {
+      expect(h.text, h.group ?? "").not.toMatch(/\d/);
+      expect(chips.find((c) => c.key === h.group)?.label, h.group ?? "").toBe(h.text);
+    }
+    expect(heads.map((x) => x.text)).toContain("Comments");
+    // Each kind's count is on screen once, on its chip (two kinds with the same number: twice, once on each chip).
+    for (const c of chips.filter((x) => x.n)) await expect(onScreen(page, ".calls-beside", new RegExp(`^\\s*${c.n}\\s*$`)), c.key ?? "").resolves.toBe(chips.filter((x) => x.n === c.n).length);
+  }, T);
+
+  it("7: with a call open beside the list, Skip all is in its header only; a row under the pointer that isn't open shows its own", async () => {
+    const { page } = await open();
+    await weeklyCall(page);
+    await expect(onScreen(page, "body", /^Skip (all|last \d+)( and close)?$/)).resolves.toBe(1);
+    await expect(page.locator(".calls-beside [data-call-act='skip-all']").isVisible()).resolves.toBe(true);
+    // The open call's row keeps it hidden even under the pointer.
+    const openRow = page.locator("[data-section='needs'] li.open").first();
+    await openRow.hover();
+    await expect(openRow.locator(".calls-skip").isVisible()).resolves.toBe(false);
+  }, T);
+
+  it("9: in Select calls the bar shows only once something is ticked; the menu says Done selecting", async () => {
+    const { page } = await open();
+    await calls(page);
+    await page.getByRole("button", { name: "More for Calls" }).click();
+    await page.getByRole("menuitem", { name: /^Select calls/ }).click();
+    await expect(page.locator("[data-calls-tickbar]").count()).resolves.toBe(0);
+    await page.getByRole("button", { name: "More for Calls" }).click();
+    await expect(page.getByRole("menuitem", { name: /^Done selecting/ }).count()).resolves.toBe(1);
+    await page.keyboard.press("Escape");
+    await page.locator("[data-calls-list] .calls-tick input").first().check();
+    await expect(page.locator("[data-calls-tickbar]").count()).resolves.toBe(1);
+    await expect(page.locator("[data-calls-tickbar] [data-tickbar='done']").count()).resolves.toBe(1);
+  }, T);
 });

@@ -1399,7 +1399,7 @@ function ReviewScreen(props: ReviewProps) {
           return (
             <section key={kind} className="mtg-group" style={{ "--c": color } as CSSProperties} aria-label={SECTION_HEAD[kind]} data-group={kind}>
               <h3 className="mtg-sec-head">
-                <span>{SECTION_HEAD[kind]}{rows.length > 0 && <span className="mtg-sec-count">{rows.length}</span>}</span>
+                <span>{SECTION_HEAD[kind]}</span>
                 {editable && selectable.length > 1 && (
                   <button type="button" className="mini quiet" aria-pressed={allOn} onClick={() => setTicked((s) => { const n = new Set(s); for (const p of selectable) if (allOn) n.delete(p.id); else n.add(p.id); return n; })}>
                     {allOn ? CALL_BAR.clear : CALL_ROW.selectAll}
