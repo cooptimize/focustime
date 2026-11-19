@@ -15,6 +15,7 @@ import { search } from "./settings/search.ts";
 import { openOf, SearchResults, SettingsSearch, type Open } from "./settings/SearchResults.tsx";
 import { takeLanding } from "./settings/landing.ts";
 import { MostUsed } from "./settings/MostUsed.tsx";
+import { useRowLabels } from "./settings/row-labels.ts";
 import { ProfileSection } from "./settings/sections/Profile.tsx";
 import { HoursSection } from "./settings/sections/Hours.tsx";
 import { NotificationsSection } from "./settings/sections/Notifications.tsx";
@@ -74,6 +75,8 @@ function SettingsPanel(props: Props & { admin: boolean | null }) {
   const admin = props.admin;
   const devLoop = useDeveloperLoop();
   const { current, setting } = placeOf(props.section, props.setting, list, props.demo, admin);
+  // SA-5: a table on the phone is drawn as rows, as in Admin.
+  useRowLabels(() => document.querySelector<HTMLElement>(".panel-shell.settings .ps-body"), `${current}/${setting ?? ""}/${data ? 1 : 0}`);
   const reload = useCallback(async () => {
     try {
       setData(await call<SettingsData>("settings.load", {}));

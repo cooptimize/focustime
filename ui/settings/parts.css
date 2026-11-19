@@ -218,3 +218,15 @@ a.sp-btn:hover { background: var(--wash-1); }
 /* Admin's rows on a phone: a select and the buttons beside it keep 8 px apart. */
 :root .app.phone .ps-body :is(.dchat-title, .dchat-card) { row-gap: 8px; column-gap: 8px; }
 :root .app.phone .ps-body td :is(select, button, a) { margin-block: 4px; }
+
+/* The phone: a table is drawn as rows, each cell under its column's name (row-labels.ts writes data-label; Settings and Admin, SA-5). */
+.panel-shell.phone .ps-body .sp-table-wrap { overflow: visible; flex: 1 1 100%; width: 100%; }
+.panel-shell.phone .ps-body .sp-table { display: block; }
+.panel-shell.phone .ps-body .sp-table thead { display: none; }
+.panel-shell.phone .ps-body .sp-table, .panel-shell.phone .ps-body .sp-table :is(tbody, tr) { display: block; width: 100%; box-sizing: border-box; }
+.panel-shell.phone .ps-body .sp-table tbody tr { padding: 8px 0; border-top: 1px solid var(--border); }
+.panel-shell.phone .ps-body .sp-table tbody tr:first-child, .panel-shell.phone .ps-body .sp-table tr.sp-after { border-top: 0; }
+.panel-shell.phone .ps-body .sp-table :is(td, th) { display: block; min-width: 0; padding: 2px 0; border: 0; overflow-wrap: anywhere; }
+.panel-shell.phone .ps-body .sp-table :is(td, th)[data-label]::before { content: attr(data-label); display: block; font-size: var(--fs-1); font-weight: 500; color: var(--text-faint); }
+.panel-shell.phone .ps-body .sp-table :is(td, th)[data-label=""]::before { content: none; }
+.panel-shell.phone .ps-body .sp-table :is(td, th):empty { display: none; }

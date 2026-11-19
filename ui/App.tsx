@@ -145,6 +145,12 @@ function storedLoc(): Loc | null {
 }
 
 /** RS-1: each tab's icon says what it is for: one day, the week in columns, the backlog's indented list, bars, a tray. */
+/** SA-5: a PTO day's reason, in the words Week's day menu uses for it (Most used's Today's hours is off then). */
+const offOn = (days: readonly { date: string; pto?: { titles: readonly string[] } | null }[], date: string) => {
+  const d = days.find((x) => x.date === date);
+  return d?.pto ? `PTO day (${d.pto.titles.join(", ")})` : undefined;
+};
+
 const TAB_ICONS: Record<Tab, IconName> = { today: "day", week: "week", ahead: "backlog", status: "status", inbox: "inbox", calls: "calls", code: "code" };
 const TAB_TITLES: Record<Tab, string> = {
   today: "Day: what's next, what's urgent and the day's blocks",
@@ -2262,6 +2268,7 @@ export function App() {
           weekDays={weekDays}
           setWeekDays={(v) => void saveWeekDays(v)}
           catchUpName={catchUpWord(data.week.days)}
+          todayOff={offOn(data.week.days, Temporal.Now.plainDateISO(userZone(data.week)).toString())}
           everyWeekendDay={showWeekend}
           setEveryWeekendDay={saveShowWeekend}
           textSize={textSize}

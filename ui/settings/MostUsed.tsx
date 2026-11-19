@@ -52,6 +52,13 @@ function TodayHours(p: BodyProps) {
     if (ok) await p.reload();
   };
   const eve = day.extra[0];
+  // Week's day menu offers no hours on a PTO day; neither does this.
+  if (p.todayOff)
+    return (
+      <Row id="today-hours" def={{ label: "Today's hours" }} help={`Not on a day off: ${p.todayOff}.`}>
+        {null}
+      </Row>
+    );
   return (
     <Row
       id="today-hours"

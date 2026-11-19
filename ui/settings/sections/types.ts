@@ -45,6 +45,8 @@ export type Props = {
   weekDays: { catchUp: boolean; weekend: boolean };
   setWeekDays: (v: { catchUp?: boolean; weekend?: boolean }) => void;
   catchUpName: string;
+  /** SA-5: why today takes no hours of its own (a PTO day), as Week's day menu says it; Most used's Today's hours is off then. */
+  todayOff?: string | undefined;
   /** SA-3: Week's View options' "Every weekend day" (this browser's), so Days on Week offers the same three choices. */
   everyWeekendDay?: boolean;
   setEveryWeekendDay?: (on: boolean) => void;
