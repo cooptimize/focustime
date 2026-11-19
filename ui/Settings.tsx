@@ -107,6 +107,11 @@ function SettingsPanel(props: Props & { admin: boolean | null }) {
       for (const e of ["focusin", "pointerdown", "keydown"]) document.removeEventListener(e, moved, true);
     };
   }, [current, target]);
+  // SA-5: on the phone the page scrolls as a whole; a section opens at its top (Most used pushes the list down, and its
+  // scroll would carry over), unless it opens at one setting.
+  useEffect(() => {
+    if (list && !target) window.scrollTo(0, 0);
+  }, [current]); // eslint-disable-line react-hooks/exhaustive-deps
   // A deep link to one setting: into view with a brief highlight, focus on its first control. Waits for the section's
   // data the first time; a later reload of that data (a save, a late response) doesn't do it again.
   useEffect(() => {
