@@ -6,7 +6,7 @@ import type { PromiseCard } from "../../plan/conversation-views.ts";
 import type { FollowUpView } from "../../actions/types.ts";
 import { actsFor, ITEM_KEYS, type ActEnv } from "./ItemActions.tsx";
 import { promiseOrder } from "./InboxPage.tsx";
-import { chipHint, chipName, dueWords, lateText, needCounts, needNoClient, NO_CLIENT } from "./model.ts";
+import { chipHint, chipName, dueWords, headCount, lateText, needCounts, needNoClient, NO_CLIENT } from "./model.ts";
 import { suggestionActs } from "./Suggestion.tsx";
 
 const TODAY = "2026-11-05";
@@ -129,4 +129,15 @@ describe("UC-2: the No client chip", () => {
     expect(chipName(NO_CLIENT, 2)).toBe("No client, 2 need you");
     expect(chipHint(NO_CLIENT, 1)).toMatch(/^1 needs you with no client: suggestions from chats/);
   });
+});
+
+// UC-3 item 4: a heading says what needs me there (the chips' and the tab's count), and its rows when they differ.
+describe("headCount (UC-3)", () => {
+  it("what needs me, then the rows when they differ", () => {
+    expect(headCount(1, 3)).toBe("1 needs you · 3");
+    expect(headCount(2, 2)).toBe("2 need you");
+    expect(headCount(1, 1)).toBe("1 needs you");
+    expect(headCount(0, 3)).toBe("none need you · 3");
+  });
+  it("a list nothing in it ever counts shows only its rows", () => expect(headCount(null, 3)).toBe("3"));
 });
