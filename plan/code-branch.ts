@@ -92,6 +92,8 @@ export const BRANCH_TEXT = {
   cut: (n: number) => `Showing the first ${n.toLocaleString("en-US")} branches.`,
   label: (name: string) => `Branch: ${name}. Change branch`,
   /** Search inside files, on a branch DevOps doesn't search for that repo. */
+  /** A results group read on a branch other than the repo's usual one. */
+  repoOn: (repo: string, branch: string) => `${repo} on ${branch}`,
   notSearched: (shown: string) => `DevOps doesn't search this branch. These are from ${shown}.`,
 } as const;
 

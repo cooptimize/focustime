@@ -79,6 +79,19 @@ describe.skipIf(!CHROMIUM)("Code on a branch you choose (RB-7)", () => {
     expect(await other.page.locator('[data-code-branch-btn="dev"]').count()).toBe(1);
     await other.page.close();
 
+    // Search inside files from dev: the repo's results say they are on dev, and one opens on dev.
+    const box = panel(page).locator("[data-code-search]");
+    await box.click();
+    await panel(page).locator('[data-code-mode="inside"]').click();
+    await box.fill("vReturnsByStore");
+    await box.press("Enter");
+    await panel(page).locator('[data-code-result-branch="dev"]').waitFor();
+    expect(await panel(page).locator('[data-code-result-branch="dev"]').innerText()).toMatch(/sales-analytics on dev/i);
+    await panel(page).locator('[data-code-hit="vReturnsByStore.sql"]').click();
+    await panel(page).locator('[data-code-off-usual="dev"]').waitFor();
+    await go(page, addr(PIPE, "dev"));
+    await page.waitForFunction(() => document.querySelector(".cv-code")?.textContent?.includes("0.02:00:00"));
+
     // Back to the usual branch with one press: the address drops the branch.
     await panel(page).locator("[data-code-back-usual]").click();
     await page.waitForFunction(() => document.querySelector(".cv-code")?.textContent?.includes("0.12:00:00"));

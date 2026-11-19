@@ -38,7 +38,7 @@ export const NAMES_TEXT = {
   insideNarrowedOther: "This search was narrowed to one kind. Press Search again to look for this one.",
   insideNotListed: (n: number) => `${n} more file${n === 1 ? " isn't" : "s aren't"} listed: DevOps found ${n === 1 ? "it" : "them"} on another branch.`,
   insideIndexing: "DevOps is still indexing this client's code, so some files may be missing.",
-  insideScope: "Only each repo's default branch is searched. Forks aren't searched.",
+  insideScope: "DevOps searches each repo's default branch, and any others its admins chose. Forks aren't searched.",
   matches: (n: number | null) => (n === null || n === 0 ? "" : `${n} match${n === 1 ? "" : "es"}`),
   searchStart: "Type a name, then press Enter or Search. Folder names count too.",
   backToResults: "Back to results",
@@ -544,7 +544,10 @@ export function InsideResults({ run, kind, onOpen }: { run: InsideRun; kind: Kin
             {g.state === "ok" &&
               g.repos.map(([repoId, repo]) => (
                 <div key={repoId} className="cv-result-kind" data-code-result-repo={repo.name}>
-                  <div className="cv-group-head">{repo.name}</div>
+                  {/* RB-7: the branch these were found on, when it isn't the repo's usual one. */}
+                  <div className="cv-group-head" data-code-result-branch={repo.files[0]?.branch ?? ""}>
+                    {repo.files[0]?.branch ? BRANCH_TEXT.repoOn(repo.name, repo.files[0].branch) : repo.name}
+                  </div>
                   {/* RB-7: DevOps doesn't search the branch on screen for this repo: these are its default's. */}
                   {g.answer.notSearched
                     ?.filter((n) => n.repoId === repoId)

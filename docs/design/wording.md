@@ -770,6 +770,8 @@ From `ui/status-states.ts` (`STATE_NAME`, `STATE_KEY`, `ST_WORDS`, `LINE_NOTE`).
 | A branch that is gone | feature/old isn't there any more, so this is dev. |
 | A file not on the branch chosen | /lake/rpt/Views/vReturns.sql isn't on main, so this is /lake/rpt/Views. (the top folder: "so this is the top of the repo.") |
 | Search inside files, a branch DevOps doesn't search | DevOps doesn't search this branch. These are from main. |
+| Search inside files, a repo's results on a chosen branch | sales-analytics on dev |
+| Search inside files' footer | DevOps searches each repo's default branch, and any others its admins chose. Forks aren't searched. (was: Only each repo's default branch is searched.) |
 | Admin › Clients › Code, the Rule | Code opens on · Each repo's default · The branch Code opens this client's repos on, where a repo has it. A repo without it opens on its own default. Anyone can still choose another branch in Code. |
 | Admin, each repo | Each repo opens on · sales-analytics: dev · store-portal: main (it has no dev) · Read with the company DevOps token for this client: branch names only. |
 | Code views, the repo column | sales-analytics on dev · All its repos on main · All its repos: sales-analytics on dev, store-portal on main · All its repos on dev where they have it, the one on screen on feature/returns |
