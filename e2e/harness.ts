@@ -166,7 +166,7 @@ export async function freshPage(h: Harness, viewport = { width: 1920, height: 10
   await page.addInitScript(hints, opts.dayPanel === "default");
   // FT-1: routes go here, before the page opens, and stay. Added to a page already open (or removed from one), a route
   // let a request through unseen now and then under load: Chromium sent it to the server and Playwright reported no
-  // request (docs/open-questions.md, FT-1). A test changes what its route answers with a variable instead.
+  // request (docs/open-questions/ft-1.md, FT-1). A test changes what its route answers with a variable instead.
   await opts.before?.(page);
   if (h.gone()) throw new Error(h.gone()!);
   await page.goto(h.url);

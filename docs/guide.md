@@ -26,7 +26,7 @@ Styles go in `ui/guide/guide.css` (loaded with the Guide), and follow style guid
 
 ## A tour
 
-1. On the real screen, add a `data-tour="<hook>"` attribute to each element the tour points at. Attributes only: no behavior change. List new hooks in `docs/decisions.md` (D986).
+1. On the real screen, add a `data-tour="<hook>"` attribute to each element the tour points at. Attributes only: no behavior change. List new hooks in the step's own `docs/decisions/<step>.md` (as D986 did).
 2. Add a `Tour` to `TOURS` in `ui/guide/tours.ts`: `id`, `title`, `section` (where Back to the Guide goes), `start` (the `Nav` it opens), 4 to 7 `steps`, `end`. Each step: `target` (the hook), `title`, `text`; optionally `at` (another screen: the tour changes the address there and later steps stay on it), `example` (a card in `content.ts` `TOUR_EXAMPLES.cards`, drawn by `ui/guide/tour/Illustrations.tsx` in one of the app's three shapes by its `kind`: `block` (a block card), `rows` (a list, each row's second part a status pill) or `preview` (a line per change); `main` names its one filled button; shown when the screen has nothing there; a step with no `target` is the drawing only), `emptyWhen` (a selector inside the target that must match, else the drawing shows), and `phone` (other words, or `"skip"`).
 3. Point a Show me at it (an area's `does[].tour`, or Start here's `START.week.steps[].tour`). The command menu offers "Show me: <title>" by itself.
 4. `ui/guide/tours.test.ts` checks every target is a hook on a screen and every drawing exists; `e2e/shell/guide-tour.test.ts` runs every tour at 1920, 1366 and phone with the keyboard only, against a baseline that visits the same screens without the tour: no extra actions, the plan store unchanged.

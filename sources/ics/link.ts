@@ -2,7 +2,7 @@
 // The URL is a secret (anyone holding it reads the calendar): it is sealed at rest, never logged, never sent to the
 // browser or the AI. Only its host is ever shown ("calendar.google.com/…").
 
-/** Fetch limits (recorded under CAL-1 in docs/decisions.md). */
+/** Fetch limits (recorded under CAL-1 in docs/decisions/cal-1.md). */
 export const ICS_TIMEOUT_MS = 15_000;
 export const ICS_MAX_BYTES = 5 * 1024 * 1024;
 export const ICS_MAX_REDIRECTS = 3;

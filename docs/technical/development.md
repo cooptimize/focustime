@@ -170,8 +170,9 @@ Every package in `package.json`, what FocusTime uses it for and its license. A n
 
 ## Decisions and open questions
 
-- Record a decision in [docs/decisions.md](../decisions.md) under the step's heading, unnumbered. Numbers are assigned when the step merges, in merge order, so two parallel pull requests never take the same number. Never renumber an existing decision.
-- Record what a person needs to decide in [docs/open-questions.md](../open-questions.md) under the step.
+- Record a step's decisions in its own file, `docs/decisions/<step>.md` (the step's code in lower case, like `mc-6.md`), under the step's heading, and what a person needs to decide in `docs/open-questions/<step>.md`. Add one line for the step to each index, [docs/decisions.md](../decisions.md) and [docs/open-questions.md](../open-questions.md); [docs/decisions/README.md](../decisions/README.md) shows how.
+- A new decision has no global number: it is named by its step and its row ("MC-6.3"). Never renumber an existing decision: every number in use (up to D1199) stays on its row.
+- Never edit another step's file, except to mark a question answered with the step that answered it.
 - Update [docs/architecture.md](../architecture.md) when a folder or an entry point is added, moved or removed, and these pages when what they say changes.
 
 ## Adding an external write safely

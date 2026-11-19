@@ -824,7 +824,7 @@ Pilots need personal calendars without Google sign-in, and Apple has no comparab
 
 ## 51. VM-2: Stop, and an opt-in start before the day begins (authorized Nov 11)
 
-From the Nov 11 review: start the VM on work days before the day, but never from dev. Decisions under "VM-2" in `docs/decisions.md`.
+From the Nov 11 review: start the VM on work days before the day, but never from dev. Decisions under "VM-2" in `docs/decisions/vm-2.md`.
 
 - **Stop.** The VM chip's menu has Stop… while my VM runs: a preview (Running → Stopped (deallocated), it stops billing, anything running on it ends, its auto-shutdown isn't changed), then Stop; followed until Azure shows it. Only my own confirmed VM; amends D475.
 - **Start without a preview.** Was Start right away; same setting.
@@ -835,7 +835,7 @@ From the Nov 11 review: start the VM on work days before the day, but never from
 
 ## 52. RB-1: Code, every client's repos, read only (authorized Nov 12)
 
-Cooptimizers borrow working code from one client to start the same job at another. Code gives every Cooptimizer one place to open any client's repos, walk the tree and read a file, read only. Decisions under "RB-1" in `docs/decisions.md`; the rules in CLAUDE.md (Client code (RB-1)).
+Cooptimizers borrow working code from one client to start the same job at another. Code gives every Cooptimizer one place to open any client's repos, walk the tree and read a file, read only. Decisions under "RB-1" in `docs/decisions/rb-1.md`; the rules in CLAUDE.md (Client code (RB-1)).
 
 - **Code.** `#/code[/<client>[/<repo>[/<path>]]]` from ⋯ and the command menu: the client picker, the repo, Find a file, the tree, and the file colored by its language with line numbers, Copy, Copy path, Copy DevOps link, Copy link, Wrap, and Format for squashed JSON. One client at a time, its name and color always in the header with Read only.
 - **Who.** Every Cooptimizer, every client, unless an admin sets a client to its team only. Guests, automation accounts and the demo's people never reach real code.
@@ -846,7 +846,7 @@ Cooptimizers borrow working code from one client to start the same job at anothe
 
 ## 53. RS-1: Restyle: controls, icons and rows (authorized Nov 13)
 
-Calmer, more consistent controls, with colors, the font, every word, layout and behavior as they were. Decisions under "RS-1" in `docs/decisions.md`; the rules in `docs/design/style-guide.md` section 11.
+Calmer, more consistent controls, with colors, the font, every word, layout and behavior as they were. Decisions under "RS-1" in `docs/decisions/rs-1.md`; the rules in `docs/design/style-guide.md` section 11.
 
 - **Controls.** Buttons are pills (filled for the screen's one main action, outlined, quiet, small); icon-only buttons are round; tabs are an icon and a word in a pill with no box around the group; a switch between views is one soft track with the chosen side lifted; a status is a pill with a wash and no line, a chip you press has a line; inputs are 32 high with an 8 radius; menus have an icon before every item.
 - **Icons.** One family (`ui/icons.tsx`) in place of text characters for back, next, more, add, close, folds, done and the rest. The DevOps type icons are unchanged.
@@ -857,7 +857,7 @@ Calmer, more consistent controls, with colors, the font, every word, layout and 
 
 ## 54. BR-1: A quiet loader, and Lumen removed (authorized Nov 15)
 
-The product owner: "i want to change the loader and remove the lightbulb/headlight mark", "remove the text at the loader"; the mark goes everywhere, the loader is the week mark alone with its blocks filling and no words. Decisions under "BR-1" in `docs/decisions.md`; details in `docs/design/brand.md`.
+The product owner: "i want to change the loader and remove the lightbulb/headlight mark", "remove the text at the loader"; the mark goes everywhere, the loader is the week mark alone with its blocks filling and no words. Decisions under "BR-1" in `docs/decisions/br-1.md`; details in `docs/design/brand.md`.
 
 - **Loader.** The week mark alone, centered, its blocks lighting in turn, no words, drawn by `index.html` from the first paint so the sign-in check and the app's own wait look the same. Nothing within 400 ms; once shown, at least 600 ms. Then the mark moves onto the top bar's while the app fades in. After 8 s one quiet line, "Still waiting on Outlook". Screen readers hear "Loading FocusTime" and "FocusTime is ready".
 - **Reduced motion.** The mark holds still, every block lit; the app appears with no movement.
@@ -867,4 +867,4 @@ The product owner: "i want to change the loader and remove the lightbulb/headlig
 
 ## Part 0: a shared owner and state per conversation
 
-One record per conversation, the same for everyone who can see it: an owner (none, or one Cooptimizer, plus helpers), a state (Open, Owned or Closed) and a history. Each person sees Asked you, Up for grabs, You're on it, Teammate has it or Done, worked out from that record. I'll take it, Give to…, Add helper, Release, Close out and Reopen apply at once with Undo (through the Assistant and Teams, as a proposal with Confirm). A reply or a detected "I'll do it" only offers one tap. The first of two claims wins. Asking again on a Closed one reopens it to its last owner; a new message on an Owned one notifies the owner. Nothing is posted to Teams. Existing conversations are moved once by a backfill. Decisions under "Part 0" in `docs/decisions.md`.
+One record per conversation, the same for everyone who can see it: an owner (none, or one Cooptimizer, plus helpers), a state (Open, Owned or Closed) and a history. Each person sees Asked you, Up for grabs, You're on it, Teammate has it or Done, worked out from that record. I'll take it, Give to…, Add helper, Release, Close out and Reopen apply at once with Undo (through the Assistant and Teams, as a proposal with Confirm). A reply or a detected "I'll do it" only offers one tap. The first of two claims wins. Asking again on a Closed one reopens it to its last owner; a new message on an Owned one notifies the owner. Nothing is posted to Teams. Existing conversations are moved once by a backfill. Decisions under "Part 0" in `docs/decisions/part-0.md`.

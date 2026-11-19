@@ -92,7 +92,7 @@ As planned, with these details settled while building:
 
 ## WP-2: making it trustworthy (Nov 11)
 
-The first real run read five clients' whole projects (about 4,100 items) and labeled 314. WP-2 scopes each client to Cooptimize's BI and analytics work, classifies every item in scope, and says where every item went. Decisions are under "WP-2" in `docs/decisions.md`; how to run it is `wp1-how-to-run.md`.
+The first real run read five clients' whole projects (about 4,100 items) and labeled 314. WP-2 scopes each client to Cooptimize's BI and analytics work, classifies every item in scope, and says where every item went. Decisions are under "WP-2" in `docs/decisions/wp-2.md`; how to run it is `wp1-how-to-run.md`.
 
 ### Step 0: why only 314 were labeled
 
@@ -125,7 +125,7 @@ About 1 second per item for classification (10 seconds per AI request of ten ite
 
 ## WP-3: trusting it (Nov 12)
 
-The second run was good enough to act on, with three soft spots: agreement on what is missing was measured too harshly to mean anything, the AI renamed the whole request types list, and the summary couldn't be read per client. WP-3 fixes those from the labels already stored, with no AI request. Decisions are under "WP-3" in `docs/decisions.md`; how to run it is `wp1-how-to-run.md`.
+The second run was good enough to act on, with three soft spots: agreement on what is missing was measured too harshly to mean anything, the AI renamed the whole request types list, and the summary couldn't be read per client. WP-3 fixes those from the labels already stored, with no AI request. Decisions are under "WP-3" in `docs/decisions/wp-3.md`; how to run it is `wp1-how-to-run.md`.
 
 ### Step 0
 

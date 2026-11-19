@@ -33,7 +33,7 @@ describe("wordsHits", () => {
   });
   it("scans the app's text, not tests, fakes, migrations or SQL files", () => {
     for (const f of ["ui/Day.tsx", "server/teams/cards.ts", "store/plan-store.ts", "docs/demo/script.md", "public/manifest.webmanifest", "scripts/teams-package.ts"]) expect(wordsScanned(f), f).toBe(true);
-    for (const f of ["ui/Today.test.tsx", "host/fakes.ts", "store/sql/baseline.ts", "store/migrations/20261106T0900_week_carry.ts", "docs/decisions.md", "e2e/day/today.test.ts"]) expect(wordsScanned(f), f).toBe(false);
+    for (const f of ["ui/Today.test.tsx", "host/fakes.ts", "store/sql/baseline.ts", "store/migrations/20261106T0900_week_carry.ts", "docs/decisions.md", "docs/decisions/mc-6.md", "docs/open-questions/mc-6.md", "e2e/day/today.test.ts"]) expect(wordsScanned(f), f).toBe(false);
   });
 });
 
@@ -93,7 +93,7 @@ describe("namesHits", () => {
   });
   it("reads the sources' own messages too, but not the demo docs or the Guide", () => {
     for (const f of ["sources/not-set-up.ts", "sources/oauth/oauth.ts", "ui/keys.ts", "ui/menu.ts", "ui/settings/registry.ts", "config/org.ts", "plan/notify.ts", "server/teams/cards.ts", "public/legal.html"]) expect(namesScanned(f), f).toBe(true);
-    for (const f of ["sources/devops/write.test.ts", "ui/guide/content.ts", "docs/demo/script.md", "scripts/demo-walkthrough.mjs", "docs/decisions.md"]) expect(namesScanned(f), f).toBe(false);
+    for (const f of ["sources/devops/write.test.ts", "ui/guide/content.ts", "docs/demo/script.md", "scripts/demo-walkthrough.mjs", "docs/decisions.md", "docs/decisions/mc-6.md"]) expect(namesScanned(f), f).toBe(false);
   });
   it("the Guide has its own check, and the Renamed list holds the old names", () => {
     expect(namesHits("ui/guide/retired.ts", 'const r = { was: "Roadmap", now: "Backlog" };\n')).toEqual([]);

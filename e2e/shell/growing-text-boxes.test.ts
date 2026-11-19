@@ -12,7 +12,7 @@ import { FIELDS, lines, measure, openField, setTheme, type Field } from "../ui10
 
 let h: Harness;
 const T = 120_000;
-/** Each field's lines: where it starts and where it stops growing (recorded in docs/decisions.md under UI-10). */
+/** Each field's lines: where it starts and where it stops growing (recorded in docs/decisions/ui-10.md under UI-10). */
 const RANGE: Record<Field, { min: number; max: number }> = { capture: { min: 1, max: 6 }, assistant: { min: 1, max: 6 }, message: { min: 5, max: 12 } };
 /** The phone's sheet shows Close the loop compact: its message starts at 4 lines. */
 const PHONE_RANGE: Record<Field, { min: number; max: number }> = { ...RANGE, message: { min: 4, max: 12 } };

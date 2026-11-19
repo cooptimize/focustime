@@ -27,7 +27,7 @@
 # secrets. Use it to add a claim to the existing registration. A full run re-grants consent with `az ad app permission
 # grant`, which deletes every grant the app has for that API (people's own consents too, azure-cli issue 20974) and
 # makes one tenant-wide grant of GRAPH_SCOPES; a scope consented later (Chat.Read, AP-1) is lost. See
-# docs/open-questions.md (Q-HK1-1) before a full run.
+# docs/open-questions/hk-1.md (Q-HK1-1) before a full run.
 #
 # --local (A2, before any vault exists): the developer loop only. The redirect URI is http://localhost:<port> alone,
 # and the client secret goes through a pipe into the local host's secret store (Secret Service, service "focustime",

@@ -6946,7 +6946,7 @@ aside.block-panel .bp-nofeature.aw-feat-name, .sug-line .sug-word { font-size: v
 .chip-more:hover { color: var(--text); background: var(--raised); }
 .chip-more:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* The phone's day tabs share the row: with the weekend shown (seven tabs at 360) they can't each be 44 wide; they keep
-   the 44 height and share the width (docs/open-questions.md, PS-1). */
+   the 44 height and share the width (docs/open-questions/ps-1.md, PS-1). */
 .app.phone .day-tabs .day-tab { min-width: 0; }
 /* WD-1's first block within 200 px at 1440×900 still holds: the notice line's links keep their 28 px target by
    reaching into the line's padding, not by making the line taller. */
@@ -7663,7 +7663,7 @@ body.ah-dragging * { cursor: grabbing !important; }
    its dot alone up to 1400 px (1800 px at Larger text; its state stays for screen readers, in its title and its menu).
    The words on Focus, Capture and Ask go as RB-6 has them (Large up to 1500 px, Larger up to 1800 px), and the tabs'
    icons never had to: measured at 1280, 1366 and 1440, at each text size, with and without the Dev mark
-   (e2e/week/calls-tab.test.ts; docs/decisions.md, MC-3). A person without Code keeps RB-6's six-tab bar. */
+   (e2e/week/calls-tab.test.ts; docs/decisions/mc-3.md, MC-3). A person without Code keeps RB-6's six-tab bar. */
 .app.medium > .topbar.seven-tabs { flex-wrap: nowrap; }
 /* Six tabs (no Code) with Calls' count: RB-6's one-word VM goes on to 1400 px (it squeezed the bar at 1366 before). */
 @media (max-width: 1400px) {

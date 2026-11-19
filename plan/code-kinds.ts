@@ -1,6 +1,6 @@
 // RB-2: a repo's things by kind, from its file paths and nothing else. Pure: no I/O, and no file is ever opened to
 // decide anything here. The rules are the tables below, built from the documentation as it stood on Nov 14 (the links
-// are in docs/decisions.md under RB-2); adding a kind or a type's label is one row. No client's, repo's or folder's
+// are in docs/decisions/rb-2.md under RB-2); adding a kind or a type's label is one row. No client's, repo's or folder's
 // name from a real client is in here.
 //
 // The rules, in order (a file belongs to the first that takes it):
@@ -219,7 +219,7 @@ const SQL_OBJECT_FOLDERS: readonly (readonly [folder: RegExp, type: SqlType])[] 
 /**
  * RB-5: folders of a database that hold no schema's objects. The documentation names the shared queries folder; it
  * names no folder for a schema's own definition or for roles and users, so Security is the folder the extract tool
- * writes them to (docs/open-questions.md, RB-5). A file there named as one of the database's schemas is that Schema.
+ * writes them to (docs/open-questions/rb-5.md, RB-5). A file there named as one of the database's schemas is that Schema.
  */
 const SQL_SECURITY_FOLDER = /^security$/i;
 const SQL_SHARED_FOLDER = /^\.sharedqueries$/i;

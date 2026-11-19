@@ -7,13 +7,14 @@
 // Where git has BASE (a developer's clone; not CI's shallow checkout) the old files are also read from git: the
 // rebuild is compared line by line, the record is checked against them, and the script is run twice.
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { BASE, baseJson, LOGS, oldLog, splitAll } from "./split-step-docs.ts";
 import { type BaseRecord, codeOf, counts, deepen, EARLY_FILE, fileOf, indexTarget, numberedRows, rebuild, sha256, shallow, splitFiles } from "./step-docs.ts";
 import { LARGE_BYTES, LARGE_OK } from "./guards.ts";
+import { anchorsOf } from "./tech-docs.ts";
 
 const root = resolve(import.meta.dirname, "..");
 const docs = (p: string) => readFileSync(join(root, "docs", p), "utf8");
@@ -100,6 +101,38 @@ describe("decision numbers after the split (DOC-1)", () => {
     expect(twice).toEqual([]);
     expect(rows.size).toBe(record.decisions.counts.numbered);
     if (hasBase) for (const [d, r] of numberedRows(oldLog("decisions"))) expect(rows.get(d), d).toEqual(r);
+  });
+});
+
+describe("links into the logs (DOC-1)", () => {
+  const tracked = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard"], { cwd: root, encoding: "utf8" }).split("\n").filter(Boolean);
+  const read = (f: string) => readFileSync(join(root, f), "utf8");
+  const anchors = (f: string) => anchorsOf([...read(f).replace(/```[\s\S]*?```/g, "").matchAll(/^#{1,6}\s+(.+)$/gm)].map((m) => m[1]!.replace(/[`*_]/g, "").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").trim()));
+
+  it("every Markdown link to either index, a step file or a heading in one resolves", () => {
+    const bad: string[] = [];
+    for (const f of tracked.filter((t) => t.endsWith(".md") && existsSync(join(root, t)))) {
+      // Inline code is never a link (the README's made-up example).
+      for (const m of read(f).replace(/`[^`\n]*`/g, "").matchAll(/\]\(([^)\s]+)\)/g)) {
+        const href = m[1]!;
+        if (/^(https?:|mailto:|#)/.test(href)) continue;
+        const [path, anchor] = href.split("#");
+        const target = join(dirname(f), path!).replace(/\\/g, "/");
+        if (!/^docs\/(decisions|open-questions)(\.md|\/)/.test(target) && !f.startsWith("docs/decisions") && !f.startsWith("docs/open-questions")) continue;
+        if (!existsSync(join(root, target))) bad.push(`${f}: ${href}`);
+        else if (anchor && !anchors(target).includes(anchor)) bad.push(`${f}: ${href} (no such heading)`);
+      }
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it("every path to a step file named in the repo's text is there", () => {
+    const bad: string[] = [];
+    // The README's example names a made-up step on purpose.
+    for (const f of tracked.filter((t) => t !== "docs/decisions/README.md" && existsSync(join(root, t)) && /\.(ts|tsx|md|css|sh|mjs|yml)$/.test(t))) {
+      for (const m of read(f).matchAll(/docs\/(decisions|open-questions)\/([a-z0-9.-]+)\.md/g)) if (!/[<>]/.test(m[2]!) && !existsSync(join(root, m[0]))) bad.push(`${f}: ${m[0]}`);
+    }
+    expect(bad).toEqual([]);
   });
 });
 

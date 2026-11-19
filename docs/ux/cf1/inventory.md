@@ -2,7 +2,7 @@
 
 CF-1 removes confirming a plan (a day's and a week's) and musts. Work comes on and off freely. The stored confirm times (`day_plans.committed_at`, `week_plans.committed_at`) and tiers (`week_features.tier`, `week_drafts.tier`, `week_commitments.tier`) stay in the database unread and unwritten, so the idea can come back (no migration, no dropped column, no deleted row).
 
-Written before the change (Step 0) and updated to what was done (Nov 11). The decisions are in `docs/decisions.md` under CF-1. "Now" is before CF-1; "After" is what CF-1 does.
+Written before the change (Step 0) and updated to what was done (Nov 11). The decisions are in `docs/decisions/cf-1.md` under CF-1. "Now" is before CF-1; "After" is what CF-1 does.
 
 ## 1. A day's confirm time (`day_plans.committed_at`, `DayPlan.committedAt`)
 

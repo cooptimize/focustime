@@ -7,7 +7,7 @@ Read before changing code: this file, `docs/technical/` (how FocusTime works: ar
 ## Current milestone
 
 FocusTime is hosted on Azure: prod in the FocusTime resource group (deployed by hand by SHA through `deploy-prod.yml`, promoting dev's tested image) and dev deployed from main; the local app is retired and developers run the developer loop. The Azure move follows `docs/azure/A0-plan.md` (A0 to A5 done, reports in `docs/azure/`; A6 follows, authorized separately).
-Work goes one step per pull request: a step code (like LP-1, GD-2 or HK-7), its decisions under that code in `docs/decisions.md` (numbered at merge), its open questions in `docs/open-questions.md`, each step authorized separately. What each delivered is in `docs/history/spec.md` and `docs/decisions.md`; `docs/technical/` is the reference for how FocusTime works now.
+Work goes one step per pull request: a step code (like LP-1, GD-2 or HK-7), its decisions in `docs/decisions/<step>.md` and its open questions in `docs/open-questions/<step>.md` (the code in lower case, like `mc-6.md`), each step authorized separately. What each delivered is in `docs/history/spec.md` and `docs/decisions.md`; `docs/technical/` is the reference for how FocusTime works now.
 Only the work in `docs/history/spec.md`, `docs/azure/A0-plan.md` and the authorized steps is authorized. Ask before expanding scope, adding a source, or adding a dependency not listed there.
 
 ## Principles
@@ -299,7 +299,7 @@ Gone, with nothing in their place: Confirm week and Confirm today, Must and Nice
 - Type-check before calling a step done. Inspect the real UI (screenshot) for UI changes.
 - UI steps that touch Day, Week or the block panel follow `docs/design/style-guide.md` section 10 (Day and Week: rules for people, PS-1): one time and date format, one name per thing, one main button, minimum targets.
 - Verify current official docs before version-specific integration code.
-- Record decisions in `docs/decisions.md` and open questions in `docs/open-questions.md` as they come up.
+- Record decisions in `docs/decisions/<step>.md` and open questions in `docs/open-questions/<step>.md` as they come up, and add the step's one line to each index (`docs/decisions.md`, `docs/open-questions.md`; `docs/decisions/README.md` shows how). Never edit another step's file, except to mark a question answered, naming the step that answered it. The index line is the one place two steps can touch the same file, so keep it to one line per step; a conflict there is two lines, both kept. A new decision has no global number: it is named by its step and its row ("MC-6.3"); every number in use (D19 to D1199) stays on its row, and "Unnumbered until merge" and numbering at merge ended with DOC-1 (Nov 19).
 - Plain language in UI copy. No em dashes.
 - Commit and push to `origin` (the private GitHub repo `focustime`) after each completed step.
 - Worktrees under `~/Code/focustime-wt/<branch>`; `~/Code/focustime` stays on main and runs the service. Never run builds, migrations or servers against the service's database or build folder from a worktree.

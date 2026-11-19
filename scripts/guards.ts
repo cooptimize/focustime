@@ -5,7 +5,7 @@
 //
 // Three guards:
 // - names (A1, D418): no real client, project, person or company address, and no desktop or workstation name, outside
-//   the history (docs/decisions.md, docs/azure/) and, for desktop words, the developer loop's README. Case-insensitive.
+//   the history (docs/decisions.md and docs/decisions/, docs/azure/) and, for desktop words, the developer loop's README. Case-insensitive.
 //   The words are base64 so this file never matches its own search.
 // - process names (WT-1): no hard-coded work item type, state or category name acting as code in ui/, actions/ or
 //   plan/ outside plan/process.ts. Case-sensitive (it matches code, not prose).
@@ -20,6 +20,8 @@
 //   checked, not only text files, from the same list. PV-1: no archive under docs/ either (a zip held pictures of a
 //   real session that the image check couldn't see inside). FT-1: no archive anywhere in the repository, and no Office
 //   file (docx, xlsx, pptx and the like: zips inside, which can hold pictures), with no file allowed either way.
+// - step docs (DOC-1): the two indexes, docs/decisions.md and docs/open-questions.md, hold one line per step and no
+//   step heading or table row: a step writes its own docs/decisions/<step>.md and docs/open-questions/<step>.md.
 //
 // Usage: node scripts/guards.ts [--root <dir>]; exits 1 and lists file:line for each hit.
 import { execFileSync } from "node:child_process";
@@ -41,7 +43,7 @@ const DESKTOP = ["b21hcmNoeQ==", "aHlwcmxhbmQ=", "cmVtbWluYQ==", "bW9vbmxpZ2h0"]
 
 export const realRe = new RegExp(REAL.join("|"), "i");
 export const desktopRe = new RegExp(DESKTOP.join("|"), "i");
-const HISTORY = (f: string) => f === "docs/decisions.md" || f.startsWith("docs/azure/");
+const HISTORY = (f: string) => f === "docs/decisions.md" || f.startsWith("docs/decisions/") || f.startsWith("docs/azure/");
 const TEXT = /\.(ts|tsx|mjs|js|json|md|css|html|toml|sh|service|desktop|txt|svg|yml|yaml|bicep|bicepparam)$|(^|\/)[^.]+$/;
 
 // WT-1's shapes.
@@ -92,8 +94,7 @@ export const OFFICE = /\.(docx|docm|dotx|dotm|xlsx|xlsm|xlsb|xltx|xltm|pptx|pptm
 export const LARGE_BYTES = 300 * 1024;
 /** Files (or folders, ending in "/") that may be over 300 KB, and why. */
 export const LARGE_OK: Record<string, string> = {
-  "docs/decisions.md": "the decision log, read by scripts/decisions.test.ts and scripts/tech-docs.test.ts; it grows with every step",
-  "docs/open-questions.md": "the open questions list, which grows with every step like the decision log (it passed 300 KB with PH-2)",
+  "docs/decisions/d19-to-d666.md": "the decision log's numbered table from before step headings (D19 to D666), moved whole by DOC-1's split and never added to",
   "ui/styles.css": "the app's one stylesheet",
   "docs/demo/": "the demo walkthrough's pictures (scripts/demo-walkthrough.mjs writes them, docs/demo.md shows them)",
 };
@@ -117,7 +118,15 @@ export function fileHits(root: string, files: string[] = allFiles(root)): FileHi
   return hits;
 }
 
-export type Hit = { guard: "names" | "desktop" | "process" | "words" | "old names" | "pointers" | "files"; at: string };
+/** DOC-1: the two indexes. */
+export const STEP_INDEXES = ["docs/decisions.md", "docs/open-questions.md"];
+/** Lines an index may not hold: a step heading or a table row (a decision). Each as its 1-based line number. */
+export function stepIndexHits(f: string, text: string): number[] {
+  if (!STEP_INDEXES.includes(f)) return [];
+  return text.split("\n").flatMap((l, i) => (/^#{2,6} /.test(l) || /^\|/.test(l) ? [i + 1] : []));
+}
+
+export type Hit = { guard: "names" | "desktop" | "process" | "words" | "old names" | "pointers" | "files" | "step docs"; at: string };
 
 export function runGuards(root: string): { files: number; hits: Hit[] } {
   const every = allFiles(root);
@@ -134,6 +143,7 @@ export function runGuards(root: string): { files: number; hits: Hit[] } {
     const desktopOk = history || f === "system/README.md";
     const proc = processScanned(f);
     const lines = text.split("\n");
+    for (const n of stepIndexHits(f, text)) hits.push({ guard: "step docs", at: `${f}:${n}: ${lines[n - 1]!.trim().slice(0, 120)}` });
     if (wordsScanned(f)) for (const n of wordsHits(f, text)) hits.push({ guard: "words", at: `${f}:${n}: ${lines[n - 1]!.trim().slice(0, 120)}` });
     if (namesScanned(f)) for (const h of namesHits(f, text)) hits.push({ guard: "old names", at: `${f}:${h.line}: ${h.says.join(", ")}: ${lines[h.line - 1]!.trim().slice(0, 120)}` });
     if (pointersScanned(f)) for (const h of pointerHits(f, text)) hits.push({ guard: "pointers", at: `${f}:${h.line}: ${h.says.join(", ")}: ${lines[h.line - 1]!.trim().slice(0, 120)}` });
@@ -154,6 +164,7 @@ const WHY: Record<Hit["guard"], string> = {
   words: 'text people read says "pick" for a planned piece of work: say "to-do" (TD-1; code names keep pick)',
   "old names": "text people read uses a name FocusTime no longer has, or writes a control as a character: use the screen's name today and the control's name (NM-1; ui/guide/retired.ts says where each old name lives now)",
   pointers: "a pointer names a place that isn't there: use the name the screen draws (NM-2; ui/places.ts lists them)",
+  "step docs": "a step heading or a decision row in an index: a step writes its decisions in docs/decisions/<step>.md and its open questions in docs/open-questions/<step>.md, and adds one line to each index (docs/decisions/README.md, DOC-1)",
   files: "an image or video under docs/ux, an archive or an Office file anywhere, or a file over 300 KB: a step's screenshots go on its shots/<step> branch (scripts/shots-branch.ts), never on main, and never in an archive or an Office file (PV-1, FT-1); a file that must be large is added to LARGE_OK in scripts/guards.ts with its reason (CI-3)",
 };
 
@@ -164,7 +175,7 @@ if (import.meta.main) {
   if (!hits.length) {
     console.log(`guards: ${files} files, no hits`);
   } else {
-    for (const g of ["names", "desktop", "process", "words", "old names", "pointers", "files"] as const) {
+    for (const g of ["names", "desktop", "process", "words", "old names", "pointers", "step docs", "files"] as const) {
       const mine = hits.filter((h) => h.guard === g);
       if (!mine.length) continue;
       console.error(`guards: ${mine.length} ${g} hit(s): ${WHY[g]}`);

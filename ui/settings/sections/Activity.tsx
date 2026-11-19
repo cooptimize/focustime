@@ -1,6 +1,6 @@
 // SA-3: Your data › What FocusTime changed in other apps (was the Activity section), one log per tab. The Outlook write log is
 // drawn here; the DevOps, Azure, Teams status and Close the loop logs are shared components that keep their insides
-// (in the parts' one table style) until a later step (docs/open-questions.md, SA-2).
+// (in the parts' one table style) until a later step (docs/open-questions/sa-2.md, SA-2).
 import { useEffect, useState } from "react";
 import type { WriteLogView } from "../../../actions/types.ts";
 import { responseLabel } from "../../../plan/rsvp.ts";
