@@ -6,8 +6,8 @@ Measured on the demo (a fictional person and fictional calls, Thursday Nov 5, 20
 
 | | 1440 by 900, before | 1440 by 900, after | 390 by 844, before | 390 by 844, after |
 |---|---|---|---|---|
-| Words in the list | 133 | 95 | 100 | 88 |
-| Calls visible in the list without scrolling | 4 of 7 | 6 of 6, room for 15 | 2 of 7 | 5 of 6, room for 6 |
+| Words in the list | 133 for 7 calls (19 a call) | 140 for 9 calls (16 a call) | 100 for 7 calls (14 a call) | 107 for 9 calls (12 a call) |
+| Calls visible in the list without scrolling | 4 of 7 | 9 of 9, room for 15 | 2 of 7 | 5 of 9, room for 6 |
 | Lines per Needs you row | 4 | 2 | 4 | 2 |
 | Lines per week row | 3 to 4 | 1 | 4 to 5 | 2 (when and name over the client and mark) |
 | Words on the call's page | 235 | 277 | 145 | 148 |
@@ -15,7 +15,7 @@ Measured on the demo (a fictional person and fictional calls, Thursday Nov 5, 20
 | Times the call's count is on screen | 6 | 1 on the call's page ("0 of 11 decided"); the list's row says "11 left" | 3 | 1 |
 | Stuck header (and a group's head) | 72 px (and 50) | 86 px (and 33) | 255 px | 218 (and 49) px |
 
-The list has 6 rows after against 7 before because last week's closed call is now "1 closed" beside its group's head instead of a row. The call's page has more words at 1440 than before because more proposals show: per proposal it is three lines where it was nine to twelve, and the help sentences are gone.
+The after list has three more rows than the before one: MC-2c's calls started in a chat came into main while MC-5 was built, and the demo has three. Last week's closed call is "1 closed" beside its group's head instead of a row. The call's page has more words at 1440 than before because more proposals show: per proposal it is three lines where it was nine to twelve, and the help sentences are gone.
 
 ## Help and explanation, where it went
 
