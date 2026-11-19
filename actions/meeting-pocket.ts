@@ -225,7 +225,7 @@ export async function pocketBring(
   ctx: PocketCallContext,
   store: MeetingStore,
   me: string,
-  input: { recordingId: unknown; occurrenceId: number; part?: unknown; replace?: unknown },
+  input: { recordingId: unknown; occurrenceId: number; part?: unknown; replace?: unknown; /** MC-5: a hand-added call takes the recording's time. */ move?: unknown },
   pass: (series: MeetingSeries, occ: Occurrence, lines: ReturnType<typeof pocketLines>) => Promise<{ outcome: string; proposals: number; added: number; same: number }>,
 ): Promise<ActionResponse> {
   const p = ctx.pocket;
@@ -237,7 +237,19 @@ export async function pocketBring(
   const seen = await v.occurrence(input.occurrenceId);
   if (!seen) return bad("No such call", 404);
   if (!canConfirm(seen.series, me)) return bad("Only this call's reviewers can bring in its transcript", 403);
-  const call = { startAt: seen.o.startAt, endAt: seen.o.endAt };
+  if (input.move !== undefined && input.move !== true) return bad("move is true or absent", 400);
+  let call = { startAt: seen.o.startAt, endAt: seen.o.endAt };
+  if (input.move === true && !goesWith(rec, call)) {
+    // MC-5: only a call I added by hand, with no transcript yet, takes any of my recordings, and with it the
+    // recording's day, start and length (said on the page before I confirm). Every other call: the recording must fit.
+    if (seen.series.callKind !== "hand" || (await store.withTranscript([seen.o.id])).has(seen.o.id)) return bad(POCKET_CALL_WORDS.notThisCall, 422, "pocket_not_this_call");
+    const at = Temporal.Instant.from(rec.startAt).toZonedDateTimeISO(seen.series.zone);
+    const minutes = Math.min(480, Math.max(1, Math.round(rec.seconds / 60)));
+    const moved = { day: at.toPlainDate().toString(), start: at.toPlainTime().toString({ smallestUnit: "minute" }), minutes, startAt: rec.startAt, endAt: at.add({ minutes }).toInstant().toString() };
+    if (!(await store.moveHandCall(seen.o.id, moved))) return bad(POCKET_CALL_WORDS.notThisCall, 422, "pocket_not_this_call");
+    ctx.log({ source: "plan", op: "meeting_pocket_bring", kind: "moved" });
+    call = { startAt: moved.startAt, endAt: moved.endAt };
+  }
   if (!goesWith(rec, call)) return bad(POCKET_CALL_WORDS.notThisCall, 422, "pocket_not_this_call");
   if ((await store.withTranscript([seen.o.id])).has(seen.o.id) && input.replace !== true) return { ok: true, data: { ask: "replace" } };
   const longer = longerThanCall(rec, call);

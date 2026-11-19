@@ -153,6 +153,20 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
       });
     },
     /**
+     * MC-5: a call added by hand takes its day, start and length from the Pocket recording its reviewer chose for it.
+     * Only a hand-added call (call_kind 'hand') with no transcript yet; false when the call is anything else.
+     */
+    async moveHandCall(occurrenceId: number, x: { day: string; start: string; minutes: number; startAt: string; endAt: string }): Promise<boolean> {
+      return db.tx(async () => {
+        const o = await db.get("SELECT o.series_id, o.transcript_at FROM meeting_occurrences o JOIN meeting_series s ON s.id = o.series_id WHERE o.id = ? AND s.call_kind = 'hand' AND s.removed_at IS NULL", [occurrenceId]);
+        if (!o || o.transcript_at) return false;
+        const t = stamp();
+        await db.run("UPDATE meeting_occurrences SET day = ?, start_at = ?, end_at = ?, updated_at = ? WHERE id = ?", [x.day, x.startAt, x.endAt, t, occurrenceId]);
+        await db.run("UPDATE meeting_series SET weekday = ?, start_time = ?, minutes = ?, updated_at = ? WHERE id = ? AND call_kind = 'hand'", [Temporal.PlainDate.from(x.day).dayOfWeek, x.start, x.minutes, t, Number(o.series_id)]);
+        return true;
+      });
+    },
+    /**
      * MC-1c: refused (PlanError "That meeting is already registered") when a live series has the same join link, checked
      * inside the insert's transaction; on SQL Server the read holds an update lock on the table's live rows, so two
      * admins registering one call at once can't both get through.
