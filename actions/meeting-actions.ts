@@ -645,6 +645,7 @@ async function review(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, 
       noSpeakers: r.o.transcriptKind === "teams_unnamed",
       // MC-7: what a reviewer pasted, a transcript or their notes; null for any other source.
       pasted: pastedAs(r.o.transcriptKind),
+      transcriptKind: lines ? r.o.transcriptKind ?? null : null,
       // MC-2b: whose Pocket recording it was, said only as mine or a reviewer's (never a name); null otherwise.
       pocketFrom: r.o.transcriptKind === "pocket_api" && lines ? ((await store.transcriptBy(r.o.id))?.toLowerCase() === me.toLowerCase() ? "mine" : "reviewer") : null,
       canConfirm: reviewer,

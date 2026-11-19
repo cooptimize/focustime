@@ -163,6 +163,8 @@ export const CALL_ACTIONS = {
   transcript: "Read the transcript",
   rerun: "Propose again",
   upload: "Upload a transcript",
+  /** MC-7: beside Upload a transcript in a call's menu. */
+  paste: "Paste a transcript or notes",
   showLines: "Show in transcript",
   /** MC-2: the area (More, the command menu, the phone, its heading). A registered weekly call is still a client call. */
   list: "Calls",
@@ -352,6 +354,29 @@ export const POCKET_TEXT = {
   dateNoLine: "Nothing was kept. Upload the recording from this call's day.",
   /** Read N lines, in the area's line after an upload. */
   read: (lines: number, proposals: number) => `Read ${lines} lines. ${proposals} ${proposals === 1 ? "proposal" : "proposals"} to review.`,
+} as const;
+
+/** MC-7: what a call's transcript is, as the question before replacing it names it. */
+const WHAT_IS_THERE: Record<string, string> = { teams: "the Teams transcript", teams_unnamed: "the Teams transcript", pocket: "the Pocket transcript", pocket_api: "the Pocket transcript", pasted: "the pasted transcript", pasted_notes: "the pasted notes" };
+
+/** MC-7: Paste, beside the other transcript choices: one box for a transcript or notes. */
+export const PASTE_TEXT = {
+  label: "Paste a transcript or your notes",
+  hint: "Plain text. A transcript with names (copied from another tool), or notes you typed during the call.",
+  transcript: (lines: number, speakers: number) => `A transcript: ${lines} ${lines === 1 ? "line" : "lines"}, ${speakers} ${speakers === 1 ? "speaker" : "speakers"}`,
+  notes: (lines: number) => `Notes: ${lines} ${lines === 1 ? "line" : "lines"}`,
+  asNotes: "Read it as notes",
+  asTranscript: "Read it as a transcript",
+  tooLong: "That is longer than FocusTime can read for one call. Paste the part that matters.",
+  tooShort: "Paste at least a few words.",
+  use: "Use this",
+  reading: "Reading…",
+  cancel: "Cancel",
+  /** Leaving the page (or closing the box) with text in it. */
+  leave: "Leave without using what you pasted? FocusTime doesn't keep it.",
+  /** Before replacing a call's transcript, naming what is there. */
+  replace: (kind: string | null) => `Replace ${WHAT_IS_THERE[kind ?? ""] ?? "this call's transcript"}? The open proposals are replaced, with any words you changed. The ones done, skipped or failed stay, and the same thing again is left out.`,
+  read: (as: "transcript" | "notes", lines: number, proposals: number) => `Read ${lines} ${as === "notes" ? (lines === 1 ? "note line" : "note lines") : lines === 1 ? "line" : "lines"}. ${proposals} ${proposals === 1 ? "proposal" : "proposals"} to review.`,
 } as const;
 
 /** The Transcript view's words. */
@@ -595,7 +620,7 @@ export const PAGE_TEXT = {
   needed: "needed",
   /** The transcript choices: Add a call's, and a call's page with no transcript. */
   transcript: "Transcript",
-  choice: { teams: "From Teams", pocket: "Pocket recording", file: "A file", later: "Later" },
+  choice: { teams: "From Teams", pocket: "Pocket recording", file: "A file", paste: "Paste", later: "Later" },
   getTeams: "Get it from Teams",
   drop: "Drop a Teams transcript or a Pocket export, or choose a file",
   kinds: ".vtt or .docx from Teams, .zip or .pdf exported from Pocket",

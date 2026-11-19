@@ -14,7 +14,8 @@
 // whether the list is folded are kept in this browser; nothing of a call is.
 import { openBreakDown } from "../menu.ts";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent } from "react";
-import { ActionRefusal, call, uploadMeetingTranscript } from "../api.ts";
+import { ActionRefusal, call, pasteMeetingTranscript, uploadMeetingTranscript } from "../api.ts";
+import { mayDrop, PasteField, usePaste, type Paste } from "./PasteBox.tsx";
 import { useDevOpsWrite, type DevOpsChange } from "../DevOpsWrite.tsx";
 import type { OccurrenceView, OtherCallView, SeriesView } from "../../plan/meeting-views.ts";
 import type { CaptureClient } from "../../plan/capture.ts";
@@ -26,7 +27,7 @@ import type { MenuItem, MenuStep } from "../menu.ts";
 import { secondsOf } from "../../plan/transcript.ts";
 import { DateField } from "../DatePicker.tsx";
 import { TimeField } from "../TimeField.tsx";
-import { CALL_ACTIONS, CALL_BAR, CALL_FILTERS, CALL_LIST, CALL_ROW, CALL_STATE, CALLS_TEXT, ADD_TEXT, CHAT_NO_SPEAKERS, CLOSE_TEXT, FETCH_WORDS, LIST_TEXT, DISMISS_TEXT, PAGE_TEXT, POCKET_TEXT, rerunLine, SECTION_HEAD, TRANSCRIPT_TEXT, type CallFilter, type FetchOutcome, type ProposalCheck } from "../../plan/call-words.ts";
+import { CALL_ACTIONS, CALL_BAR, CALL_FILTERS, CALL_LIST, CALL_ROW, CALL_STATE, CALLS_TEXT, ADD_TEXT, CHAT_NO_SPEAKERS, CLOSE_TEXT, FETCH_WORDS, LIST_TEXT, DISMISS_TEXT, PAGE_TEXT, POCKET_TEXT, rerunLine, SECTION_HEAD, TRANSCRIPT_TEXT, type CallFilter, type FetchOutcome, type ProposalCheck, PASTE_TEXT } from "../../plan/call-words.ts";
 import { callClientChoices, dismissOf, callRows, chipClients, closedAtOf, closedLine, closedList, outcomeOfCall, weekOf, filterCounts, firstToOpen, hiddenList, hiddenMissing, LIST_FILTERS, openList, otherRowKey, hideKeyOf, type CallHides, type CallRow, type CheckState, type Entry, type ListedRecording, type ListFilter, type SeriesEntry } from "../../plan/call-list.ts";
 import { ClosedRow, HiddenRow, NeedsRow, SeriesRow, TickBar, WeekRow, whenOf, type RowStatus } from "./CallsList.tsx";
 import { pocketRows } from "../../plan/call-list-pocket.ts";
@@ -44,7 +45,7 @@ import { forgetCallOptions, useNewOptions } from "./GapFields.tsx";
 import { opensItself, ProposalRow } from "./Proposal.tsx";
 import "./calls.css";
 
-type Review = { meeting: SeriesView; occurrence: OccurrenceView; proposals: Proposal[]; /** MC-6: my own promises, by the server. */ mine?: number[]; transcript: { lines: number; speakers: number } | null; /** MC-2: what was said (at most 5 lines); null before MC-2 or once the transcript is gone. */ summary?: string[] | null; /** PK-1: from a Pocket export: numbered speakers, no times. */ pocket?: boolean; /** MC-7: pasted by a reviewer, as a transcript or as their notes. */ pasted?: "transcript" | "notes" | null; /** MC-2b: brought in from a Pocket recording: by me, or by another reviewer. */ pocketFrom?: "mine" | "reviewer" | null; /** MC-2c: Teams gave a chat call's transcript without speaker names. */ noSpeakers?: boolean; canConfirm: boolean; canWrite: boolean; checks: Record<string, ProposalCheck> };
+type Review = { meeting: SeriesView; occurrence: OccurrenceView; proposals: Proposal[]; /** MC-6: my own promises, by the server. */ mine?: number[]; transcript: { lines: number; speakers: number } | null; /** MC-2: what was said (at most 5 lines); null before MC-2 or once the transcript is gone. */ summary?: string[] | null; /** PK-1: from a Pocket export: numbered speakers, no times. */ pocket?: boolean; /** MC-7: pasted by a reviewer, as a transcript or as their notes. */ pasted?: "transcript" | "notes" | null; /** MC-7: the stored transcript's kind, to name it before replacing. */ transcriptKind?: string | null; /** MC-2b: brought in from a Pocket recording: by me, or by another reviewer. */ pocketFrom?: "mine" | "reviewer" | null; /** MC-2c: Teams gave a chat call's transcript without speaker names. */ noSpeakers?: boolean; canConfirm: boolean; canWrite: boolean; checks: Record<string, ProposalCheck> };
 
 const errText = (e: unknown) => (e instanceof ActionRefusal || e instanceof Error ? e.message : "Something went wrong");
 const dayLabel = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -982,9 +983,12 @@ function PocketAddSetup({ rec, clients, suggested, zone, onCancel, onAdded }: { 
 /** MC-5: one of my recordings Add a call offers: not yet a call's transcript; the listed call it fits, if one does. */
 export type RecChoice = { rec: ListedRecording; fits: CallRow | null; /** MC-6: its own row in the list, when it has one. */ own?: CallRow | null };
 
-/** MC-5: a file chosen in Add a call, uploaded on the call's page once it is added (so the date question can be asked there). */
-let uploadFor: { occurrenceId: number; file: File } | null = null;
-const takeUpload = (occurrenceId: number): File | null => {
+/**
+ * MC-5: a file chosen in Add a call, uploaded on the call's page once it is added (so the date question can be asked
+ * there). MC-7: or what was pasted, held here in memory only, sent the same way.
+ */
+let uploadFor: { occurrenceId: number; file: File | Paste } | null = null;
+const takeUpload = (occurrenceId: number): File | Paste | null => {
   const f = uploadFor?.occurrenceId === occurrenceId ? uploadFor.file : null;
   if (f) uploadFor = null;
   return f;
@@ -1003,7 +1007,7 @@ function lastHalfHour(nowMs: number, zone: string): { date: string; start: strin
  * itself; one that fits a listed call says which, with Review that call. About is always mine to choose. One recording's
  * transcript is read only on Add and review; Add a call asks Pocket nothing more.
  */
-function AddCall({ clients, today, nowMs, zone, pocketOn, recs, onCancel, onAdded, onReviewThat, onOwn }: { clients: CaptureClient[]; today: string; nowMs: number; zone: string; pocketOn: boolean | null; recs: readonly RecChoice[]; onCancel: () => void; onAdded: (occurrenceId: number, file: File | null) => void; onReviewThat: (row: CallRow, recId: string) => void; /** MC-6: a recording with its own row: that row opens. */ onOwn: (row: CallRow) => void }) {
+function AddCall({ clients, today, nowMs, zone, pocketOn, recs, onCancel, onAdded, onReviewThat, onOwn }: { clients: CaptureClient[]; today: string; nowMs: number; zone: string; pocketOn: boolean | null; recs: readonly RecChoice[]; onCancel: () => void; onAdded: (occurrenceId: number, file: File | Paste | null) => void; onReviewThat: (row: CallRow, recId: string) => void; /** MC-6: a recording with its own row: that row opens. */ onOwn: (row: CallRow) => void }) {
   const at = lastHalfHour(nowMs, zone);
   const [mode, setMode] = useState<Choice>(pocketOn && recs.length ? "pocket" : "file");
   const [recId, setRecId] = useState<string>(recs.find((x) => !x.fits && !x.own)?.rec.id ?? recs.find((x) => !x.own)?.rec.id ?? "");
@@ -1015,6 +1019,8 @@ function AddCall({ clients, today, nowMs, zone, pocketOn, recs, onCancel, onAdde
   const [minutes, setMinutes] = useState(30);
   const [client, setClient] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  // MC-7: what is pasted, held in memory until Add and review.
+  const pasted = usePaste();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [dropping, setDropping] = useState(false);
@@ -1025,7 +1031,7 @@ function AddCall({ clients, today, nowMs, zone, pocketOn, recs, onCancel, onAdde
   useEffect(() => {
     if (!named) setName(rec?.rec.title ?? "");
   }, [rec?.rec.id]); // eslint-disable-line react-hooks/exhaustive-deps
-  const ready = !!name.trim() && !!client && (mode !== "pocket" || !!rec) && (mode !== "file" || !!file);
+  const ready = !!name.trim() && !!client && (mode !== "pocket" || !!rec) && (mode !== "file" || !!file) && (mode !== "paste" || pasted.ok);
   const save = async () => {
     setBusy(true);
     setErr(null);
@@ -1037,13 +1043,15 @@ function AddCall({ clients, today, nowMs, zone, pocketOn, recs, onCancel, onAdde
         return onAdded(id, null);
       }
       const r = await call<{ occurrenceId: number }>("meeting.call_add", { name: name.trim(), date, start, minutes, clientKey: client });
-      onAdded(r.occurrenceId, mode === "file" ? file : null);
+      onAdded(r.occurrenceId, mode === "file" ? file : mode === "paste" ? pasted.value() : null);
     } catch (e) {
       setErr(errText(e));
       setBusy(false);
     }
   };
-  const choices: Choice[] = [...(pocketOn ? (["pocket"] as const) : []), "file", "later"];
+  const choices: Choice[] = [...(pocketOn ? (["pocket"] as const) : []), "file", "paste", "later"];
+  // MC-7: closing with text in the box asks first.
+  const cancel = () => mayDrop(pasted) && onCancel();
   const takeFile = (fs: FileList | null | undefined) => {
     const f = fs?.length === 1 ? fs[0]! : null;
     if (fs && fs.length > 1) setErr(POCKET_TEXT.oneAtATime);
@@ -1072,7 +1080,7 @@ function AddCall({ clients, today, nowMs, zone, pocketOn, recs, onCancel, onAdde
     </div>
   );
   return (
-    <form className="mtg-setup mtg-add mc5" aria-labelledby="mtg-add-title" onSubmit={(e) => (e.preventDefault(), ready && void save())} onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), onCancel())} data-add-call="">
+    <form className="mtg-setup mtg-add mc5" aria-labelledby="mtg-add-title" onSubmit={(e) => (e.preventDefault(), ready && void save())} onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), cancel())} data-add-call="">
       <span className="mtg-add-head">
         <h3 id="mtg-add-title">{ADD_TEXT.title}</h3>
         <span className="muted" title={ADD_TEXT.onlyYouFull}>{ADD_TEXT.onlyYou}</span>
@@ -1116,11 +1124,12 @@ function AddCall({ clients, today, nowMs, zone, pocketOn, recs, onCancel, onAdde
           <span className="mtg-drop-kinds">{PAGE_TEXT.kinds}</span>
         </div>
       )}
+      {mode === "paste" && <PasteField p={pasted} />}
       {fields}
       {err && <p className="error-line" role="alert">{err}</p>}
       <span className="mtg-setup-actions">
         <button type="submit" className="mini primary" disabled={busy || !ready} data-add-save="">{busy ? ADD_TEXT.adding : mode === "later" ? ADD_TEXT.add : ADD_TEXT.addReview}</button>
-        <button type="button" className="mini quiet" disabled={busy} onClick={onCancel}>{CALLS_TEXT.cancel}</button>
+        <button type="button" className="mini quiet" disabled={busy} onClick={cancel}>{CALLS_TEXT.cancel}</button>
       </span>
     </form>
   );
@@ -1208,9 +1217,17 @@ function ReviewScreen(props: ReviewProps) {
   const up = useTranscriptUpload(r ? { seriesId: r.meeting.id, date: r.occurrence.date, hasTranscript: r.occurrence.hasTranscript } : null, load);
   const fileRef = useRef<HTMLInputElement | null>(null);
   // MC-5: a file chosen in Add a call is uploaded here once the call is read (a date question is asked here).
+  // MC-7: what was pasted there is sent the same way; refused, the box opens again with it.
+  const [pasting, setPasting] = useState<{ text: string } | null>(null);
+  const paste = async (v: Paste) => {
+    const ok = await up.paste(v);
+    if (ok) setPasting(null);
+    return ok;
+  };
   useEffect(() => {
     const f = r ? takeUpload(r.occurrence.id) : null;
-    if (f) up.pick(f);
+    if (f instanceof File) up.pick(f);
+    else if (f) void up.paste(f).then((ok) => !ok && setPasting({ text: f.text }));
   }, [r?.occurrence.id]); // eslint-disable-line react-hooks/exhaustive-deps
   // MC-1d: "Upload a transcript" from a meeting's menu lands here: on a call with a transcript the file button opens.
   const menu = useMenu((): MenuStep => {
@@ -1218,6 +1235,8 @@ function ReviewScreen(props: ReviewProps) {
     if (r && run.canRerun) items.push({ id: "call-rerun", label: CALL_ACTIONS.rerun, icon: "refresh", ...(run.busy ? { disabled: "Busy" } : {}), run: () => void run.rerun() });
     if (r?.meeting.teams && !r.occurrence.hasTranscript) items.push({ id: "call-teams", label: CALL_ACTIONS.fromTeams, ...(run.busy ? { disabled: "Busy" } : {}), run: () => void run.fromTeams() });
     items.push({ id: "call-upload", label: CALL_ACTIONS.upload, icon: "attach", ...(up.busy ? { disabled: "Reading…" } : {}), run: () => fileRef.current?.click() });
+    // MC-7: beside Upload: the paste box, on the call's page.
+    items.push({ id: "call-paste", label: CALL_ACTIONS.paste, ...(up.busy ? { disabled: "Reading…" } : {}), run: () => setPasting((x) => x ?? { text: "" }) });
     if (props.onDismiss) items.push({ id: "call-dismiss", label: DISMISS_TEXT.dismiss, run: props.onDismiss });
     if (r && !r.meeting.call && r.occurrence.state !== "no_transcript" && !r.occurrence.hasTranscript) items.push({ id: "call-none", label: "No transcript this week", run: () => void call("meeting.no_transcript", { occurrenceId: r.occurrence.id }).then(load, (e: unknown) => setNote(errText(e))) });
     return { title: r?.meeting.name ?? "Call", items };
@@ -1400,6 +1419,9 @@ function ReviewScreen(props: ReviewProps) {
       {editable && r.transcript && dragging && !noTranscript && (
         <div className="mtg-drop mtg-drop-replace dropping" {...dropProps(up)}>{POCKET_TEXT.dropReplace}</div>
       )}
+      {editable && pasting && !noTranscript && (
+        <PasteReplace initial={pasting.text} busy={up.busy} msg={up.msg} kind={r.transcriptKind ?? null} has={o.hasTranscript} onUse={paste} onClose={() => setPasting(null)} />
+      )}
       {editable && <input ref={fileRef} type="file" accept={ACCEPT} hidden onChange={(e) => (up.pick(e.target.files?.[0]), (e.target.value = ""))} data-call-file="" />}
       {view !== "transcript" && r.proposals.length > 0 && closedAt !== null && (
         // MC-4: a closed call says when it closed and what came of it; what was skipped is one press away, and putting one back opens the call again.
@@ -1432,7 +1454,7 @@ function ReviewScreen(props: ReviewProps) {
       {note && <p className="error-line" role="alert">{note}</p>}
       {o.state === "waiting" && <p className="muted mtg-run-line" title={PAGE_TEXT.waitingHint}>{PAGE_TEXT.waiting}</p>}
       {noTranscript && (
-        <TranscriptChoices series={m} occ={o} recs={m.call === "hand" ? anyRecs : pocketRecs} startRec={startRec} pocketOn={pocketOn} zone={zone} up={up} dragging={dragging} start={view === "upload" ? "file" : null} onTeams={() => void run.fromTeams()} teamsBusy={run.busy === "teams"} teamsRefused={run.refused} onDone={load} />
+        <TranscriptChoices series={m} occ={o} recs={m.call === "hand" ? anyRecs : pocketRecs} startRec={startRec} pocketOn={pocketOn} zone={zone} up={up} dragging={dragging} start={pasting ? "paste" : view === "upload" ? "file" : null} pasteText={pasting?.text ?? ""} onPaste={paste} key={pasting ? "paste" : "choices"} onTeams={() => void run.fromTeams()} teamsBusy={run.busy === "teams"} teamsRefused={run.refused} onDone={load} />
       )}
       {view === "transcript" ? (
         <TranscriptView occurrenceId={o.id} startAt={o.startAt} zone={zone} proposals={r.proposals} line={line} notes={notes} onProposal={(pid) => onPlace({ proposal: pid })} />
@@ -1672,6 +1694,24 @@ function useTranscriptUpload(target: { seriesId: number; date: string; hasTransc
     }
   };
   const pick = (f: File | undefined) => f && void send(f);
+  /** MC-7: what was pasted, read as the box said; true when it was saved (the box can let it go). */
+  const paste = async (v: Paste): Promise<boolean> => {
+    if (!target) return false;
+    setBusy(true);
+    setMsg(null);
+    setAsk(null);
+    try {
+      const r = await pasteMeetingTranscript<UploadAnswer>(target.seriesId, target.date, v.text, v.as);
+      setMsg(r.outcome && r.outcome !== "done" ? `Read ${r.lines ?? 0} lines. ${CALL_STATE.aiFailed}.` : PASTE_TEXT.read(v.as, r.lines ?? 0, r.proposals ?? 0));
+      await onDone();
+      return true;
+    } catch (e) {
+      setMsg(errText(e));
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
   const dropped = (e: ReactDragEvent) => {
     e.preventDefault();
     // Not stopped here: the page's own drop handler then clears the dragging look (a browser sends no dragleave after a drop).
@@ -1689,7 +1729,7 @@ function useTranscriptUpload(target: { seriesId: number; date: string; hasTransc
       setMsg(POCKET_TEXT.dateNoLine);
     }
   };
-  return { busy, msg, ask, pick, dropped, answer };
+  return { busy, msg, ask, pick, paste, dropped, answer };
 }
 type Upload = ReturnType<typeof useTranscriptUpload>;
 
@@ -1778,7 +1818,7 @@ function useCallRun(occ: OccurrenceView | null, onDone: () => Promise<void>, onR
   return { busy, msg, refused, fromTeams, rerun, canRerun };
 }
 
-type Choice = "teams" | "pocket" | "file" | "later";
+type Choice = "teams" | "pocket" | "file" | "paste" | "later";
 
 /** MC-5: the transcript choices as a segmented control (Add a call's, and a call's page with no transcript). */
 export function ChoiceSeg({ choices, value, onChange }: { choices: readonly Choice[]; value: Choice; onChange: (c: Choice) => void }) {
@@ -1807,11 +1847,40 @@ function DropFile({ up, dragging, children }: { up: Upload; dragging: boolean; c
 }
 
 /**
+ * MC-7: the call's menu's Paste a transcript or notes on a call that has a transcript: the box, then a question that
+ * names what is there before replacing it ("Replace the Teams transcript?"); a no changes nothing.
+ */
+function PasteReplace({ initial, busy, msg, kind, has, onUse, onClose }: { initial: string; busy: boolean; msg: string | null; kind: string | null; has: boolean; onUse: (v: Paste) => Promise<boolean>; onClose: () => void }) {
+  const p = usePaste(initial);
+  const use = async () => {
+    const v = p.value();
+    if (!v || (has && !window.confirm(PASTE_TEXT.replace(kind)))) return;
+    if (await onUse(v)) (p.setText(""), onClose());
+  };
+  return (
+    <section className="mtg-choices mtg-paste-replace" aria-label={CALL_ACTIONS.paste} data-paste-replace="">
+      <PasteField p={p} autoFocus>
+        {msg && <p className="muted" role="status" data-paste-msg="">{msg}</p>}
+        <span className="mtg-upload-actions">
+          <button type="button" className="mini primary" disabled={busy || !p.ok} onClick={() => void use()} data-paste-use="">{busy ? PASTE_TEXT.reading : PASTE_TEXT.use}</button>
+          <button type="button" className="mini quiet" disabled={busy} onClick={() => mayDrop(p) && onClose()}>{PASTE_TEXT.cancel}</button>
+        </span>
+      </PasteField>
+    </section>
+  );
+}
+
+/**
  * MC-5: a call with no transcript shows Add a call's choices instead of the old box: From Teams (a Teams meeting FocusTime
  * may ask), Pocket recording (when connected: my recordings that fit the call), A file. Pocket not connected: a quiet link.
  */
-function TranscriptChoices({ series, occ, recs, startRec = null, pocketOn, zone, up, dragging, start, onTeams, teamsBusy, teamsRefused, onDone }: { series: SeriesView; occ: OccurrenceView; recs: readonly ListedRecording[]; startRec?: string | null; pocketOn: boolean | null; zone: string; up: Upload; dragging: boolean; start: "file" | null; onTeams: () => void; teamsBusy: boolean; teamsRefused: boolean; onDone: () => Promise<void> }) {
-  const choices: Choice[] = [...(series.teams ? (["teams"] as const) : []), ...(pocketOn ? (["pocket"] as const) : []), "file"];
+function TranscriptChoices({ series, occ, recs, startRec = null, pocketOn, zone, up, dragging, start, pasteText = "", onPaste, onTeams, teamsBusy, teamsRefused, onDone }: { series: SeriesView; occ: OccurrenceView; recs: readonly ListedRecording[]; startRec?: string | null; pocketOn: boolean | null; zone: string; up: Upload; dragging: boolean; start: "file" | "paste" | null; /** MC-7: text a refused paste left, back in the box. */ pasteText?: string; onPaste: (v: Paste) => Promise<boolean>; onTeams: () => void; teamsBusy: boolean; teamsRefused: boolean; onDone: () => Promise<void> }) {
+  const choices: Choice[] = [...(series.teams ? (["teams"] as const) : []), ...(pocketOn ? (["pocket"] as const) : []), "file", "paste"];
+  const pasted = usePaste(pasteText);
+  const sendPasted = async () => {
+    const v = pasted.value();
+    if (v && (await onPaste(v))) pasted.setText("");
+  };
   const first: Choice = start ?? (pocketOn && recs.length ? "pocket" : series.teams ? "teams" : "file");
   const [c, setC] = useState<Choice>(first);
   // A hand-added call: my recordings that fit it first, then the others (it takes the chosen one's time).
@@ -1820,8 +1889,9 @@ function TranscriptChoices({ series, occ, recs, startRec = null, pocketOn, zone,
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => {
-    if (dragging) setC("file");
-  }, [dragging]);
+    // MC-7: a file dragged over the page shows the file area, unless something is pasted in the box.
+    if (dragging && !pasted.dirty) setC("file");
+  }, [dragging]); // eslint-disable-line react-hooks/exhaustive-deps
   const chosen = sorted.find((r) => r.id === choice.id) ?? null;
   const moves = series.call === "hand" && !!chosen && !goesWith(spanOf(chosen), occ);
   const bring = async () => {
@@ -1868,6 +1938,12 @@ function TranscriptChoices({ series, occ, recs, startRec = null, pocketOn, zone,
         <DropFile up={up} dragging={dragging}>
           {up.msg && !up.ask && <p className="muted" role="status">{up.msg}</p>}
         </DropFile>
+      )}
+      {c === "paste" && (
+        <PasteField p={pasted} autoFocus={start === "paste"}>
+          {up.msg && <p className="muted" role="status" data-paste-msg="">{up.msg}</p>}
+          <span><button type="button" className="mini primary" disabled={up.busy || !pasted.ok} onClick={() => void sendPasted()} data-paste-use="">{up.busy ? PASTE_TEXT.reading : PASTE_TEXT.use}</button></span>
+        </PasteField>
       )}
       {up.ask && <DateAsk text={up.ask.text} onAnswer={up.answer} />}
     </section>
