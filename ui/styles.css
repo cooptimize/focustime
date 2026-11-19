@@ -5242,7 +5242,8 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .app.phone .status-view { overflow: visible; }
 .app.phone .status-view .st-foot { bottom: calc(var(--bb-h, 0px) + 36px); }
 .app.phone .status-view :is(.st-show .ib4-chip, .st-foot .mini, .st-sugg .mini, .st-sugg .link-btn, .st-adds .mini, .st-last-link, .st-preview-top .mini, .st-preview-top .link-btn, .st-bullets .link-btn, .st-pending-line .link-btn, .st-hints summary) { min-height: 44px; min-width: 44px; }
-.app.phone .status-view .st-updated { margin-left: 0; flex: 1 1 100%; }
+.app.phone .status-view .st-updated { margin-left: 0; flex: 1 1 100%; min-width: 0; white-space: normal; }
+.app.phone .status-view .st-updated .calls-left-bar { flex: none; }
 .app.phone .status-view .st-sugg.st-state-suggested { grid-template-columns: minmax(0, 1fr); }
 .app.phone .status-view .st-notyet { padding: 6px; }
 
