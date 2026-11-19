@@ -262,7 +262,7 @@ describe("AS-3 golden set: more from the same week", () => {
     const c = await s.a.handle("Any client calls to review?");
     expect(lines(c)).toEqual(["Tailspin weekly status on Nov 5: proposals to review"]);
     // UC-3 item 1: the links say Calls and open #/calls.
-    expect(JSON.stringify([c.links, c.sections])).not.toMatch(/#\/meetings|Client calls/);
+    expect(JSON.stringify(c)).not.toMatch(/#\/meetings|Client calls/);
     expect(c.links).toEqual([expect.objectContaining({ href: "#/calls", label: "Open Calls" })]);
     expectNoLeak(c, s);
   });
