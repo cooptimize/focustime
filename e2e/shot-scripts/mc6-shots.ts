@@ -114,19 +114,6 @@ async function callPage(page: Page, open: number) {
   }, open);
 }
 
-/** Controls under 44 px tall in `sel` (the phone). */
-async function smallControls(page: Page, sel: string) {
-  return page.evaluate((s) => {
-    const root = document.querySelector(s) ?? document.body;
-    return [...root.querySelectorAll<HTMLElement>("button, a[href], select, input:not([type=hidden]), [role=button]")]
-      // A control's hit area: its label when it has one (a tick box), its row when it is stretched over the row (a call's name).
-      .map((e) => ({ e, box: (e.closest("label") ?? (e.classList.contains("calls-row-main") && getComputedStyle(e, "::after").content !== "none" ? e.closest("li") : null) ?? e).getBoundingClientRect() }))
-      .filter(({ e, box }) => e.offsetParent && box.height > 0 && box.height < 43.5 && !e.closest(".sr-only, .topbar, .bottom-bar, nav"))
-      .map(({ e }) => e)
-      .map((e) => `${e.tagName.toLowerCase()}:${(e.getAttribute("aria-label") ?? e.textContent ?? "").trim().slice(0, 30)}:${Math.round(e.getBoundingClientRect().height)}`);
-  }, sel);
-}
-
 /** MC-6's three measures: week row titles cut, phone lines starting with a separator, the decided line in the window. */
 async function mc6Measures(page: Page) {
   return page.evaluate(() => {

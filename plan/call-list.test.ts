@@ -271,7 +271,7 @@ describe("MC-6: words for chat calls and Pocket recordings", () => {
 });
 
 describe("MC-6: which rows have Dismiss", () => {
-  const base = { review: true, left: null, pocket: [], occurrenceId: 7, state: { label: CALL_STATE.upload, needsMe: true } } as const;
+  const base: Parameters<typeof dismissOf>[0] = { review: true, left: null, pocket: [], occurrenceId: 7, state: { label: CALL_STATE.upload, needsMe: true } };
   it("a kept call I review whose one button is Add transcript or Use Pocket recording: Remove when I added it, else Close", () => {
     expect(dismissOf({ ...base, kept: "hand" })).toBe("remove");
     expect(dismissOf({ ...base, kept: "call" })).toBe("close");
