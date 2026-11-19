@@ -1841,3 +1841,18 @@ Readings taken where the brief left room (the one that changes less), each open 
 - **The 5 tries reset with each new list.** A new list (after 5 minutes, a new key, or a changed address) allows 5 more. Since every refusal reads the same, this only tells a person which outside addresses recorded under their own key. (From the diff review.)
 - **A colleague outside the work domain.** Since the walkthrough, an address on the person's work domain other than their own is a colleague's. A colleague's personal address on a shared key still can't be told from the person's own, so it could be set as theirs; Settings asks for a key made for the person alone. Asking Pocket's List organization users would settle it for organization keys, but it is a fourth call (above).
 - **A closed call opens again when a recording fits it.** MC-2b's rule (a call closed with no transcript opens when my Pocket recording goes with it) now happens as Calls opens, not on a press. The walkthrough found that surprising. Taken: keep MC-2b's rule; the row says Pocket recording found. A line saying why it opened is a later wording step.
+
+## MC-5: Calls made scannable, a call's page with less to read, Add a call from Pocket (Nov 18)
+
+- **"A recording not yet a call's transcript".** FocusTime doesn't keep which recording became a transcript (only the transcript), so Add a call leaves out a recording that goes with a call that already has a transcript. One that fits a call with no transcript is offered with Review that call.
+- **Hide the list moved into the header's menu.** The brief lists the menu as Refresh, Check Pocket and Select calls; Hide the list had to go somewhere at the head, and the menu is the head's one control.
+- **When Pocket was last checked is the menu item's hint** ("Checked 4:30 PM"), not a line.
+- **After Set my Pocket address the line says "Pocket address saved" once,** then what is still left out, if anything.
+- **MC-4's amber note in two words and a day** reads "Transcript goes Nov 26": the day the call's transcript is deleted, for a call left open from an earlier week.
+- **The transcript choices also show while a call waits on its transcript or was marked as having none this week,** where MC-2's upload box showed, so nothing that was reachable is lost.
+- **Review that call** opens that call with the recording chosen: its setup for a calendar call nobody has read, its page for a call FocusTime keeps.
+- **A file chosen in Add a call is uploaded once the call's page opens,** so the date question (a Pocket export from another day) is asked there, as for any call.
+- **Upload a transcript from the call's menu replaces a transcript without asking,** as the file picker did before; a drop still asks first.
+- **A hand-added call may take a recording that also fits another listed call.** The recording is mine and the call only I see. The other call still shows it as fitting, and bringing it there too would give both calls the same words; that isn't refused.
+- **On the phone Skip all reads "Skip all" or "Skip last N"** in the call's header, its full words as its label, so the header keeps one row.
+- **CLAUDE.md's Pocket sentence** changes only to name the presses as they are now and the hand-added call; it is quoted in the pull request for the product owner's OK.

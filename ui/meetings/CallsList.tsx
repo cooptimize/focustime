@@ -75,7 +75,7 @@ export function NeedsRow({ r, open, zone, today, colors, selecting, ticked, onTi
       <span className="calls-row-end">
         {act?.kind === "left" ? <span className="calls-left" data-call-left="">{act.text}</span> : act ? <button type="button" className="mini primary" onClick={() => onAction(act.kind)} data-call-act={act.kind}>{act.text}</button> : null}
       </span>
-      <span className="calls-meta">{shortWhen(r.startAt, r.day, today, zone)} · {r.clientName ?? CALL_LIST.noClient}</span>
+      <span className="calls-meta">{shortWhen(r.startAt, r.day, today, zone)} · {r.clientName ?? CALL_LIST.noClient}{!act && !r.state.needsMe ? <span data-call-state=""> · {r.state.label}</span> : null}</span>
       <span className="calls-row-end two">
         {r.left?.open && !phone ? <button type="button" className="mini quiet calls-skip" onClick={onSkipAll} data-call-act="skip-all">{r.left.open === r.left.all ? LIST_TEXT.skipAll : LIST_TEXT.skipLast(r.left.open)}</button> : null}
         {note && "amber" in note ? <span className="calls-amber" data-call-note="">{note.amber}</span> : note ? <Bar done={note.done} /> : null}
