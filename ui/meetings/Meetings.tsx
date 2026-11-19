@@ -881,7 +881,8 @@ function PocketFields({ recs, call: c, zone, value, onChange, who, named = false
       )}
       {value.whole !== null && <p role="status" className="mtg-pocket-ask">{PW.whole(value.whole)}</p>}
       {value.replace && <p role="status" className="mtg-pocket-ask">{PW.replaceAsk}</p>}
-      {who && <p className="mtg-pocket-who" data-pocket-who="">{who} {PW.ai}</p>}
+      {/* On a call's page the line under the title already says who sees it (listed): only what the AI does. */}
+      {(who || listed) && <p className="mtg-pocket-who" data-pocket-who="">{who ? `${who} ` : ""}{PW.ai}</p>}
     </div>
   );
 }
@@ -1051,7 +1052,7 @@ function AddCall({ clients, today, nowMs, zone, pocketOn, recs, onCancel, onAdde
       ) : (
         <p className="muted">{PAGE_TEXT.noRecordings}</p>
       ))}
-      {mode === "pocket" && rec && <p className="mtg-pocket-who" data-pocket-who="">{PW.seeMe} {PW.ai}</p>}
+      {mode === "pocket" && rec && <p className="mtg-pocket-who" data-pocket-who="">{PW.ai}</p>}
       {mode === "file" && (
         <div className={`mtg-drop mtg-dropzone${dropping ? " dropping" : ""}`} data-drop=""
           onDragOver={(e) => [...e.dataTransfer.types].includes("Files") && (e.preventDefault(), setDropping(true))} onDragLeave={() => setDropping(false)}
@@ -1324,7 +1325,8 @@ function ReviewScreen(props: ReviewProps) {
             <span className="mtg-show-chips" role="group" aria-label={PAGE_TEXT.show}>
               {shownFilters.map((f) => (
                 <button key={f.key} type="button" className={`ib4-chip${(filter ?? "all") === f.key ? " on" : ""}`} aria-pressed={(filter ?? "all") === f.key} onClick={() => onPlace(f.key === "all" ? undefined : { filter: f.key })} data-show={f.key}>
-                  {f.label} <span className="seg-count">{counts[f.key]}</span>
+                  {/* All's number is the decided line's "of N": said once. */}
+                  {f.label}{f.key !== "all" && <> <span className="seg-count">{counts[f.key]}</span></>}
                 </button>
               ))}
             </span>
@@ -1794,7 +1796,7 @@ function TranscriptChoices({ series, occ, recs, startRec = null, pocketOn, zone,
         <div className="mtg-choice-body" data-pocket-bring="">
           {recs.length ? (
             <>
-              <PocketFields recs={sorted} call={moves && chosen ? chosen : occ} zone={zone} value={choice} onChange={setChoice} who={series.call === "hand" ? PW.seeMe : series.call ? PW.seeCall : PW.seeClient} listed />
+              <PocketFields recs={sorted} call={moves && chosen ? chosen : occ} zone={zone} value={choice} onChange={setChoice} who="" listed />
               {moves && chosen && <p className="mtg-run-line" role="note" data-takes-time="">{PAGE_TEXT.takesTime(whenLine(chosen.startAt, chosen.endAt, zone))}</p>}
               {err && <p className="error-line" role="alert">{err}</p>}
               <span><button type="button" className="mini primary" disabled={busy} onClick={() => void bring()} data-use-recording="">{busy ? PW.bringing : choice.replace ? PW.replaceYes : PAGE_TEXT.useRecording}</button></span>

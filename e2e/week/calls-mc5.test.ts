@@ -169,7 +169,8 @@ describe.skipIf(!CHROMIUM)("MC-5: Calls made scannable (browser, demo mode)", ()
     await expect(page.locator(".mtg-switch").textContent()).resolves.toBe("ProposalsTranscript");
     const shows = await page.locator("[data-show]").evaluateAll((bs) => bs.map((b) => [b.getAttribute("data-show"), Number(b.querySelector(".seg-count")?.textContent)] as const));
     expect(shows.map(([k]) => k)).toEqual(["all", "gap", "commitment", "comment"]);
-    for (const [k, c] of shows) expect(c, k ?? "").toBeGreaterThan(0);
+    // All has no number: the decided line's "of N" is the call's one count.
+    for (const [k, c] of shows) if (k === "all") expect(c, k).toBeNaN(); else expect(c, k ?? "").toBeGreaterThan(0);
     await expect(page.locator(".mtg-show .mtg-switch").count()).resolves.toBe(0);
     // Folded to start, three lines; the one Northwind's process needs a date on opens by itself, its field marked.
     const statement = page.locator(".mtg-prop[aria-label='Monthly statement as a PDF']");

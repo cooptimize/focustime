@@ -161,15 +161,15 @@
 .mtg-drop-replace { padding: 12px; text-align: center; }
 .mtg-recs label { align-items: baseline; }
 
-.app.phone .mtg-head { grid-template-areas: "back switch acts" "title title title" "meta meta meta"; grid-template-columns: auto auto minmax(0, 1fr); }
+.app.phone .mtg-head { grid-template-areas: "back switch menu" "title title skip" "meta meta meta"; grid-template-columns: auto minmax(0, 1fr) auto; }
 .app.phone .mtg-head-acts { display: contents; }
-.app.phone .mtg-head-acts > .mtg-switch { grid-area: switch; }
-.app.phone .mtg-head-acts > [data-call-act="skip-all"] { grid-area: acts; justify-self: end; margin-right: 48px; }
-.app.phone .mtg-head-acts > [data-call-menu] { grid-area: acts; justify-self: end; }
+.app.phone .mtg-head-acts > .mtg-switch { grid-area: switch; justify-self: start; }
+.app.phone .mtg-head-acts > [data-call-act="skip-all"] { grid-area: skip; align-self: start; }
+.app.phone .mtg-head-acts > [data-call-menu] { grid-area: menu; }
 .app.phone .mtg-head .mtg-back { min-width: var(--tap, 44px); padding: 0; justify-content: center; }
 .app.phone .mtg-head .mtg-back .mtg-back-word { display: none; }
 .app.phone .mtg-show { overflow-x: auto; scrollbar-width: none; }
-.app.phone .mtg-show-chips { overflow: visible; }
+.app.phone .mtg-show-chips { flex: none; overflow: visible; }
 .app.phone .mtg-head h2 { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .app.phone .mtg-meta { row-gap: 0; }
 .app.phone .mtg-prop.mc5 label.mtg-tick { min-width: 30px; min-height: var(--tap, 44px); align-items: center; }
