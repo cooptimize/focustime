@@ -12,7 +12,7 @@
 // what meeting.mine, meeting.calls, meeting.calls_check and my hides already returned.
 import type { CallOutcome, OccurrenceView, OtherCallView, SeriesView } from "./meeting-views.ts";
 import { OTHER_CALL_DAYS } from "./calls.ts";
-import { CALL_LIST, callLabel, CALLS_TEXT, CLOSE_TEXT, MARK_TEXT } from "./call-words.ts";
+import { CALL_LIST, CALL_STATE, callLabel, CALLS_TEXT, CLOSE_TEXT, LIST_TEXT, MARK_TEXT } from "./call-words.ts";
 import { LIST_FILTERS, type ListFilter } from "./call-filters.ts";
 import { toReview, type Proposal } from "./meetings.ts";
 
@@ -334,3 +334,36 @@ export function chipClients(rows: readonly CallRow[], nameOf: (key: string) => s
   }
   return [...seen].map(([key, name]) => ({ key, name })).sort((a, b) => Number(a.key === "") - Number(b.key === "") || a.name.localeCompare(b.name));
 }
+
+/**
+ * MC-5: Needs you's one button by state: what is left to decide ("3 left", no button), else the button: Add transcript,
+ * Use Pocket recording (my recording fits), or Try again (a pass failed). Null: nothing to press (waiting on someone else).
+ */
+export type NeedsAction = { kind: "left"; text: string } | { kind: "upload" | "pocket" | "retry"; text: string } | null;
+export function needsAction(r: Pick<CallRow, "left" | "state" | "pocket">): NeedsAction {
+  if (r.left?.open) return { kind: "left", text: LIST_TEXT.left(r.left.open) };
+  if (r.state.label === CALL_STATE.aiFailed) return { kind: "retry", text: LIST_TEXT.tryAgain };
+  if (r.pocket.length) return { kind: "pocket", text: LIST_TEXT.usePocket };
+  if (r.state.label === CALL_STATE.upload || r.state.label === CALL_STATE.readFailed) return { kind: "upload", text: LIST_TEXT.addTranscript };
+  return null;
+}
+
+/**
+ * MC-5: a Needs you row's second line, on its right: MC-4's amber note when the call is from before this week (its
+ * transcript goes 30 days after the call), else a thin bar once something is decided, else nothing.
+ */
+export function needsNote(r: Pick<CallRow, "day" | "left" | "occurrenceId">, today: string): { amber: string } | { done: number } | null {
+  if (r.occurrenceId !== null && weekOf(r.day, today) !== "this") return { amber: LIST_TEXT.goes(Temporal.PlainDate.from(r.day).add({ days: 30 }).toLocaleString("en-US", { month: "short", day: "numeric" })) };
+  if (r.left && r.left.all && r.left.open < r.left.all) return { done: (r.left.all - r.left.open) / r.left.all };
+  return null;
+}
+
+/** MC-5: when, short: "Tue 1:00 PM" this week and last, "Nov 10, 2:00 PM" before that (in my zone). */
+export function shortWhen(iso: string, day: string, today: string, zone: string): string {
+  const t = new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: zone });
+  if (weekOf(day, today) !== "earlier") return `${new Date(iso).toLocaleDateString("en-US", { weekday: "short", timeZone: zone })} ${t}`;
+  return `${new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: zone })}, ${t}`;
+}
+
+/** MC-5: a week row's mark, short ("Teams", "Pocket", "Teams · Pocket"), and its full words for its label and hover. */
+export const markShort = (m: CallMarkKind): { short: string; full: string } | null => (m ? { short: LIST_TEXT.mark[m], full: LIST_TEXT.markFull[m] } : null);

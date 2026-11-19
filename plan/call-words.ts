@@ -445,3 +445,51 @@ export const CLOSE_TEXT = {
 
 /** MC-2b: a call my Pocket recording goes with, and a recording's own row (plan/pocket-words.ts has the rest). */
 export const POCKET_ROW = { found: "Pocket recording found", kind: "Pocket recording", source: "Your Pocket recording" } as const;
+
+/**
+ * MC-5: Calls made scannable. The list's header menu, its one quiet Pocket line, the Client row, Needs you's one button
+ * and short notes, a week row's mark and client, and the Undo messages that say what skipping did.
+ */
+export const LIST_TEXT = {
+  /** The header's dots menu. */
+  menu: "More for Calls",
+  refresh: "Refresh",
+  checkPocket: "Check Pocket",
+  checkedAt: (time: string) => `Checked ${time}`,
+  select: "Select calls",
+  selectDone: "Done selecting",
+  hideList: CALL_LIST.hideList,
+  /** Said on the Calls heading's hover: what the old subtitle and privacy line said. */
+  headingHint: "The calls you were on, newest first. Only you see the calls from your calendar, and FocusTime keeps nothing about one until you review it.",
+  /** The one quiet Pocket line, only when there is something to do. */
+  leftOut: (n: number) => `${n} Pocket ${n === 1 ? "recording was" : "recordings were"} left out.`,
+  setAddress: "Set my Pocket address",
+  pocketFailed: "Pocket didn't answer.",
+  checkAgain: "Check again",
+  connect: "Connect Pocket",
+  /** The Client row under the filters. */
+  client: "Client",
+  all: "All",
+  noClient: "No client",
+  /** Needs you's one button by state. */
+  addTranscript: "Add transcript",
+  usePocket: "Use Pocket recording",
+  tryAgain: "Try again",
+  left: (n: number) => `${n} left`,
+  /** MC-4's amber note, short: the transcript of a call from before this week goes 30 days after the call. */
+  goes: (day: string) => `Transcript goes ${day}`,
+  /** Skip all on a row (with Undo). */
+  skipAll: "Skip all",
+  skipLast: (n: number) => `Skip last ${n}`,
+  /** The Undo message: what skipping did. */
+  skippedClosed: (n: number) => `Skipped ${n}, call closed`,
+  skippedClosedMany: (calls: number, n: number) => `Skipped ${n} in ${calls} calls, all closed`,
+  /** A week row's mark, short, with its full words as its label. */
+  mark: { teams: "Teams", pocket: "Pocket", both: "Teams · Pocket" },
+  markFull: { teams: "Transcript in Teams", pocket: "Your Pocket recording", both: "Transcript in Teams and your Pocket recording" },
+  whichClient: CLOSE_TEXT.whichClient,
+  clientFor: (name: string) => `Client for ${name}`,
+  /** Said on the fold's hover (it was the line under it). */
+  foldHint: CLOSE_TEXT.foldSub,
+  hiddenHint: CLOSE_TEXT.hiddenWhy,
+} as const;

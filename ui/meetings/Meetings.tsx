@@ -23,12 +23,14 @@ import type { OccurrenceView, OtherCallView, SeriesView } from "../../plan/meeti
 import type { CaptureClient } from "../../plan/capture.ts";
 import { lengthLabel, OTHER_CALL_DAYS, suggestClient } from "../../plan/calls.ts";
 import { callBatch, proposalWords, toReview, type Proposal, type Quote } from "../../plan/meetings.ts";
-import { rememberCallsList as remember, rememberedCallsList as remembered, requestFetch, takeFetch, takeRerun, takeReviewCall, type MineData } from "./calls.ts";
-import { CALL_ACTIONS, CALL_BAR, CALL_FILTERS, CALL_LIST, CALL_ROW, CALL_STATE, CALLS_TEXT, CLOSE_TEXT, FETCH_WORDS, POCKET_TEXT, rerunLine, SECTION_HEAD, TRANSCRIPT_TEXT, type CallFilter, type FetchOutcome, type ProposalCheck } from "../../plan/call-words.ts";
+import { rememberCallsList as remember, rememberedCallsList as remembered, requestFetch, requestRerun, takeFetch, takeRerun, takeReviewCall, type MineData } from "./calls.ts";
+import { useMenu } from "../Menus.tsx";
+import type { MenuStep } from "../menu.ts";
+import { CALL_ACTIONS, CALL_BAR, CALL_FILTERS, CALL_LIST, CALL_ROW, CALL_STATE, CALLS_TEXT, CLOSE_TEXT, FETCH_WORDS, LIST_TEXT, POCKET_TEXT, rerunLine, SECTION_HEAD, TRANSCRIPT_TEXT, type CallFilter, type FetchOutcome, type ProposalCheck } from "../../plan/call-words.ts";
 import { callRows, chipClients, closedAtOf, closedLine, closedList, outcomeOfCall, weekOf, filterCounts, firstToOpen, hiddenList, hiddenMissing, LIST_FILTERS, openList, otherRowKey, hideKeyOf, type CallHides, type CallRow, type CheckState, type Entry, type ListedRecording, type ListFilter, type SeriesEntry } from "../../plan/call-list.ts";
 import { ClosedRow, HiddenRow, NeedsRow, SeriesRow, TickBar, WeekRow, whenOf, type RowStatus } from "./CallsList.tsx";
 import { pocketRows } from "../../plan/call-list-pocket.ts";
-import { checkedLine, leftOutLine, POCKET_CALL_WORDS as PW, recordingLine, yoursLine } from "../../plan/pocket-words.ts";
+import { POCKET_CALL_WORDS as PW, recordingLine } from "../../plan/pocket-words.ts";
 import { PocketAddressForm } from "./PocketAddress.tsx";
 import { lengthWords, longerThanCall } from "../../plan/pocket-match.ts";
 import type { PocketView } from "../../actions/pocket-types.ts";
@@ -39,6 +41,7 @@ import { useNarrow } from "../PanelShell.tsx";
 import { clientColor } from "../labels.ts";
 import { Icon } from "../icons.tsx";
 import { forgetCallOptions, GapFields, useNewOptions } from "./GapFields.tsx";
+import "./calls.css";
 
 type Review = { meeting: SeriesView; occurrence: OccurrenceView; proposals: Proposal[]; transcript: { lines: number; speakers: number } | null; /** MC-2: what was said (at most 5 lines); null before MC-2 or once the transcript is gone. */ summary?: string[] | null; /** PK-1: from a Pocket export: numbered speakers, no times. */ pocket?: boolean; /** MC-2b: brought in from a Pocket recording: by me, or by another reviewer. */ pocketFrom?: "mine" | "reviewer" | null; canConfirm: boolean; canWrite: boolean; checks: Record<string, ProposalCheck> };
 
@@ -110,6 +113,8 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
   const [rowStatus, setRowStatus] = useState<Record<string, RowStatus>>({});
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const [chosen, setChosen] = useState<Record<string, string>>({});
+  // MC-5: tick boxes show only once Select calls is chosen in the header's menu.
+  const [selecting, setSelecting] = useState(false);
   const getPocket = useCallback(async () => {
     setPocketBusy(true);
     setPocketErr(null);
@@ -275,7 +280,7 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
     } catch {
       /* a convenience only */
     }
-    requestAnimationFrame(() => document.querySelector<HTMLElement>(on ? "[data-calls-show]" : "[data-calls-hide]")?.focus());
+    requestAnimationFrame(() => document.querySelector<HTMLElement>(on ? "[data-calls-show]" : "[data-calls-menu] button")?.focus());
   };
 
   // J and K move through the list and Enter opens (a row is a button), as in the Inbox; never while typing. Esc, when
@@ -371,7 +376,7 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
       // One call closed from the list: its closed page is what shows beside it, not the next call in line.
       if (ids.length === 1 && !narrow) go({ occurrence: ids[0]! }, true);
       const items = d.calls.flatMap((c) => c.skipped);
-      undoable?.(ids.length === 1 ? CLOSE_TEXT.closedOne : CLOSE_TEXT.closedMany(ids.length), async () => {
+      undoable?.(ids.length === 1 ? LIST_TEXT.skippedClosed(items.length) : LIST_TEXT.skippedClosedMany(ids.length, items.length), async () => {
         if (items.length) await call("meeting.unskip_all", { items });
         await loadMine();
         changed();
@@ -410,12 +415,21 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
   const tickedHide = tickedRows.filter((r) => !!hideKeyOf(r));
   const tickedClose = tickedRows.filter((r) => r.occurrenceId !== null && r.left?.open);
   const seriesTicked = (e: SeriesEntry) => e.rows.every((r) => ticked.has(r.key));
+  // MC-5: X skips all and closes at once; the app's own message says what it did, with Undo (no browser dialog).
   const askSkipAll = (r: CallRow) => {
     if (!r.occurrenceId || !r.left?.open) return;
-    const words = r.left.open === r.left.all ? CLOSE_TEXT.skipAllClose : CLOSE_TEXT.skipLastClose(r.left.open);
-    if (window.confirm(`${words}: ${r.name}? ${CLOSE_TEXT.skippedNone}`)) void skipAllCalls([r.occurrenceId]);
+    void skipAllCalls([r.occurrenceId]);
   };
-  // X: hides the row in focus, or on a call with proposals asks to skip all and close. Never while typing.
+  /** MC-5: Needs you's one button: the call's page with its transcript choice, or the failed pass tried again there. */
+  const rowAction = (r: CallRow, kind: "upload" | "pocket" | "retry") => {
+    if (!r.occurrenceId) return;
+    if (kind === "retry") requestRerun(r.occurrenceId);
+    setAdding(false);
+    setSetupKey(null);
+    fromList.current = narrow;
+    go({ occurrence: r.occurrenceId, ...(kind === "upload" ? { view: "upload" as const } : {}) });
+  };
+  // X: hides the row in focus, or on a call with proposals skips all and closes it (with Undo). Never while typing.
   const xRef = useRef<(k: string) => void>(() => {});
   xRef.current = (k: string) => {
     const r = rows.find((x) => x.key === k);
@@ -424,14 +438,14 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
     else if (r.other) hideRows([r]);
   };
   const weekRow = (r: CallRow, inSeries = false) => (
-    <WeekRow key={r.key} r={r} open={openKey === r.key} zone={zone} colors={colors} ticked={ticked.has(r.key)} onTick={(on) => tickRow(r.key, on)} onOpen={() => openRow(r)}
-      clients={clients} client={clientOn(r)} onClient={(k) => setChosen((x) => ({ ...x, [r.key]: k }))} onReview={() => void reviewRow(r)} onHide={() => hideRows([r])}
+    <WeekRow key={r.key} r={r} open={openKey === r.key} zone={zone} today={today} colors={colors} selecting={selecting} ticked={ticked.has(r.key)} onTick={(on) => tickRow(r.key, on)} onOpen={() => void reviewRow(r)}
+      clients={clients} client={clientOn(r)} onClient={(k) => setChosen((x) => ({ ...x, [r.key]: k }))} onHide={() => hideRows([r])}
       status={rowStatus[r.key] ?? null} onUpload={() => { const st = rowStatus[r.key]; if (st?.occurrenceId) go({ occurrence: st.occurrenceId, view: "upload" }); }} inSeries={inSeries} />
   );
   const entryRow = (e: Entry, label: string) => e.kind === "one" ? weekRow(e.row) : (
     <SeriesRow key={e.key} e={e} weekLabel={label} expanded={expanded.has(e.key)} onExpand={(on) => setExpanded((x) => { const n = new Set(x); if (on) n.add(e.key); else n.delete(e.key); return n; })}
       onHideEvery={() => void hideItems({ series: [e.seriesKey] }, CLOSE_TEXT.hiddenEvery(e.name))} onHideWeek={() => hideRows(e.rows)}
-      ticked={seriesTicked(e)} onTick={(on) => setTicked((t) => { const n = new Set(t); for (const r of e.rows) if (on) n.add(r.key); else n.delete(r.key); return n; })}>
+      selecting={selecting} ticked={seriesTicked(e)} onTick={(on) => setTicked((t) => { const n = new Set(t); for (const r of e.rows) if (on) n.add(r.key); else n.delete(r.key); return n; })}>
       {e.rows.map((r) => weekRow(r, true))}
     </SeriesRow>
   );
@@ -439,77 +453,79 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
   const hiddenRows = show === "hidden" ? hiddenList(rows, client) : [];
   const nothingHere = show === "open" ? !open.needs.length && !open.weeks.length && !open.foldCount : show === "closed" ? !closedRows.length : !hiddenRows.length && !goneCount;
 
+  // MC-5: the header's dots menu: Refresh, Check Pocket (with when it was last checked), Select calls, Hide the list.
+  const headMenu = useMenu((): MenuStep => ({
+    title: CALLS_TEXT.heading,
+    items: [
+      { id: "calls-refresh", label: LIST_TEXT.refresh, icon: "refresh", ...(checkInfo.busy ? { disabled: CLOSE_TEXT.reviewing } : {}), run: () => (void loadOthers(), void runCheck({ refresh: true }), pocketOn ? void getPocket() : undefined) },
+      ...(pocketOn ? [{ id: "calls-pocket", label: LIST_TEXT.checkPocket, icon: "mic" as const, ...(pocket ? { hint: LIST_TEXT.checkedAt(timeOf(pocket.at, zone)) } : {}), ...(pocketBusy ? { disabled: PW.getting } : {}), run: () => (setPocketNote(null), void getPocket()) }] : []),
+      { id: "calls-select", label: selecting ? LIST_TEXT.selectDone : LIST_TEXT.select, run: () => (setSelecting((x) => !x), setTicked(new Set())) },
+      ...(!twoStep ? [{ id: "calls-hide-list", label: LIST_TEXT.hideList, run: () => fold(true) }] : []),
+    ],
+  }));
   const list = (
     <section className="calls-list" aria-labelledby="calls-title" data-calls-list="" ref={listRef}>
       <header className="calls-head">
         <div className="calls-title">
-          <h1 id="calls-title">{CALLS_TEXT.heading}</h1>
-          <span className="muted">{CALL_LIST.sub}</span>
+          <h1 id="calls-title" title={LIST_TEXT.headingHint}>{CALLS_TEXT.heading}</h1>
         </div>
         <span className="calls-head-actions">
-          <button type="button" className="mini quiet" disabled={checkInfo.busy} onClick={() => (void loadOthers(), void runCheck({ refresh: true }), pocketOn ? void getPocket() : undefined)} data-calls-refresh="">{CLOSE_TEXT.refresh}</button>
-          <button type="button" className="mini" onClick={() => (setSetupKey(null), setAdding(true), at.occurrence ? go({ occurrence: null }) : undefined)} aria-expanded={adding}>{CALLS_TEXT.add}</button>
-          {!twoStep && (
-            <button type="button" className="mini quiet icon-only" data-calls-hide="" onClick={() => fold(true)} aria-label={CALL_LIST.hideList} title={CALL_LIST.hideList}>
-              <Icon name="back" />
-            </button>
-          )}
+          <button type="button" className="mini" onClick={() => (setSetupKey(null), setAdding(true), at.occurrence ? go({ occurrence: null }) : undefined)} aria-expanded={adding} data-calls-add="">{CALLS_TEXT.add}</button>
+          <span data-calls-menu="">{headMenu.button(LIST_TEXT.menu)}</span>
         </span>
       </header>
       {data && (
         <div className="seg calls-filters" role="group" aria-label="Show">
         {LIST_FILTERS.map((f) => (
-          <button key={f} type="button" className={`seg-btn${show === f ? " on" : ""}`} aria-pressed={show === f} title={CALL_LIST.filterHint[f]} onClick={() => setList(f, client)} data-calls-filter={f}>
-            {CALL_LIST.filters[f]} <span className="seg-count">{counts[f]}</span>
+          <button key={f} type="button" className={`seg-btn${show === f ? " on" : ""}`} aria-pressed={show === f} title={f === "hidden" ? `${CALL_LIST.filterHint[f]}. ${LIST_TEXT.hiddenHint}` : CALL_LIST.filterHint[f]} onClick={() => setList(f, client)} data-calls-filter={f}>
+            {CALL_LIST.filters[f]}{counts[f] > 0 && <> <span className="seg-count">{counts[f]}</span></>}
           </button>
         ))}
       </div>
       )}
       {data && chips.length > 1 && (
-        <div className="ib4-chips calls-chips" role="group" aria-label="Clients">
+        // MC-5: one row labelled Client: All, each client with its square, then No client only when some call has none.
+        <div className="ib4-chips calls-chips" role="group" aria-labelledby="calls-client-label">
+          <span id="calls-client-label" className="calls-chips-label">{LIST_TEXT.client}</span>
           <button type="button" className={`ib4-chip${client === null ? " on" : ""}`} aria-pressed={client === null} onClick={() => setList(show, null)}>
-            {CALL_LIST.allClients}
+            {LIST_TEXT.all}
           </button>
           {chips.map((c) => (
             <button key={c.key || "none"} type="button" className={`ib4-chip${client === c.key ? " on" : ""}${c.key ? "" : " ib4-chip-none"}`} aria-pressed={client === c.key} onClick={() => setList(show, client === c.key ? null : c.key)} style={c.key ? ({ "--c": clientColor(c.key, colors) } as CSSProperties) : undefined} data-chip={c.key ? undefined : "no-client"}>
-              {c.key && <span className="dot" aria-hidden="true" />}
-              {c.name}
+              {c.key && <span className="swatch calls-sq" aria-hidden="true" />}
+              {c.key ? c.name : LIST_TEXT.noClient}
             </button>
           ))}
         </div>
       )}
-      {data && pocketOn !== null && (
+      {data && pocketOn === false && (
+        <p className="calls-pocket muted" data-calls-pocket=""><a href="#/settings/connections/pocket">{LIST_TEXT.connect}</a></p>
+      )}
+      {data && pocketOn && (pocketErr || (pocket && pocket.counts.address > 0) || addressOpen || pocketNote) && (
+        // MC-5: Pocket's one quiet line, only when there is something to do (its counts are in Settings › Connections › Pocket).
         <div className="calls-pocket" data-calls-pocket="">
-          {pocketOn ? (
-            <>
-              <button type="button" className="mini" disabled={pocketBusy} onClick={() => (setPocketNote(null), void getPocket())} data-pocket-get="">{pocketBusy ? PW.getting : PW.get}</button>
-              <span className="muted" role="status" data-pocket-line="">
-                {pocketNote ? `${pocketNote} ` : ""}
-                {pocket ? `${pocket.counts.kept || !leftOutLine(pocket.counts) ? `${yoursLine(pocket.recordings.length)} ` : ""}${leftOutLine(pocket.counts)}${leftOutLine(pocket.counts) ? " " : ""}${checkedLine(timeOf(pocket.at, zone))}` : pocketBusy ? PW.getting : ""}
-                {pocket?.more ? ` ${PW.more}` : ""}
-              </span>
-              {pocket?.canSetAddress && !addressOpen && (
-                <button type="button" className="mini" onClick={() => (setPocketNote(null), setAddressOpen(true))} data-pocket-set-address="">{PW.setAddress}</button>
-              )}
-              {addressOpen && (
-                <PocketAddressForm
-                  onCancel={() => setAddressOpen(false)}
-                  onSaved={() => (setAddressOpen(false), setPocketNote(PW.addressSaved), void getPocket())}
-                />
-              )}
-            </>
-          ) : (
-            <span className="muted">{PW.connectLine.slice(0, PW.connectLine.indexOf(PW.connectLink))}<a href="#/settings/connections/pocket">{PW.connectLink}</a>.</span>
+          {pocketErr ? (
+            <span className="muted" role="status" title={pocketErr} data-pocket-failed="">
+              {LIST_TEXT.pocketFailed} <button type="button" className="link-btn" disabled={pocketBusy} onClick={() => void getPocket()}>{LIST_TEXT.checkAgain}</button>
+            </span>
+          ) : pocket && pocket.counts.address > 0 && !addressOpen ? (
+            <span className="muted" role="status" data-pocket-line="">
+              {pocketNote ? `${pocketNote} ` : ""}{LIST_TEXT.leftOut(pocket.counts.address)}{" "}
+              {pocket.canSetAddress && <button type="button" className="link-btn" onClick={() => (setPocketNote(null), setAddressOpen(true))} data-pocket-set-address="">{LIST_TEXT.setAddress}</button>}
+            </span>
+          ) : pocketNote && !addressOpen ? (
+            <span className="muted" role="status" data-pocket-line="">{pocketNote}</span>
+          ) : null}
+          {addressOpen && (
+            <PocketAddressForm
+              onCancel={() => setAddressOpen(false)}
+              onSaved={() => (setAddressOpen(false), setPocketNote(PW.addressSaved), void getPocket())}
+            />
           )}
         </div>
       )}
       <div className="calls-scroll">
         {missing && <p className="muted calls-note" role="status">{CALLS_TEXT.notFound}</p>}
-        {pocketOn && pocketErr && (
-          <p className="muted calls-note calls-check-line" role="status" title={pocketErr} data-pocket-failed="">
-            {PW.failedQuiet} <button type="button" className="link-btn" disabled={pocketBusy} onClick={() => void getPocket()}>{PW.get}</button>
-          </p>
-        )}
         {(error || othersErr) && (
           <p className="error-line calls-note" role="alert">
             {error ? (data ? error : CALL_LIST.failedMine) : CALL_LIST.failedOthers}{" "}
@@ -535,12 +551,12 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
           </p>
         )}
         {rowStatus._page?.error && <p className="error-line calls-note" role="alert">{rowStatus._page.error}</p>}
-        <TickBar hide={tickedHide.length} close={tickedClose.length} onHide={() => hideRows(tickedHide)} onClose={() => void skipAllCalls(tickedClose.map((r) => r.occurrenceId!))} onClear={() => setTicked(new Set())} />
+        {selecting && <TickBar hide={tickedHide.length} close={tickedClose.length} onHide={() => hideRows(tickedHide)} onClose={() => void skipAllCalls(tickedClose.map((r) => r.occurrenceId!))} onClear={() => setTicked(new Set())} onDone={() => (setSelecting(false), setTicked(new Set()))} />}
         {show === "open" && open.needs.length > 0 && (
           <section className="calls-day calls-needs" aria-labelledby="calls-needs" data-section="needs">
             <h2 id="calls-needs" className="calls-day-head">{CLOSE_TEXT.needs} <span className="calls-head-count">{open.needs.length}</span></h2>
-            <ul className="calls-rows">
-              {open.needs.map((r) => <NeedsRow key={r.key} r={r} open={openKey === r.key} zone={zone} colors={colors} ticked={ticked.has(r.key)} onTick={(on) => tickRow(r.key, on)} onOpen={() => openRow(r)} onSkipAll={() => void skipAllCalls([r.occurrenceId!])} />)}
+            <ul className="calls-rows calls-cards">
+              {open.needs.map((r) => <NeedsRow key={r.key} r={r} open={openKey === r.key} zone={zone} today={today} colors={colors} selecting={selecting} phone={phone} ticked={ticked.has(r.key)} onTick={(on) => tickRow(r.key, on)} onOpen={() => openRow(r)} onAction={(k) => rowAction(r, k)} onSkipAll={() => void skipAllCalls([r.occurrenceId!])} />)}
             </ul>
           </section>
         )}
@@ -555,13 +571,13 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
           </section>
         ))}
         {show === "open" && open.foldCount > 0 && (
-          <Fold id="no-transcript" title={CLOSE_TEXT.fold(open.foldCount)} sub={CLOSE_TEXT.foldSub}>
+          <Fold id="no-transcript" title={CLOSE_TEXT.fold(open.foldCount)} hint={LIST_TEXT.foldHint}>
             <ul className="calls-rows">{open.fold.map((e) => entryRow(e, ""))}</ul>
           </Fold>
         )}
         {show === "closed" && closedRows.length > 0 && (
           <ul className="calls-rows" data-section="closed">
-            {closedRows.map((r) => <ClosedRow key={r.key} r={r} open={openKey === r.key} zone={zone} colors={colors} onOpen={() => openRow(r)} />)}
+            {closedRows.map((r) => <ClosedRow key={r.key} r={r} open={openKey === r.key} zone={zone} today={today} colors={colors} onOpen={() => openRow(r)} />)}
           </ul>
         )}
         {show === "hidden" && (
@@ -573,7 +589,7 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
                   // A series hidden for every one is one row, at its newest call.
                   if (every && hiddenRows.findIndex((x) => x.seriesKey === r.seriesKey) !== i) return [];
                   const count = every ? hiddenRows.filter((x) => x.seriesKey === r.seriesKey).length : 1;
-                  return [<HiddenRow key={r.key} r={r} every={every} count={count} zone={zone} onPutBack={() => void putBack(every ? { series: [r.seriesKey!] } : { keys: [hideKeyOf(r)!] })} />];
+                  return [<HiddenRow key={r.key} r={r} every={every} count={count} zone={zone} today={today} onPutBack={() => void putBack(every ? { series: [r.seriesKey!] } : { keys: [hideKeyOf(r)!] })} />];
                 })}
               </ul>
             )}
@@ -582,12 +598,11 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
                 {CLOSE_TEXT.hiddenGone(goneCount)} <button type="button" className="link-btn" onClick={() => void putBack({ ...(gone.keys.length ? { keys: gone.keys } : {}), ...(gone.series.length ? { series: gone.series } : {}) })}>{CLOSE_TEXT.putBackAll}</button>
               </p>
             )}
-            <p className="muted calls-note">{CLOSE_TEXT.hiddenWhy}</p>
           </>
         )}
         {data && !othersErr && !others && <p className="muted calls-note" role="status">{CALL_LIST.loading}</p>}
         {data && (
-          <Fold id="client-calls" title={CALL_LIST.clientCalls(registered.length)} sub={CALL_LIST.clientCallsSub}>
+          <Fold id="client-calls" title={CALL_LIST.clientCalls(registered.length)} hint={CALL_LIST.clientCallsSub}>
             {registered.length === 0 && <p className="muted">{CALLS_TEXT.noClientCalls}</p>}
             <ul className="calls-series">
               {registered.map((m) => {
@@ -604,7 +619,6 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
             </ul>
           </Fold>
         )}
-        {others && <p className="muted calls-privacy">{CALL_LIST.privacy}</p>}
       </div>
     </section>
   );
@@ -696,16 +710,15 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
 const pick = (a: CallsAt): Omit<CallsAt, "occurrence" | "show" | "client"> => ({ ...(a.view ? { view: a.view } : {}), ...(a.line ? { line: a.line } : {}), ...(a.filter ? { filter: a.filter } : {}), ...(a.proposal ? { proposal: a.proposal } : {}) });
 
 /** A fold at the list's foot (the Inbox's and the call page's own: a link button with its count, the body under it). */
-function Fold({ id, title, sub, children }: { id: string; title: string; sub: string; children: React.ReactNode }) {
+function Fold({ id, title, hint, children }: { id: string; title: string; /** MC-5: what the line under it said, now on its hover. */ hint: string; children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="calls-fold" data-calls-fold={id}>
-      <button type="button" className="link-btn" aria-expanded={open} aria-controls={`calls-fold-${id}`} onClick={() => setOpen((o) => !o)}>
+      <button type="button" className="link-btn" aria-expanded={open} aria-controls={`calls-fold-${id}`} title={hint} onClick={() => setOpen((o) => !o)}>
         <Icon name={open ? "open" : "closed"} /> {title}
       </button>
       {open && (
         <div id={`calls-fold-${id}`} className="calls-fold-body">
-          <p className="muted">{sub}</p>
           {children}
         </div>
       )}

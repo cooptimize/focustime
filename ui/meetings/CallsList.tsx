@@ -5,8 +5,8 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { clientColor } from "../labels.ts";
 import { Icon } from "../icons.tsx";
 import { lengthLabel } from "../../plan/calls.ts";
-import { CALL_LIST, CLOSE_TEXT, MARK_TEXT } from "../../plan/call-words.ts";
-import { closedLine, markWords, type CallMarkKind, type CallRow, type SeriesEntry } from "../../plan/call-list.ts";
+import { CALL_LIST, CLOSE_TEXT, LIST_TEXT, MARK_TEXT } from "../../plan/call-words.ts";
+import { closedLine, markShort, markWords, needsAction, needsNote, shortWhen, type CallMarkKind, type CallRow, type SeriesEntry } from "../../plan/call-list.ts";
 import type { CaptureClient } from "../../plan/capture.ts";
 
 const timeOf = (iso: string, zone: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: zone });
@@ -26,7 +26,7 @@ export function TranscriptMark({ mark, check }: { mark: CallMarkKind; check?: Ca
   );
 }
 
-/** A tick for a row that can be done together with others (Hide, or Skip all and close). */
+/** A tick for a row that can be done together with others (Hide, or Skip all and close); only while selecting. */
 function Tick({ on, name, onTick }: { on: boolean; name: string; onTick: (on: boolean) => void }) {
   return (
     <label className="calls-tick" title={CLOSE_TEXT.tick(name)}>
@@ -35,50 +35,50 @@ function Tick({ on, name, onTick }: { on: boolean; name: string; onTick: (on: bo
   );
 }
 
-/** "3 left of 11" with a small bar. */
-function Left({ left }: { left: NonNullable<CallRow["left"]> }) {
-  const done = left.all ? (left.all - left.open) / left.all : 0;
-  return (
-    <span className="calls-left">
-      <span className="calls-left-bar" aria-hidden="true"><span style={{ width: `${Math.round(done * 100)}%` }} /></span>
-      {CLOSE_TEXT.left(left.open, left.all)}
-    </span>
-  );
+/** MC-5: a thin bar of how much is decided (its words are the row's "N left"). */
+function Bar({ done }: { done: number }) {
+  return <span className="calls-left-bar" aria-hidden="true" data-call-bar=""><span style={{ width: `${Math.round(done * 100)}%` }} /></span>;
 }
 
 type RowActs = {
   open: boolean;
   zone: string;
+  today: string;
   colors: Record<string, string>;
+  /** MC-5: ticks show only once Select calls is chosen. */
+  selecting: boolean;
   ticked: boolean;
   onTick: (on: boolean) => void;
   onOpen: () => void;
 };
 
+/** MC-5: the client's square: its color, or dashed when no client is said yet. */
+const Square = ({ color }: { color: string | null }) => <span className={`swatch calls-sq${color ? "" : " none"}`} aria-hidden="true" />;
+
 /**
- * MC-4: a call in Needs you, two lines: when and its name; then its client, how far along and one button (Review,
- * Upload or Open), with Skip all and close where proposals are left.
+ * MC-5: a call in Needs you, two lines in one bordered card. Line 1: the client's square, the name (one line, its full
+ * name on hover), and on the right "N left" or the one button. Line 2: when and the client, and on the right a thin bar
+ * once something is decided or the short amber note; Skip all is a quiet button there on the selected, hovered or focused
+ * row (not on the phone: there it is only in the call's header). A click anywhere on the row or Enter opens the call.
  */
-export function NeedsRow({ r, open, zone, colors, ticked, onTick, onOpen, onSkipAll }: RowActs & { r: CallRow; onSkipAll: () => void }) {
+export function NeedsRow({ r, open, zone, today, colors, selecting, ticked, onTick, onOpen, onAction, onSkipAll, phone = false }: RowActs & { r: CallRow; onAction: (kind: "upload" | "pocket" | "retry") => void; onSkipAll: () => void; phone?: boolean }) {
   const color = r.clientKey ? clientColor(r.clientKey, colors) : null;
-  const action = r.left?.open ? CALL_LIST.reviewButton : r.state.label === CALL_LIST.uploadState ? CALL_LIST.uploadButton : CALL_LIST.openButton;
+  const act = needsAction(r);
+  const note = needsNote(r, today);
   return (
-    <li className={`calls-row need-row${open ? " open" : ""}`} style={color ? ({ "--c": color } as CSSProperties) : undefined} data-row={r.key}>
-      {r.left?.open ? <Tick on={ticked} name={r.name} onTick={onTick} /> : <span className="calls-tick" aria-hidden="true" />}
-      <button type="button" className="calls-row-main" aria-current={open ? "true" : undefined} data-call-row={r.key} data-bucket={r.bucket} onClick={onOpen}>
-        <span className="calls-row-one">
-          <span className="calls-time">{whenOf(r.startAt, zone)}</span>
-          <span className="calls-name">{r.name}</span>
-        </span>
-        <span className="calls-row-two">
-          <span className={`swatch${color ? "" : " none"}`} aria-hidden="true" />
-          <span className="calls-meta">{r.clientName ?? CALL_LIST.noClient}</span>
-          {r.left ? <Left left={r.left} /> : <span className="calls-state needs">{r.state.label}</span>}
-        </span>
+    <li className={`calls-row need-row${open ? " open" : ""}${selecting ? " selecting" : ""}`} style={color ? ({ "--c": color } as CSSProperties) : undefined} data-row={r.key}>
+      {selecting && (r.left?.open ? <Tick on={ticked} name={r.name} onTick={onTick} /> : <span className="calls-tick" aria-hidden="true" />)}
+      <Square color={color} />
+      <button type="button" className="calls-row-main" title={r.name} aria-current={open ? "true" : undefined} data-call-row={r.key} data-bucket={r.bucket} onClick={onOpen}>
+        <span className="calls-name">{r.name}</span>
       </button>
-      <span className="calls-row-acts">
-        <button type="button" className="mini primary" onClick={onOpen} data-call-act="open">{action}</button>
-        {r.left?.open ? <button type="button" className="mini quiet" onClick={onSkipAll} data-call-act="skip-all">{r.left.open === r.left.all ? CLOSE_TEXT.skipAllClose : CLOSE_TEXT.skipLastClose(r.left.open)}</button> : null}
+      <span className="calls-row-end">
+        {act?.kind === "left" ? <span className="calls-left" data-call-left="">{act.text}</span> : act ? <button type="button" className="mini primary" onClick={() => onAction(act.kind)} data-call-act={act.kind}>{act.text}</button> : null}
+      </span>
+      <span className="calls-meta">{shortWhen(r.startAt, r.day, today, zone)} · {r.clientName ?? CALL_LIST.noClient}</span>
+      <span className="calls-row-end two">
+        {r.left?.open && !phone ? <button type="button" className="mini quiet calls-skip" onClick={onSkipAll} data-call-act="skip-all">{r.left.open === r.left.all ? LIST_TEXT.skipAll : LIST_TEXT.skipLast(r.left.open)}</button> : null}
+        {note && "amber" in note ? <span className="calls-amber" data-call-note="">{note.amber}</span> : note ? <Bar done={note.done} /> : null}
       </span>
     </li>
   );
@@ -87,18 +87,25 @@ export function NeedsRow({ r, open, zone, colors, ticked, onTick, onOpen, onSkip
 /** What Review from a row is doing, or why it stopped (with Upload a file). */
 export type RowStatus = { busy: string | null; error: string | null; occurrenceId: number | null };
 
+/** MC-5: a week row's mark, short, with its full words as its label and on hover. */
+export function MarkShort({ mark }: { mark: CallMarkKind }) {
+  const m = markShort(mark);
+  if (!m) return null;
+  return <span className={`calls-mark ${mark}`} title={m.full} aria-label={m.full} data-call-mark={mark ?? ""}>{m.short}</span>;
+}
+
 /**
- * MC-4: one line under a week (or in the fold): when, the name, the client it would be about (a calendar call, as
- * "About Northwind", which is the client choice), its mark, Review and Hide. A call FocusTime keeps (waiting on someone
- * else) shows its state instead.
+ * MC-5: one line under a week (or in the fold): when, the client's square, the name, the client as a small picker (my
+ * choice, else FocusTime's suggestion, else "Which client?" in amber), the mark and Hide (on hover or focus, always on
+ * touch). A call FocusTime keeps (waiting on someone else) shows its client and its state instead. A click opens the
+ * review straight away only when a client shows and Teams has the transcript; otherwise the setup (CallsPage decides).
  */
-export function WeekRow({ r, open, zone, colors, ticked, onTick, onOpen, clients, client, onClient, onReview, onHide, status, onUpload, inSeries = false }: RowActs & {
+export function WeekRow({ r, open, zone, today, colors, selecting, ticked, onTick, onOpen, clients, client, onClient, onHide, status, onUpload, inSeries = false }: RowActs & {
   r: CallRow;
   clients: readonly CaptureClient[];
   /** The client on the row: my choice, else FocusTime's suggestion, else none ("Which client?"). */
   client: string | null;
   onClient: (key: string) => void;
-  onReview: () => void;
   onHide: () => void;
   status: RowStatus | null;
   onUpload: () => void;
@@ -107,32 +114,30 @@ export function WeekRow({ r, open, zone, colors, ticked, onTick, onOpen, clients
   const color = r.clientKey ? clientColor(r.clientKey, colors) : client ? clientColor(client, colors) : null;
   // PK-4: a recording with no call hides too, by its id alone.
   const canHide = (!!r.other && r.occurrenceId === null) || !!r.recording;
+  const picks = (!!r.other && r.occurrenceId === null) || !!r.recording;
   const nameOf = (k: string) => clients.find((c) => c.clientKey === k)?.clientName ?? k;
   return (
-    <li className={`calls-row one${open ? " open" : ""}${inSeries ? " in-series" : ""}`} style={color ? ({ "--c": color } as CSSProperties) : undefined} data-row={r.key}>
-      {canHide ? <Tick on={ticked} name={r.name} onTick={onTick} /> : <span className="calls-tick" aria-hidden="true" />}
-      <button type="button" className="calls-row-main" aria-current={open ? "true" : undefined} data-call-row={r.key} data-bucket={r.bucket} onClick={onOpen}>
-        <span className="calls-row-one">
-          <span className="calls-time">{inSeries ? dayOf(r.startAt, zone) : whenOf(r.startAt, zone)}</span>
-          <span className="calls-name">{inSeries ? timeOf(r.startAt, zone) : r.name}</span>
-          {r.occurrenceId !== null && <span className="calls-state">{r.state.label}</span>}
-        </span>
+    <li className={`calls-row one${open ? " open" : ""}${inSeries ? " in-series" : ""}${selecting ? " selecting" : ""}`} style={color ? ({ "--c": color } as CSSProperties) : undefined} data-row={r.key}>
+      {selecting && (canHide ? <Tick on={ticked} name={r.name} onTick={onTick} /> : <span className="calls-tick" aria-hidden="true" />)}
+      <span className="calls-time">{inSeries ? dayOf(r.startAt, zone) : shortWhen(r.startAt, r.day, today, zone)}</span>
+      <Square color={color} />
+      <button type="button" className="calls-row-main" title={r.name} aria-current={open ? "true" : undefined} data-call-row={r.key} data-bucket={r.bucket} disabled={!!status?.busy} onClick={onOpen}>
+        <span className="calls-name">{inSeries ? timeOf(r.startAt, zone) : r.name}</span>
       </button>
-      <span className="calls-row-acts">
-        <TranscriptMark mark={r.mark} check={r.check} />
-        {r.other && r.occurrenceId === null && (
+      <span className="calls-row-end">
+        {picks ? (
           <label className={`calls-about${client ? "" : " none"}`} title={CLOSE_TEXT.aboutHint}>
-            <span className="sr-only">{CALL_LIST.aboutLabel}</span>
+            <span className="sr-only">{LIST_TEXT.clientFor(r.name)}</span>
             <select value={client ?? ""} onChange={(e) => onClient(e.target.value)} data-call-about="">
-              {!client && <option value="">{CLOSE_TEXT.whichClient}</option>}
-              {clients.map((c) => <option key={c.clientKey} value={c.clientKey}>{CLOSE_TEXT.about(nameOf(c.clientKey))}</option>)}
+              {!client && <option value="">{LIST_TEXT.whichClient}</option>}
+              {clients.map((c) => <option key={c.clientKey} value={c.clientKey}>{nameOf(c.clientKey)}</option>)}
             </select>
           </label>
-        )}
-        {(r.other || r.recording) && r.occurrenceId === null && (
-          <button type="button" className={`mini${r.mark ? " primary" : ""}`} disabled={!!status?.busy} onClick={onReview} data-call-act="review">{CALL_LIST.reviewButton}</button>
-        )}
-        {canHide && <button type="button" className="mini quiet" onClick={onHide} data-call-act="hide">{CLOSE_TEXT.hide}</button>}
+        ) : r.occurrenceId !== null ? (
+          <span className="calls-state" data-call-state="">{r.state.label}</span>
+        ) : null}
+        <MarkShort mark={r.mark} />
+        {canHide && <button type="button" className="mini quiet calls-hide" onClick={onHide} data-call-act="hide">{CLOSE_TEXT.hide}</button>}
       </span>
       {status?.busy && <p className="calls-row-status muted" role="status">{status.busy}</p>}
       {status?.error && (
@@ -145,8 +150,9 @@ export function WeekRow({ r, open, zone, colors, ticked, onTick, onOpen, clients
 }
 
 /** MC-4: a meeting that repeats, nobody asked about, as one row for the week ("Team standup · 3 this week"), its menu and its days. */
-export function SeriesRow({ e, weekLabel, expanded, onExpand, onHideEvery, onHideWeek, ticked, onTick, children }: {
+export function SeriesRow({ e, weekLabel, expanded, onExpand, onHideEvery, onHideWeek, selecting, ticked, onTick, children }: {
   e: SeriesEntry;
+  selecting: boolean;
   weekLabel: string;
   expanded: boolean;
   onExpand: (on: boolean) => void;
@@ -168,7 +174,7 @@ export function SeriesRow({ e, weekLabel, expanded, onExpand, onHideEvery, onHid
   }, [menu]);
   return (
     <li className="calls-row one series" data-row={e.key} data-series-row="">
-      <Tick on={ticked} name={e.name} onTick={onTick} />
+      {selecting && <Tick on={ticked} name={e.name} onTick={onTick} />}
       <button type="button" className="calls-row-main" aria-expanded={expanded} data-call-row={e.key} onClick={() => onExpand(!expanded)}>
         <span className="calls-row-one">
           <span className="calls-name">{e.name}</span>
@@ -177,7 +183,7 @@ export function SeriesRow({ e, weekLabel, expanded, onExpand, onHideEvery, onHid
         </span>
       </button>
       <span className="calls-row-acts">
-        <TranscriptMark mark={e.mark} />
+        <MarkShort mark={e.mark} />
         <div className="calls-menu" ref={menuRef}>
           <button type="button" className="mini quiet" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu((m) => !m)} data-call-act="hide-menu">{CLOSE_TEXT.hide} <Icon name="more" /></button>
           {menu && (
@@ -200,36 +206,34 @@ export function SeriesRow({ e, weekLabel, expanded, onExpand, onHideEvery, onHid
   );
 }
 
-/** MC-4: a closed call, one line: when, its name, and what came of it. */
-export function ClosedRow({ r, open, zone, colors, onOpen }: { r: CallRow; open: boolean; zone: string; colors: Record<string, string>; onOpen: () => void }) {
+/** MC-4: a closed call, one line: when, its name, and what came of it. MC-5: a Pocket recording that fits it later shows its mark. */
+export function ClosedRow({ r, open, zone, today, colors, onOpen }: { r: CallRow; open: boolean; zone: string; today: string; colors: Record<string, string>; onOpen: () => void }) {
   const color = r.clientKey ? clientColor(r.clientKey, colors) : null;
   return (
     <li className={`calls-row one closed${open ? " open" : ""}`} style={color ? ({ "--c": color } as CSSProperties) : undefined} data-row={r.key}>
-      <span className="calls-tick" aria-hidden="true" />
-      <button type="button" className="calls-row-main" aria-current={open ? "true" : undefined} data-call-row={r.key} data-bucket={r.bucket} onClick={onOpen}>
-        <span className="calls-row-one">
-          <span className="calls-time">{whenOf(r.startAt, zone)}</span>
-          <span className="calls-name">{r.name}</span>
-          <span className="calls-state" data-closed-line="">{r.closed ? closedLine(r.closed) : ""}</span>
-        </span>
+      <span className="calls-time">{shortWhen(r.startAt, r.day, today, zone)}</span>
+      <Square color={color} />
+      <button type="button" className="calls-row-main" title={r.name} aria-current={open ? "true" : undefined} data-call-row={r.key} data-bucket={r.bucket} onClick={onOpen}>
+        <span className="calls-name">{r.name}</span>
       </button>
+      <span className="calls-row-end">
+        <span className="calls-state" data-closed-line="">{r.closed ? closedLine(r.closed) : ""}</span>
+        <MarkShort mark={r.mark} />
+      </span>
     </li>
   );
 }
 
 /** MC-4: a hidden meeting, with Put back (a series hidden for every one says so). */
-export function HiddenRow({ r, every, count = 1, zone, onPutBack }: { r: CallRow; every: boolean; /** A series hidden for every one: its calls in the window, as one row. */ count?: number; zone: string; onPutBack: () => void }) {
+export function HiddenRow({ r, every, count = 1, zone, today, onPutBack }: { r: CallRow; every: boolean; /** A series hidden for every one: its calls in the window, as one row. */ count?: number; zone: string; today: string; onPutBack: () => void }) {
   return (
     <li className="calls-row one hidden-row" data-row={r.key}>
-      <span className="calls-tick" aria-hidden="true" />
-      <span className="calls-row-main as-text" data-call-row={r.key} tabIndex={-1}>
-        <span className="calls-row-one">
-          {!every && <span className="calls-time">{whenOf(r.startAt, zone)}</span>}
-          <span className="calls-name">{r.name}</span>
-          {every && <span className="calls-time">· {CLOSE_TEXT.series(count, "")} · {CLOSE_TEXT.hiddenEveryLine}</span>}
-        </span>
+      {!every && <span className="calls-time">{shortWhen(r.startAt, r.day, today, zone)}</span>}
+      <span className="calls-row-main as-text" data-call-row={r.key} tabIndex={-1} title={r.name}>
+        <span className="calls-name">{r.name}</span>
       </span>
-      <span className="calls-row-acts">
+      <span className="calls-row-end">
+        {every && <span className="calls-state">{CLOSE_TEXT.series(count, "")} · {CLOSE_TEXT.hiddenEveryLine}</span>}
         <button type="button" className="mini" onClick={onPutBack} data-call-act="put-back">{CLOSE_TEXT.putBack}</button>
       </span>
     </li>
@@ -237,14 +241,14 @@ export function HiddenRow({ r, every, count = 1, zone, onPutBack }: { r: CallRow
 }
 
 /** MC-4: the bar for ticked rows: Hide N and Skip all and close N, with Clear. */
-export function TickBar({ hide, close, onHide, onClose, onClear }: { hide: number; close: number; onHide: () => void; onClose: () => void; onClear: () => void }) {
-  if (!hide && !close) return null;
+export function TickBar({ hide, close, onHide, onClose, onClear, onDone }: { hide: number; close: number; onHide: () => void; onClose: () => void; onClear: () => void; /** MC-5: leaves Select calls. */ onDone: () => void }) {
   return (
-    <div className="calls-tickbar" role="region" aria-label={CLOSE_TEXT.ticked(hide + close)} data-calls-tickbar="">
-      <span className="muted">{CLOSE_TEXT.ticked(hide + close)}</span>
+    <div className="calls-tickbar" role="region" aria-label={LIST_TEXT.select} data-calls-tickbar="">
+      {hide + close > 0 && <span className="muted">{CLOSE_TEXT.ticked(hide + close)}</span>}
       {hide > 0 && <button type="button" className="mini" onClick={onHide} data-tickbar="hide">{CLOSE_TEXT.hideSeveral(hide)}</button>}
       {close > 0 && <button type="button" className="mini" onClick={onClose} data-tickbar="close">{CLOSE_TEXT.skipSeveral(close)}</button>}
-      <button type="button" className="mini quiet" onClick={onClear}>{CLOSE_TEXT.clearTicks}</button>
+      {hide + close > 0 && <button type="button" className="mini quiet" onClick={onClear}>{CLOSE_TEXT.clearTicks}</button>}
+      <button type="button" className="mini quiet" onClick={onDone} data-tickbar="done">{LIST_TEXT.selectDone}</button>
     </div>
   );
 }

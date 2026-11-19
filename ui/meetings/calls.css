@@ -1,0 +1,88 @@
+/* MC-5: Calls made scannable. Loaded with the Calls screen (after styles.css, so these win at the same specificity);
+   the first download doesn't grow. The app's own parts: the segmented control, the Inbox's chips, section labels, pill
+   buttons (.mini), the row menu (.more-btn) and the type scale (--fs-1 to --fs-4). */
+
+/* ---- The list ---- */
+/* A little wider than MC-3's, so a week row's name, client and mark sit on one line. */
+.calls-page { grid-template-columns: clamp(360px, 34vw, 520px) minmax(0, 1fr); }
+.calls-head { align-items: center; padding: 12px 12px 6px 24px; }
+.calls-head-actions { align-items: center; }
+.calls-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.calls-chips-label { margin-right: 2px; color: var(--text-muted); font-size: var(--fs-1); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.calls-chips .ib4-chip { display: inline-flex; align-items: center; gap: 6px; }
+.calls-sq { width: 10px; height: 10px; border-radius: 3px; background: var(--c, var(--border-strong)); flex: none; }
+.calls-sq.none { background: none; border: 1px dashed var(--border-strong); box-sizing: border-box; }
+.calls-pocket { margin: 0; }
+.calls-pocket .link-btn { min-height: 0; padding: 0; }
+
+/* A row: one click anywhere opens it (its name is the button, stretched over the row); its own controls sit above. */
+.calls-row { position: relative; display: grid; column-gap: 0; row-gap: 0; align-items: center; padding: 4px 8px; border: 1px solid transparent; border-radius: 8px; }
+.calls-row.open { border-color: transparent; background: none; }
+.calls-row-main { position: static; display: block; min-width: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.calls-row-main::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+.calls-row-main.as-text::after { content: none; }
+.calls-row-main:focus-visible { outline: none; }
+.calls-row:has(> .calls-row-main:focus-visible) { outline: 2px solid var(--focus); outline-offset: 1px; }
+.calls-row-main:disabled { cursor: progress; }
+.calls-name { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; overflow-wrap: normal; }
+.calls-tick, .calls-row-end > *, .calls-row-status { position: relative; z-index: 1; }
+.calls-tick { grid-column: tick; grid-row: 1 / -1; width: 24px; margin-right: 4px; }
+.calls-row-end { grid-column: end; display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; margin-left: 8px; min-width: 0; white-space: nowrap; }
+.calls-row .calls-sq { grid-column: sq; margin-right: 8px; }
+.calls-time { grid-column: time; margin-right: 8px; min-width: 6.4em; color: var(--text-muted); font-size: var(--fs-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.calls-state { max-width: none; color: var(--text-muted); font-size: var(--fs-2); text-align: right; overflow: hidden; text-overflow: ellipsis; }
+.calls-row-status { grid-column: 1 / -1; grid-row: 2; margin: 2px 0 0; padding: 0; font-size: var(--fs-2); }
+
+/* Needs you: two lines in one bordered card. The selected one has its client's color on the left edge and a tinted
+   ground; the others carry the color only in the square. */
+.calls-cards { gap: 6px; }
+.calls-row.need-row { grid-template-columns: [tick] auto [sq] auto [main] minmax(0, 1fr) [end] auto; grid-template-rows: auto auto; row-gap: 2px; padding: 6px 10px; border: 1px solid var(--border); background: var(--surface); }
+.calls-row.need-row:hover { background: color-mix(in oklab, var(--text) 3%, var(--surface)); }
+.calls-row.need-row.open { border-color: var(--border-strong); border-left: 3px solid var(--c, var(--border-strong)); padding-left: 8px; background: color-mix(in oklab, var(--c, var(--accent)) 10%, var(--surface)); }
+.calls-row.need-row .calls-sq { grid-row: 1; }
+.calls-row.need-row .calls-row-main { grid-column: main; grid-row: 1; }
+.calls-row.need-row .calls-row-end { grid-row: 1; }
+.calls-row.need-row .calls-meta { grid-column: sq / end; grid-row: 2; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); font-size: var(--fs-2); }
+.calls-row.need-row .calls-row-end.two { grid-row: 2; }
+.calls-left { color: var(--text-muted); font-size: var(--fs-2); }
+.calls-left-bar { width: 40px; height: 3px; }
+.calls-amber { color: var(--watch); font-size: var(--fs-2); }
+.calls-row-end .mini { min-height: 26px; }
+/* Skip all: a quiet button on the selected, hovered or focused row only. */
+.need-row .calls-skip { display: none; min-height: 0; padding: 0 4px; font-size: var(--fs-2); }
+.need-row:is(:hover, :focus-within, .open) .calls-skip { display: inline-flex; }
+
+/* A week's rows: one line each: when, the square, the name, the client, the mark and Hide (on hover or focus). */
+.calls-row.one { grid-template-columns: [tick] auto [time] auto [sq] auto [main] minmax(0, 1fr) [end] auto; padding: 3px 8px; border-left: 1px solid transparent; }
+.calls-row.one .calls-sq, .calls-row.one .calls-time, .calls-row.one .calls-row-main, .calls-row.one .calls-row-end { grid-row: 1; }
+.calls-row.one .calls-row-main { grid-column: main; }
+.calls-row.one:hover { background: var(--wash-1); }
+.calls-row.one.open { background: color-mix(in oklab, var(--c, var(--accent)) 10%, transparent); }
+.calls-row.in-series { border-left-style: none; }
+.calls-row .calls-hide { visibility: hidden; min-height: 24px; padding: 0 6px; }
+.calls-row:is(:hover, :focus-within) .calls-hide { visibility: visible; }
+@media (hover: none) { .calls-row .calls-hide { visibility: visible; } }
+.calls-about select { appearance: none; max-width: 8.5em; min-height: 24px; padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--text); font: inherit; font-size: var(--fs-2); cursor: pointer; }
+.calls-about select:hover, .calls-about select:focus-visible { border-color: var(--border); background: var(--surface); }
+.calls-about.none select { border: 1px dashed color-mix(in oklab, var(--watch) 60%, transparent); color: var(--watch); }
+.calls-mark { padding: 0 6px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-muted); font-size: var(--fs-1); line-height: 1.6; }
+.calls-row.series > .calls-series-days { grid-column: 1 / -1; grid-row: 2; margin: 2px 0 2px 16px; }
+.calls-row.series .calls-row-main { grid-column: time / end; }
+.calls-row.series .calls-row-one { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.calls-row.series .calls-row-one .calls-name { flex: 0 1 auto; }
+.calls-row.series .calls-row-one .calls-time { min-width: 0; }
+.calls-row.closed .calls-row-end, .calls-row.hidden-row .calls-row-end { grid-row: 1; }
+.calls-row.hidden-row .calls-row-main { grid-column: main; }
+.calls-tickbar { gap: 8px; }
+
+/* The phone: rows keep two lines (a week row's controls under its name), every control at least 44 px. */
+.app.phone .calls-row.need-row .calls-row-end .mini, .app.phone .calls-about select, .app.phone .calls-row .calls-hide, .app.phone .calls-tick, .app.phone .calls-pocket .link-btn { min-height: var(--tap, 44px); }
+.app.phone .calls-row.need-row { grid-template-columns: [tick] auto [sq] auto [main] minmax(0, 1fr) [end] auto; }
+.app.phone .calls-row.need-row .calls-row-main { min-height: 28px; }
+.app.phone .calls-row.one { grid-template-columns: [tick] auto [time] auto [sq] auto [main] minmax(0, 1fr); grid-template-rows: auto auto; padding: 4px 4px; }
+.app.phone .calls-row.one .calls-row-end { grid-column: time / -1; grid-row: 2; justify-content: flex-start; margin-left: 0; }
+.app.phone .calls-row.one .calls-row-main { min-height: 28px; }
+.app.phone .calls-row.closed .calls-row-end, .app.phone .calls-row.hidden-row .calls-row-end { grid-row: 2; }
+.app.phone .calls-row-main { min-height: 0; }
+.app.phone .calls-filters { display: inline-flex; }
+.app.phone .calls-chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
