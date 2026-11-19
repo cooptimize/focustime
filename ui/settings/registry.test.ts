@@ -1,7 +1,11 @@
 // ST-1: the Settings registry is one consistent list: ids unique, every setting in a section that exists, old section
 // ids still land, and search finds settings by their new and their old labels (and hides developer and demo rows).
 import { describe, expect, it } from "vitest";
-import { OLD_SECTIONS, SECTIONS, SETTINGS, SETTINGS_GROUPS, resolveSettings, searchSettings, sectionOf, settingOf, settingsHref } from "./registry.ts";
+import { OLD_SECTIONS, SECTIONS, SETTINGS, SETTINGS_GROUPS, resolveSettings, sectionOf, settingOf, settingsHref } from "./registry.ts";
+import { search, type SearchOpts } from "./search.ts";
+
+/** SA-5: these tests read results the way ST-1's search returned them; the search is ui/settings/search.ts now. */
+const searchSettings = (q: string, o: SearchOpts = {}) => search(q, o).map((r) => ({ kind: r.kind, section: r.section, setting: r.kind === "section" ? null : (r.setting ?? null), label: r.label, where: r.where, matched: r.matched }));
 
 describe("Settings registry", () => {
   it("has unique ids, known groups and sections, and a description for every section", () => {
@@ -104,12 +108,12 @@ describe("SA-2: one name per setting", () => {
       expect(d.label, d.id).not.toMatch(/\((minutes|days|weeks|months|seconds)[^)]*\)/);
     }
   });
-  it("search shows a row's group beside its section, and never a client page's rows (they need the client)", () => {
+  it("search shows a row's group beside its section; a client page's rows say they need the client (SA-5)", () => {
     expect(searchSettings("quiet on days off")[0]).toMatchObject({ setting: "quiet-pto", where: "Reminders and notices › Quiet" });
     expect(searchSettings("watch at").find((h) => h.setting === "risk-watch")).toMatchObject({ where: "Planning › Fine tuning › At-risk blocks" });
     expect(searchSettings("stale after")[0]).toMatchObject({ setting: "stale-weeks", where: "Planning › Fine tuning › Backlog" });
     expect(searchSettings("someone took your story")[0]).toMatchObject({ setting: "notify-story-taken", where: "Reminders and notices › Each kind of notice" });
-    expect(searchSettings("dataverse nickname").some((h) => h.section === "client")).toBe(false);
+    expect(searchSettings("dataverse nickname")[0]).toMatchObject({ kind: "client", section: "client", setting: "client-nickname", where: "A client's page" });
     expect(searchSettings("midday check-in").some((h) => h.setting === "notify-checkin")).toBe(true);
     expect(searchSettings("check-in").find((h) => h.setting === "notify-checkin")).toMatchObject({ label: "Midday check-in" });
   });

@@ -535,7 +535,7 @@ function setKind(env: MenuEnv, p: Pick, input: Record<string, unknown>, done: st
 }
 
 /** WK-3: the clients a deployment can be for: the week's focus clients and every client with DevOps work, then Internal. */
-function deployClients(env: MenuEnv): { value: string; label: string }[] {
+export function deployClients(env: MenuEnv): { value: string; label: string }[] {
   const seen = new Map<string, string>();
   for (const d of env.week.days) for (const s of [d.am, d.pm]) for (const f of s.focus) seen.set(f.clientKey, f.clientName);
   for (const [k, w] of env.work) if (!seen.has(k)) seen.set(k, w.clientName);

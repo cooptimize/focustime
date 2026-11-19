@@ -11,7 +11,10 @@ import { PhoneReadOnly } from "./Phone.tsx";
 import { AdminPlace, NOT_ADMIN_TEXT, RETIRED_ADMIN_SECTIONS, useAdmin } from "./settings/Admin.tsx";
 import { PanelShell, useNarrow, type RailGroup } from "./PanelShell.tsx";
 import { useDeveloperLoop } from "./appenv.ts";
-import { resolveSettings, searchSettings, sectionOf, SECTIONS, settingsHref, SETTINGS_GROUPS, type SearchHit } from "./settings/registry.ts";
+import { resolveSettings, sectionOf, SECTIONS, settingsHref, SETTINGS_GROUPS } from "./settings/registry.ts";
+import { search } from "./settings/search.ts";
+import { openOf, SearchResults, SettingsSearch, type Open } from "./settings/SearchResults.tsx";
+import { takeLanding } from "./settings/landing.ts";
 import { ProfileSection } from "./settings/sections/Profile.tsx";
 import { HoursSection } from "./settings/sections/Hours.tsx";
 import { NotificationsSection } from "./settings/sections/Notifications.tsx";
@@ -31,66 +34,6 @@ export const SETTINGS_SECTIONS: readonly (readonly [string, string])[] = SECTION
 const ADMIN = "admin";
 const NOT_ADMIN = "admin-only";
 export type SettingsSectionId = string;
-
-/** ST-1: the rail's search. Finds any setting by its label, an old label or a keyword; Enter opens the first. */
-function SettingsSearch({ q, setQ, hits, onGo }: { q: string; setQ: (q: string) => void; hits: SearchHit[]; onGo: (h: SearchHit) => void }) {
-  return (
-    <div className="ps-search">
-      <input
-        type="search"
-        value={q}
-        placeholder="Search settings"
-        aria-label="Search settings"
-        aria-controls="settings-search-results"
-        onChange={(e) => setQ(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Escape" && q) {
-            // The first Esc clears the search; the next closes Settings.
-            e.preventDefault();
-            e.nativeEvent.stopImmediatePropagation();
-            setQ("");
-          } else if (e.key === "Enter" && hits[0]) {
-            e.preventDefault();
-            onGo(hits[0]);
-          } else if (e.key === "ArrowDown") {
-            e.preventDefault();
-            document.querySelector<HTMLElement>("#settings-search-results a")?.focus();
-          }
-        }}
-      />
-    </div>
-  );
-}
-
-function SearchResults({ q, hits, onGo }: { q: string; hits: SearchHit[]; onGo: (h: SearchHit) => void }) {
-  return (
-    <div id="settings-search-results" className="ps-results" role="region" aria-label="Search results" aria-live="polite">
-      {hits.length === 0 ? (
-        <p className="muted ps-none">Nothing called “{q.trim()}”.</p>
-      ) : (
-        hits.map((h) => (
-          <a
-            key={`${h.section}/${h.setting ?? ""}`}
-            className="ps-item ps-hit"
-            href={settingsHref(h.section, h.setting)}
-            onClick={(e) => (e.preventDefault(), onGo(h))}
-            onKeyDown={(e) => {
-              const el = e.currentTarget;
-              if (e.key === "ArrowDown") (e.preventDefault(), (el.nextElementSibling as HTMLElement | null)?.focus());
-              if (e.key === "ArrowUp") (e.preventDefault(), ((el.previousElementSibling as HTMLElement | null) ?? document.querySelector<HTMLElement>(".ps-search input"))?.focus());
-            }}
-          >
-            <span>{h.label}</span>
-            <span className="ps-hint">
-              {h.where}
-              {h.matched ? ` · was “${h.matched}”` : ""}
-            </span>
-          </a>
-        ))
-      )}
-    </div>
-  );
-}
 
 /** The section and setting an address opens: old ids mapped; "" is the rail (a list on the phone, Profile otherwise). */
 function placeOf(section: string, setting: string | null | undefined, list: boolean, demo: boolean, admin: boolean | null): { current: string | null; setting: string | null } {
@@ -120,6 +63,10 @@ function SettingsPanel(props: Props & { admin: boolean | null }) {
   const [data, setData] = useState<SettingsData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  // SA-5: a client's-page result whose clients are listed, and the setting to land on once a client's page opens.
+  const [asking, setAsking] = useState<string | null>(null);
+  // The command menu's client's-page result hands its setting over once (ui/settings/landing.ts).
+  const [clientSetting, setClientSetting] = useState<string | null>(() => takeLanding());
   // A jump to a setting is owed once, until it lands or the person moves on (see the effect below).
   const jumpDue = useRef(false);
   const phone = usePhone();
@@ -141,22 +88,24 @@ function SettingsPanel(props: Props & { admin: boolean | null }) {
   }, [reload, current]);
   // Each jump is owed once. The person going anywhere else first (a click, a key, the focus moving) cancels it, so it
   // never takes the focus back; this effect runs after PanelShell's own focus on the section's heading.
+  // On a client's page the address's last part is the client; the setting comes from a search result (SA-5).
+  const target = current === "client" ? clientSetting : setting;
   useEffect(() => {
-    if (!setting || current === "client") return;
+    if (!target) return;
     jumpDue.current = true;
     const moved = () => void (jumpDue.current = false);
     for (const e of ["focusin", "pointerdown", "keydown"]) document.addEventListener(e, moved, true);
     return () => {
       for (const e of ["focusin", "pointerdown", "keydown"]) document.removeEventListener(e, moved, true);
     };
-  }, [current, setting]);
+  }, [current, target]);
   // A deep link to one setting: into view with a brief highlight, focus on its first control. Waits for the section's
   // data the first time; a later reload of that data (a save, a late response) doesn't do it again.
   useEffect(() => {
-    if (!data || !setting || current === "client") return;
+    if (!data || !target) return;
     const t = setTimeout(() => {
       if (!jumpDue.current) return;
-      const el = document.querySelector<HTMLElement>(`.ps-body [data-setting="${CSS.escape(setting)}"]`);
+      const el = document.querySelector<HTMLElement>(`.ps-body [data-setting="${CSS.escape(target)}"]`);
       if (!el) return;
       jumpDue.current = false;
       // SA-3: a setting inside a fold (Fine tuning, Each kind of notice) opens it first.
@@ -169,7 +118,7 @@ function SettingsPanel(props: Props & { admin: boolean | null }) {
       setTimeout(() => el.classList.remove("ps-flash"), 2200);
     }, 60);
     return () => clearTimeout(t);
-  }, [data, current, setting]);
+  }, [data, current, target]);
   const saved = useCallback(
     (d: SettingsData) => {
       setData(d);
@@ -184,7 +133,8 @@ function SettingsPanel(props: Props & { admin: boolean | null }) {
   const clientName = (c: SettingsClient) => c.setting.name ?? c.dataverseName ?? c.key;
   const title = inAdmin ? "Admin" : current === "client" ? (client ? clientName(client) : (setting ?? "Client")) : (def?.label ?? "Settings");
   const description = inAdmin ? undefined : def?.description;
-  const hits = q.trim() ? searchSettings(q, { demo: props.demo, dev: devLoop, phone }) : [];
+  const searchOpts = { demo: props.demo, dev: devLoop, phone, admin: admin === true };
+  const hits = q.trim() ? search(q, searchOpts) : [];
   const groups: RailGroup[] = [
     ...SETTINGS_GROUPS.map(([g, label]) => ({
       id: g,
@@ -195,7 +145,20 @@ function SettingsPanel(props: Props & { admin: boolean | null }) {
   return (
     <AutoSaveProvider onNotice={props.onNotice}>
       {(leave) => {
-        const go = (section: string, s?: string | null) => leave(() => (setQ(""), props.onSection(section, s ?? null)));
+        const go = (section: string, s?: string | null) => leave(() => (setQ(""), setAsking(null), setClientSetting(null), props.onSection(section, s ?? null)));
+        const open = (o: Open) => {
+          if (o.kind === "settings") return go(o.section, o.setting);
+          if (o.kind === "admin") return go(ADMIN, o.path || null);
+          if (o.kind === "client") return leave(() => (setQ(""), setAsking(null), setClientSetting(o.setting), props.onSection("client", o.client)));
+          leave(() => (setQ(""), (location.hash = o.href)));
+        };
+        const first = hits[0];
+        const onEnter = () => {
+          if (!first) return;
+          const o = openOf(first);
+          if (o) open(o);
+          else if (first.kind === "client") setAsking(first.id);
+        };
         return (
           <PanelShell
             name="Settings"
@@ -209,8 +172,8 @@ function SettingsPanel(props: Props & { admin: boolean | null }) {
             backLabel={current === "client" ? "Clients" : "Settings"}
             title={title}
             description={description}
-            railTop={<SettingsSearch q={q} setQ={setQ} hits={hits} onGo={(h) => go(h.section, h.setting)} />}
-            railOverride={q.trim() ? <SearchResults q={q} hits={hits} onGo={(h) => go(h.section, h.setting)} /> : undefined}
+            railTop={<SettingsSearch q={q} setQ={(x) => (setQ(x), setAsking(null))} onEnter={onEnter} />}
+            railOverride={q.trim() ? <SearchResults q={q} hits={hits} clients={data?.clients ?? []} admin={admin === true} demo={props.demo} dev={devLoop} phone={phone} asking={asking} setAsking={setAsking} onOpen={open} onGuide={props.onGuide} /> : undefined}
             railFoot={
               // SA-4: Admin is its own place; Settings' rail has one line for it, for admins only.
               admin ? (

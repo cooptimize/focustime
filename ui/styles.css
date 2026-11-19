@@ -5590,6 +5590,16 @@ body:has(.done-offer) .undo-toast.app-undo { top: 64px; bottom: auto; }
 .ps-results { display: flex; flex-direction: column; gap: 1px; }
 .ps-hit span:first-child { color: var(--text); }
 .ps-none { padding: 6px 10px; }
+/* SA-5: a result's name with Admin's mark; what something that isn't a setting answers; a client's page asking which
+   client; nothing found, then the nearest, then the Guide. Buttons in the results read as the links beside them. */
+.ps-hit-label { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 6px; color: var(--text); }
+.ps-admin-mark { padding: 0 6px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--border); font-size: var(--fs-1); font-weight: 500; color: var(--text-muted); }
+.ps-answer-text { color: var(--text-muted); }
+.ps-results button.ps-item { width: 100%; border: 0; background: transparent; font: inherit; font-size: var(--fs-3); text-align: left; cursor: pointer; }
+.ps-which { display: flex; flex-direction: column; gap: 1px; padding-left: 14px; }
+.ps-none > .muted { margin: 0 0 6px; }
+.ps-none-h { margin: 6px 0 2px; font-size: var(--fs-1); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); }
+.ps-none .ps-item { margin: 0 -10px; }
 .ps-main { min-height: 0; display: flex; flex-direction: column; min-width: 0; }
 .ps-head { display: flex; align-items: flex-start; gap: 12px; padding: 14px 24px 12px 28px; border-bottom: 1px solid var(--border); }
 .ps-titles { flex: 1; min-width: 0; }
