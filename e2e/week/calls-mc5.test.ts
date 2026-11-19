@@ -65,13 +65,13 @@ describe.skipIf(!CHROMIUM)("MC-5: Calls made scannable (browser, demo mode)", ()
     // The header: Calls, Add a call and the menu; no subtitle.
     await expect(page.locator(".calls-head").textContent()).resolves.toBe("CallsAdd a call");
     await page.getByRole("button", { name: "More for Calls" }).click();
-    for (const name of ["Refresh", "Check Pocket", "Select calls"]) await expect(page.getByRole("menuitem", { name: new RegExp(`^${name}`) }).count(), name).resolves.toBe(1);
+    for (const name of ["Refresh", "Check Pocket", "Select calls"]) await expect.poll(() => page.getByRole("menuitem", { name: new RegExp(`^${name}`) }).count(), { message: name, timeout: W }).toBe(1);
     await page.keyboard.press("Escape");
     // The Client row: All first and pressed, a chip a client, and No client because a call here has none.
     const chips = page.locator(".calls-chips .ib4-chip");
     await expect(chips.first().textContent()).resolves.toBe("All");
     await expect(chips.first().getAttribute("aria-pressed")).resolves.toBe("true");
-    await expect(chips.filter({ hasText: "No client" }).count()).resolves.toBe(1);
+    await expect.poll(() => chips.filter({ hasText: "No client" }).count(), { timeout: W }).toBe(1);
     await expect(page.locator(".calls-chips-label").textContent()).resolves.toBe("Client");
     // Hidden has none: no count drawn.
     await expect(page.locator('[data-calls-filter="hidden"] .seg-count').count()).resolves.toBe(0);
