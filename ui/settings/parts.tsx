@@ -7,17 +7,20 @@
 // result said on the row. A row's label, help and unit come from the registry (ui/settings/registry.ts), so the page,
 // search, links to it and the Undo message read one name. docs/design/style-guide.md section 12 has the rules;
 // ui/settings/sections.guard.test.ts keeps the sections on them.
-import { createContext, Fragment, useContext, useId, type ChangeEvent, type CSSProperties, type KeyboardEvent, type ReactNode, type Ref } from "react";
+import { createContext, Fragment, useContext, useId, type ChangeEvent, type CSSProperties, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, type Ref } from "react";
 import type { FieldStatus } from "./autosave.tsx";
 import { settingOf, settingsHref, type SettingDef } from "./registry.ts";
 import { TimeField } from "../TimeField.tsx";
 import { Icon } from "../icons.tsx";
+import { usePhone } from "../viewport.ts";
+import { HelpLine, More, splitHelp, useHelpMax } from "./help.tsx";
+export { HelpLine, More, splitHelp, useHelpMax };
 import "./parts.css";
 
 /** The words the team line says, the same everywhere. */
 export const TEAM_LINE = "Set by your FocusTime admin";
 /** The words behind a long help line. */
-export const MORE = "More about this";
+export { MORE } from "./help.tsx";
 
 type RowCtx = { labelId: string; helpId: string; label: string; unit: string | undefined };
 const RowContext = createContext<RowCtx | null>(null);
@@ -37,11 +40,13 @@ export function Page({ children }: { children: ReactNode }) {
   return <div className="sp-page">{children}</div>;
 }
 
+
 /** A card of rows, with an optional heading and one intro line. `sid` is the group's own registry id, for deep links. */
 export function Group({ title, intro, more, sid, children, label }: { more?: ReactNode; title?: string | undefined; intro?: ReactNode | undefined; sid?: string | undefined; children: ReactNode; label?: string | undefined }) {
   const name = title ?? label;
   // The intro is one line too: a long one ends at a sentence or clause, the rest behind More about this.
-  const [shown, spill] = typeof intro === "string" ? splitHelp(intro) : [intro, null];
+  const max = useHelpMax();
+  const [shown, spill] = typeof intro === "string" ? splitHelp(intro, max) : [intro, null];
   const folded = spill ? (more ? <>{spill} {more}</> : spill) : more;
   return (
     <section className="sp-group" data-setting={sid} aria-label={name}>
@@ -87,25 +92,6 @@ export function Subhead({ children, sid }: { children: ReactNode; sid?: string |
   );
 }
 
-/**
- * SA-2: a help line keeps to about two lines on a phone: past `max` characters it ends at a sentence (or, failing
- * that, a clause) and the rest goes behind "More about this", word for word. Cut inside a sentence, the shown part
- * ends with "…" and the rest starts with it, so neither reads as finished (SA-2 review).
- */
-export function splitHelp(t: string, max = 80): [string, string | null] {
-  if (t.length <= max) return [t, null];
-  const dot = t.lastIndexOf(". ", max);
-  if (dot > 20) return [t.slice(0, dot + 1), t.slice(dot + 2)];
-  for (const sep of [": ", "; ", ", "]) {
-    const j = t.lastIndexOf(sep, max);
-    if (j > 20) return [`${t.slice(0, j)}…`, `…${t.slice(j + 2)}`];
-  }
-  for (const word of [" (", " when ", " with "]) {
-    const j = t.lastIndexOf(word, max);
-    if (j > 20) return [`${t.slice(0, j)}…`, `…${t.slice(j + 1)}`];
-  }
-  return max < 90 ? splitHelp(t, max + 12) : [t, null];
-}
 
 /** One setting. */
 export function Row({ id, def, badge, help, more, mark, team, wide, below, noSid, status, children }: RowProps) {
@@ -114,12 +100,24 @@ export function Row({ id, def, badge, help, more, mark, team, wide, below, noSid
   const helpId = useId();
   const given = help === undefined ? d.help : help;
   const givenMore = more === undefined ? d.more : more;
-  const [shownHelp, spill] = typeof given === "string" && !status ? splitHelp(given) : [given, null];
+  const max = useHelpMax();
+  const phone = usePhone();
+  // A team line ("Team default: on.") follows the help on the same line, so the help leaves it room.
+  // A status line says what is true now in full on a computer; on a phone it keeps to two lines like any help.
+  const [shownHelp, spill] = typeof given === "string" && (!status || phone) ? splitHelp(given, team ? max - 22 : max) : [given, null];
   const shownMore = spill ? (givenMore ? <>{spill} {givenMore}</> : spill) : givenMore;
   const error = mark?.s?.kind === "error" ? mark.s.messages.join("; ") : null;
+  // SA-5: on a phone a switch's or a select's whole row takes the press (a choice's sides are each a row there).
+  // Admin's rows (`def`) carry no kind: their press works only when the row holds one switch or select.
+  const kind = "kind" in d ? d.kind : undefined;
+  const press = phone && !wide && !!children && (kind === "switch" || kind === "select" || !!def);
   return (
     <RowContext.Provider value={{ labelId, helpId, label: d.label, unit: d.unit }}>
-      <div className={`sp-row${wide ? " sp-wide" : ""}${children ? "" : " sp-bare"}`} data-setting={noSid ? undefined : id}>
+      <div
+        className={`sp-row${wide ? " sp-wide" : ""}${children ? "" : " sp-bare"}${press ? " sp-press" : ""}`}
+        data-setting={noSid ? undefined : id}
+        onClick={press ? pressRow : undefined}
+      >
         <div className="sp-text">
           <span className="sp-label-line">
             <span className="sp-label" id={labelId}>{d.label}</span>
@@ -147,15 +145,26 @@ export function Row({ id, def, badge, help, more, mark, team, wide, below, noSid
   );
 }
 
-/** What doesn't fit in a row's one help line, word for word, behind "More about this". */
-export function More({ children }: { children: ReactNode }) {
-  return (
-    <details className="sp-more">
-      <summary>{MORE}</summary>
-      <span className="sp-more-text">{children}</span>
-    </details>
-  );
+/**
+ * A press on a switch's or a select's row, away from any control or link in it, works its one control: a switch
+ * flips, a select opens. A row with more than one such control leaves the press alone.
+ */
+function pressRow(e: ReactMouseEvent<HTMLDivElement>) {
+  if ((e.target as Element).closest("input, select, textarea, button, a, summary, label, details")) return;
+  const row = e.currentTarget;
+  const controls = row.querySelectorAll<HTMLInputElement | HTMLSelectElement>(".sp-control input[role=switch]:not(:disabled), .sp-control select:not(:disabled)");
+  if (controls.length !== 1) return;
+  const c = controls[0]!;
+  if (c instanceof HTMLSelectElement) {
+    c.focus();
+    try {
+      c.showPicker?.();
+    } catch {
+      // Some browsers open a select only on a direct tap; the focus is enough there.
+    }
+  } else c.click();
 }
+
 
 /** "Saved" by the row's label for 2 s, drawn out of the flow so nothing on the page moves; Saving… and Retry the same. */
 export function Mark({ s, retry }: { s: FieldStatus; retry: () => void }) {
@@ -219,12 +228,19 @@ export function Value({ children }: { children?: ReactNode | undefined }) {
 
 /** A line of its own in a group: a status, an empty state, a problem. */
 export function Note({ children, tone, live, sid, site }: { children: ReactNode; tone?: "problem" | "warn" | "ok" | undefined; live?: boolean | undefined; sid?: string | undefined; site?: boolean | undefined }) {
+  const max = useHelpMax();
+  // SA-5: a plain note is two lines at most too; a problem or a live line says everything where it stands.
+  const [shown, spill] = typeof children === "string" && !live && tone !== "problem" ? splitHelp(children, max) : [children, null];
   return (
-    <p className={`sp-note${tone ? ` ${tone}` : ""}`} role={live ? "status" : tone === "problem" ? "alert" : undefined} data-setting={sid} data-site-line={site || undefined}>
-      {children}
-    </p>
+    <>
+      <p className={`sp-note${tone ? ` ${tone}` : ""}`} role={live ? "status" : tone === "problem" ? "alert" : undefined} data-setting={sid} data-site-line={site || undefined}>
+        {shown}
+      </p>
+      {spill && <More>{spill}</More>}
+    </>
   );
 }
+
 
 /**
  * A closed fold that says how many it holds. SA-3: a fold of settings says "Fine tuning · 14 more", and "· 2 changed"

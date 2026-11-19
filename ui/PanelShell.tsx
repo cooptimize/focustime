@@ -38,6 +38,8 @@ export type PanelShellProps = {
   backLabel?: string;
   title: ReactNode;
   description?: ReactNode;
+  /** SA-5: first on the phone's list page, above the search (Settings' Most used); hidden while searching. */
+  railLead?: ReactNode;
   /** Above the rail's items (search). */
   railTop?: ReactNode;
   /** In place of the rail's items while it has something (search results). */
@@ -143,7 +145,14 @@ export function PanelShell(p: PanelShellProps) {
     return (
       <main ref={root} className={`panel-shell phone ${p.className ?? ""}`} aria-label={p.name} data-overlay="page">
         {header}
-        {p.current === null ? rail : <div className="ps-body" ref={body}>{p.children}</div>}
+        {p.current === null ? (
+          <>
+            {!p.railOverride && p.railLead}
+            {rail}
+          </>
+        ) : (
+          <div className="ps-body" ref={body}>{p.children}</div>
+        )}
       </main>
     );
   return (

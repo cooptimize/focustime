@@ -370,7 +370,7 @@ Every Settings section (the person's own and a client's own page; Admin keeps it
 | Row | One setting: its label (`--fs-3`, 500) and help (`--fs-2`, muted) on the left, its control on the right. Under 560 px of row (a narrow window, the phone) the control sits under the label. A thin line between rows. |
 | More about this | A fold under the help with the rest of it, word for word. The app's one summary chevron. |
 | Fold | A closed fold that says how many it holds ("Not followed · 2"). |
-| Table | One table style: muted 600 headings, rows split by a thin line, the first column marked in the risk color for a failed row; scrolls sideways inside its own box on a phone. |
+| Table | One table style: muted 600 headings, rows split by a thin line, the first column marked in the risk color for a failed row; on a phone each row becomes a block of lines, one per column, and nothing scrolls sideways (SA-4, SA-5). |
 | Button row | Buttons side by side with the last one's result said on the same row. |
 | Saved mark | "Saved" beside the label for 2 s, drawn out of the flow so nothing on the page moves; Saving… and Couldn't save. Retry the same; a refusal is said under the row. |
 | Team line | "Set by your FocusTime admin" for a team value; "Team default: <value>." with Reset for a team default the person changed. |
@@ -379,7 +379,7 @@ Every Settings section (the person's own and a client's own page; Admin keeps it
 
 **Help.** What it does first, about one line at 1440 and at most two on a phone; a longer help ends at a sentence or clause and the rest is behind More about this, word for word (`splitHelp`).
 
-**On the phone** every control is at least 44 px tall (a switch's label is its tap box), and the Undo sits above the bottom bar inside the 16 px gutters.
+**On the phone** every control is at least 44 px tall at every Text size (44 px, not a size that scales down with the text), with at least 8 px between two separate controls; the sides of one choice and the rows of one list may touch, their lines part them (SA-5). A switch's or a select's whole row takes the press; a choice's sides become full-width rows, except two-to-four short sides inside a list entry (a standing block's day and half), which stay one row. Help keeps to two lines at the Text size in use: the line gets shorter as the text grows (`useHelpMax`), and one with no clause to break at ends at a word. A table becomes rows, a wide row stacks, a list adds and removes with full-width buttons. Nothing is read-only on the phone. The Undo sits above the bottom bar inside the 16 px gutters.
 
 ## 13. Calls made scannable (MC-5, Nov 18)
 

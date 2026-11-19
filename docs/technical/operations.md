@@ -216,19 +216,25 @@ AppExceptions | where TimeGenerated > ago(2d) | summarize count() by where=tostr
 
 ## The VM-6 queries
 
-How VM-6 read production (read only, `ft-prod-log`; `docs/ux/vm6/what-happened.md`). The console log names the revision, which App Insights doesn't.
+How VM-6 read production (read only, `ft-prod-log`; `docs/ux/vm6/what-happened.md`). The console log names the revision, which App Insights doesn't. VM-7: every refused Azure answer's line also carries three closed words: `challenge` (a Bearer WWW-Authenticate's error word: invalid_token, insufficient_claims, insufficient_scope, other, none), `cause` (x-ms-failure-cause: gateway, service, other, none) and `body` (json_with_code, json_no_code, not_json, empty). A yes carries none of them. How to read them: `cause=gateway` is Azure Resource Manager itself refusing; `cause=service` the service behind it (Compute, Resource Graph, DevTest Labs); a `challenge` other than none is Azure asking about the token; `body=empty` or `not_json` with `kind=none` is a no that came without Azure's usual error.
 
 ```kusto
 // Every Azure call by call and day: yes and no
 AppDependencies | where TimeGenerated > ago(3d) | where Name startswith 'azure'
 | summarize yes=countif(Success), no=countif(not(Success)) by Name, bin(TimeGenerated, 1d)
-// Each no: status, Azure's code word, first and last, median time
+// Each no: status, Azure's code word, VM-7's three words, first and last, median time
 AppDependencies | where TimeGenerated > ago(3d) | where Name startswith 'azure' and Success == false
-| summarize n=count(), first_=min(TimeGenerated), last_=max(TimeGenerated), p50=percentile(DurationMs, 50) by Name, ResultCode, code=tostring(Properties['kind'])
+| summarize n=count(), first_=min(TimeGenerated), last_=max(TimeGenerated), p50=percentile(DurationMs, 50) by Name, ResultCode, code=tostring(Properties['kind']), challenge=tostring(Properties['challenge']), cause=tostring(Properties['cause']), body=tostring(Properties['body'])
 // State reads by revision (the console log), status and code
 ContainerAppConsoleLogs_CL | where TimeGenerated > ago(3d) | where Log_s has 'azure instanceView'
 | extend st=extract('status=([0-9]+)', 1, Log_s), k=extract('kind=([A-Za-z]+)', 1, Log_s)
 | summarize n=count(), first_=min(TimeGenerated), last_=max(TimeGenerated) by RevisionName_s, st, k
+// VM-7: every refused Azure answer by revision (the console log), with its code word and three closed words
+ContainerAppConsoleLogs_CL | where TimeGenerated > ago(3d) | where Log_s has ' azure ' and Log_s has 'challenge='
+| extend call=extract(' azure ([A-Za-z_]+)', 1, Log_s), st=extract('status=([0-9]+)', 1, Log_s), k=extract('kind=([A-Za-z]+)', 1, Log_s),
+  challenge=extract('challenge=([a-z_]+)', 1, Log_s), cause=extract('cause=([a-z]+)', 1, Log_s), body=extract('body=([a-z_]+)', 1, Log_s)
+| summarize n=count(), first_=min(TimeGenerated), last_=max(TimeGenerated) by RevisionName_s, call, st, k, challenge, cause, body
+| order by first_ asc
 // Reads and token renewals side by side around a burst
 AppDependencies | where TimeGenerated between (datetime(2026-11-18T15:25Z) .. datetime(2026-11-18T15:40Z))
 | where Name startswith 'azure' or Name has 'token' | project TimeGenerated, Name, ResultCode, DurationMs, OperationName

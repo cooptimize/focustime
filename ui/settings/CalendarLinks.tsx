@@ -1,6 +1,7 @@
 // CAL-1: Settings › Connections › Calendars added by link. Paste any calendar's ICS link, check it ("Found
 // 12 upcoming events"), name it, pick a color, Busy only or Show titles, Personal or Work, then Save. The link is
 // sent once to be checked and kept; it never comes back (only its host, "calendar.google.com/…"). Read only.
+import { HelpLine } from "./parts.tsx";
 import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
 import type { CalendarLinkView } from "../../actions/calendar-link-types.ts";
 import { call } from "../api.ts";
@@ -46,9 +47,7 @@ export function CalendarLinks({ timeZone, onChanged }: { timeZone: string; onCha
   };
   return (
     <>
-      <p className="muted set-intro">
-        Any calendar with a subscription link (an <em>.ics</em> or <em>webcal://</em> address): Google, Outlook, iCloud, school and activity apps. Read only, refreshed about every 15 minutes while you use FocusTime. Events count against your free time like Outlook's and Google's.
-      </p>
+      <HelpLine className="muted set-intro" text="Any calendar with a subscription link (an .ics or webcal:// address): Google, Outlook, iCloud, school and activity apps. Read only, refreshed about every 15 minutes while you use FocusTime. Events count against your free time like Outlook's and Google's." />
       {problem && <p className="field-problem" role="status">{problem}</p>}
       {links && links.length > 0 && (
         <ul className="set-list cal-links">

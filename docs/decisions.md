@@ -994,7 +994,6 @@ D871 to D876 (numbered after merge, in TD-1). Counts-only diagnostics for QF-1's
 | D875 | Done | DX-1: This is work now marks its place (`reason` "is_work", `IS_WORK_PLACE`) so Diagnostics counts it apart from Move and Split. Places made by This is work before DX-1 count as "moved or split" (they can't be told apart). Nothing else reads a work place's reason |
 | D876 | Done | DX-1: Copy as text copies counts only: no conversation titles, chat names or client names (chats are numbered with their kind). The panel itself shows my own conversations' titles and my chats' names. On the phone the rest of Settings › Data stays read only (P1); Diagnostics only reads, so it runs there too |
 
-
 ## PK-1
 
 D877 to D887 (numbered after merge, in TD-1). Checking off a to-do offers the DevOps update (decisions by the product owner, Nov 6).
@@ -1385,7 +1384,6 @@ Numbered D1103 to D1116 in HK-7. Built on the Gantt layout above (a second sessi
 | D1115 | Done | AH-6: Gaps reads Readiness (labels only): the mode switch reads Grid · Gantt · Readiness · Backlog, the header "Ahead · N not ready yet", and the command menu finds it by readiness, gaps, get ready and fix next. The code name `fix`, `#/ahead/fix` and `#/ahead/gaps`, the `view.gaps` command id, the tour id and the stored values are unchanged. Admin › AI's "Gaps looks at the top N" reads "Readiness looks at the top N". |
 | D1116 | Done | AH-6: Stale's helpers moved to `plan/stale.ts` (re-exported from `plan/backlog.ts`) so the model can filter by Stale without importing Backlog. |
 
-
 ## AH-7: Readiness you can finish (Nov 7)
 
 Numbered D1117 to D1126 in HK-7.
@@ -1680,7 +1678,6 @@ Unnumbered until the next numbering pass. Tanner, Nov 8: "Let's start by just fe
 - KB-1: Ask. A new `standards` topic in the intent round and one task, `assistant.standards`, with no client (no client data goes). No matching article is "Not in the standards" without an AI call. The answer must name an article that was sent and quote it word for word (markup and spacing aside), checked in code, or it is also "Not in the standards". A failed AI is said plainly, never guessed. With no sync yet, it says the standards haven't been read.
 - KB-1: Export. `draft_stories.ai_standards` is a new user column (schema 36); `standards_articles` and `standards_sync` are app tables, never exported.
 - KB-1: logs carry outcomes and counts only (`sync` `updated`, `unchanged`, `failed`).
-
 
 ## GD-3: re-check held messages under GD-2, show why each is held (Nov 8)
 
@@ -1986,7 +1983,6 @@ Unnumbered until merge.
 | - | Done | RF-1 review: the assistant's glossary, `docs/demo.md` and `docs/architecture.md` name the tabs in the new order. |
 | - | Done | RF-1 review: someone who stepped through setup before RF-1 has no mark, but Calendars recorded done or skipped means they reached the end, so they count as through too (no backfill write). Esc skips a step, so Esc through every screen is stepping through; closing with × is not. |
 
-
 ## MC-1c: Meeting registration fixes (Nov 11)
 
 Unnumbered until merge.
@@ -2059,7 +2055,6 @@ Unnumbered until merge.
 | - | Done | DV-2 review: a tab left visible with nobody using it (no input for the Rule's idle minutes, HK-3) asks for versions every 5 minutes, not 30 seconds, as the old quiet refresh did, so it never keeps the database awake. |
 | - | Done | DV-2 review: Refresh says only what it checked. Within 30 seconds of another check it says "DevOps was checked 20s ago", never an earlier count as new; a client DevOps slowed keeps its slower pace (no forced checks while slowed) and says so; a Retry-After hold says "DevOps asked FocusTime to wait". |
 | - | Done | DV-2 review: Ahead's quiet reread that overlaps my own stage, unstage or skip keeps my changes and skips (a counter, `local`); "Changed in DevOps just now" goes once the item isn't staged any more. |
-
 
 ## WD-2: One panel, one Day (Nov 11)
 
@@ -3817,6 +3812,28 @@ Unnumbered until merge.
 | - | Done | Left as the brief decided, and named for the product owner: the client is a suggestion the presser can change in the setup, so a chat's call can be kept under another client, whose Allow AI then applies (open questions); a reviewer keeps seeing the call they pressed Review on after leaving its chat, as MC-2's reviewer does. |
 | - | Open | The readings taken where the brief left room are in `docs/open-questions.md` under MC-2c. |
 
+## SA-5: Settings search that finds things, and all of Settings on the phone (Nov 18)
+
+Unnumbered until merge.
+
+| # | Status | Decision |
+|---|---|---|
+| - | Done | Scope: search, the phone and names. No setting moves, is added or removed; no stored key, default, action or behavior changes; no migration and no new dependency. The one new prop (today's time off, for Most used) is read from the week already loaded. |
+| - | Done | One search (`ui/settings/search.ts`) for Settings' box, the command menu's Settings results and Search Admin. It reads the registry's labels, old labels and `keywords` and Admin's list (`settings-list.ts`, its `words`); there is no second list. |
+| - | Done | Ranking, in tiers: a section or part named by the words; a whole word in a label; a whole word among old labels and keywords; the start of a word (3 letters or more). Within a tier, the registry's order. "ai" finds AI for FocusTime and AI and assistant first. |
+| - | Done | A result says where it is ("Connections › DevOps write access") and opens there: scrolled to, marked a moment, with its fold open. A setting on a client's page asks which client when more than one fits. The command menu lists the same results in the same order and opens them the same way. |
+| - | Done | Admin's results show only to admins, marked Admin, under the person's own, in the box, the menu and the nearest suggestions; for anyone else they are never built (`admin === true` only, never while the check loads). |
+| - | Done | Things that aren't settings (password, language, shortcuts, Gantt, code and others) answer from `NOT_SETTINGS` in the registry: where it is, or that FocusTime doesn't have it. |
+| - | Done | Nothing found: "Nothing in Settings called "<words>"", up to three nearest settings, then Look in the Guide. What is typed stays in the browser: no request, no storage (`e2e/settings/sa5-search.test.ts`). |
+| - | Done | The 100 searches (`ui/settings/search-cases.ts`): 100 land first, from main's 60. |
+| - | Done | The phone: Settings opens on Most used (Notify this device, Let FocusTime message me in Teams, Theme, Text size, today's hours), then the search, then every section. Each of the five saves what its own page saves: the same rows for the first two, Display's setters, and Week's one-day change (`hours.set_day`, `hours.clear_day`) for today, off on a PTO day as in Week's day menu. |
+| - | Done | No section is read-only on the phone (Working hours' read-only bar is gone). A table becomes rows with each cell under its column's name (shared with Admin, `row-labels.ts`); a wide row stacks; a list adds and removes with full-width buttons; a secret field is empty after save, as on a computer. |
+| - | Done | Every control is at least 44 px at every Text size, with 8 px between two; a switch's or select's whole row takes the press. Help keeps to two lines at the Text size in use (`useHelpMax`), the rest behind More about this. Back goes setting, section, list, and the address follows. The desktop is unchanged. |
+| - | Done | One name both sides: a row that shows a team value names it as Admin does (`team` in the registry, 13 pairs); the old name becomes an old label so search still finds it. "My acknowledgements" became "My thanks and short replies". |
+| - | Done | The overhaul measured against SA-0 in `docs/ux/sa5/after.md`, with what is still open. |
+| - | Done | From the review: Settings' tables drew sideways on the phone (now rows); Most used's today's hours offered Save on a PTO day (now says why); a section opened from the phone's list kept the list's scroll (now opens at its top); Admin's results now sit under all of the person's own, except an Admin part named by the words; "not signed in", "who opened" and "who changed" find their Admin tabs; the box clears when the address moves to another section; from the shake, a setting opened by search stays in view for two seconds while parts above it load their own data (My VM), unless the person moves first. |
+| - | Open | The readings taken where the brief left room are in `docs/open-questions.md` under SA-5. |
+
 ## UC-3: Cleanup round (Nov 18)
 
 Unnumbered until merge.
@@ -3851,6 +3868,21 @@ Unnumbered until merge.
 | - | Done | Unchanged: the Azure client's allowed calls (`ALLOWED`, its test), the Azure hard rule, VM-4's retry and 2 minutes, VM-5's rules, the background policy and its test. No migration, dependency or new background work. `demo.vm_fail` takes the new failures for verification runs only. |
 | - | Open | What on Azure's side refused one copy, and whether the product owner's access is switched on for a time, are in `docs/open-questions.md` under VM-6. |
 
+## VM-7: A refused Azure answer says enough to explain the next one (Nov 18)
+
+Unnumbered until merge.
+
+| # | Status | Decision |
+|---|---|---|
+| - | Done | Admin › Health gets no Azure line. Health keeps nothing it could count today's Azure answers from: its rows are the status registry's (DevOps polling, client accounts, telemetry batches sent and dropped, the background passes) and the scheduler's runs, none of which records an Azure answer. Counting them would mean keeping something new, which this step doesn't do. The answers are counted from the logs instead, with the queries in `docs/technical/operations.md`. |
+| - | Done | When Azure answers no to any allowed call, the line already logged (`sources/azure/client.ts`, `send`) gains three facts, each one word from a fixed list (`log/logger.ts`): the challenge (from a Bearer WWW-Authenticate's error word only: invalid_token, insufficient_claims, insufficient_scope, other, none), the failure cause (from x-ms-failure-cause: gateway, service, other, none) and the body (json_with_code, json_no_code, not_json, empty). |
+| - | Done | Never a header's value beyond those words, never any of the body, never an id, an address or a name. A word not on a list is "other"; the logger itself maps any value off a list to "other" (challenge, cause) or leaves it out (body), so a caller can't widen them. |
+| - | Done | An answer of yes logs none of them. |
+| - | Done | The closed set is one list (`LOG_FIELDS`), and `log/logger.test.ts` names the three fields and still refuses any other, on the console line and in Application Insights. |
+| - | Done | The three facts join the VM-6 queries in `docs/technical/operations.md`, with one query listing refused answers by revision (the console log's `RevisionName_s`, which already names it; no new field) and these facts. |
+| - | Done | The body is read once as text and its shape and Azure's code taken from it; the code is what `res.json()` gave before, so the kind, the chip's reason and what each failure returns are unchanged. |
+| - | Done | Nothing else changes: the allowed calls (`ALLOWED`), what a refusal does (`failure`), the chip's words, the automatic start. No migration, dependency or new background work. |
+
 ## MC-6: Calls polish after the redesign, and a chat call keeps its chat's client (Nov 18)
 
 Unnumbered until merge.
@@ -3879,4 +3911,3 @@ Unnumbered until merge.
 | - | Done | 20. Dismiss: every kept call with no transcript (its one button Add transcript or Use Pocket recording) has a way out in one press: a quiet "Dismiss" on its Needs you row (on hover and focus, always on touch, 44 px on the phone) and in the call's menu. A call I added by hand is removed (`meeting.call_remove`; it exists nowhere else), for its adder only; any other kept call closes as No transcript (`meeting.call_close_none`) into Closed, and a transcript later opens it again (the pass sets it ready). It leaves Needs you at once, the tab's count drops, and one Undo message says which: "Removed: <name>" (`meeting.call_restore`) or "Closed with no transcript: <name>" (`meeting.call_reopen`, back to waiting or needs upload, only from a close of mine). The server refuses Remove for a call not added by hand and for anyone but its adder, and refuses both for a call with a transcript ("Skip all and close closes it"). A registered client call keeps its own "No transcript this week". Nothing is read, sent or written anywhere but the call's own row. This replaces any earlier "Remove this call" line. |
 | - | Done | No migration, dependency or setting. The four Dismiss actions are named in the registry; they write only `meeting_series.removed_at` (a hand-added call) or the occurrence's state, as `meeting.no_transcript` does. Who sees a call, what a transcript read, a Pocket read or a DevOps write does, keys and addresses are unchanged. |
 | - | Open | The readings taken are in `docs/open-questions.md` under MC-6. |
-

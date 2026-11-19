@@ -138,7 +138,7 @@ describe.skipIf(!CHROMIUM)("Settings shell (ST-1)", () => {
     await box.press("ArrowDown");
     expect(await page.evaluate(() => document.activeElement?.closest("#settings-search-results") !== null)).toBe(true);
     await box.fill("app secrets");
-    await results.getByText(/^Nothing called/).waitFor();
+    await results.getByText(/^Nothing in Settings called/).waitFor();
     // The first Esc clears the box, the next closes Settings.
     await box.press("Escape");
     expect(await box.inputValue()).toBe("");

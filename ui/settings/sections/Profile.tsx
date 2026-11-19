@@ -50,8 +50,9 @@ export function ProfileSection(p: BodyProps) {
           </Row>
         )}
       </Group>
+      {p.demo && <Note>{`Your settings save as you change them, to ${d.configPath}.`}</Note>}
       <Note>
-        {p.demo ? `Your settings save as you change them, to ${d.configPath}. ` : null}Your time zone is under{" "}
+        Your time zone is under{" "}
         <GoLink section="hours" setting="time-zone" go={p.go}>
           Working hours
         </GoLink>

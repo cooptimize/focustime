@@ -38,6 +38,12 @@ export const PART_TABS = {
     ["code", "Code views"],
   ],
 } as const;
+/** SA-5: the words people use for a tab, beside it (Search Admin and, for admins, Settings' search read them). */
+export const TAB_WORDS: Readonly<Record<string, readonly string[]>> = {
+  "people/setup": ["not signed in", "signed in", "invite", "who hasn't signed in"],
+  "audit/code": ["who opened code", "who opened", "code opened"],
+  "audit/changes": ["who changed", "settings history"],
+};
 /** A part's tab's name (null: no such tab). */
 export function tabName(part: AdminPart, tab: string): string | null {
   const list: readonly (readonly [string, string])[] = part === "clients" ? CLIENT_TABS : isTabbed(part) ? PART_TABS[part] : [];
