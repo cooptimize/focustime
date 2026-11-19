@@ -41,7 +41,13 @@ function FeedbackRow({ go }: { go: Go }) {
   const load = (fresh: boolean) => call<FeedbackStatus>("feedback.status", fresh ? { fresh: true } : {}).then((r) => (setSt(r), setError(null)), (e: unknown) => setError(e instanceof Error ? e.message : "Couldn't check"));
   useEffect(() => void load(false), []);
   return (
-    <Row id="feedback" wide status help={error ?? (st ? st.line : "Checking…")} below={st ? <Result>{`${st.destination}. ${st.sentToday} of ${st.limit} sent today.`}</Result> : undefined}>
+    <Row id="feedback" wide status help={error ?? (st ? st.line : "Checking…")} below={
+        st ? (
+          <>
+            <Result>{`${st.destination}.`}</Result> <Result>{`${st.sentToday} of ${st.limit} sent today.`}</Result>
+          </>
+        ) : undefined
+      }>
       <Buttons>
         {st?.setup.state === "no_pat" && (
           <GoLink kind="button" section="connections" setting="devops-write" go={go}>

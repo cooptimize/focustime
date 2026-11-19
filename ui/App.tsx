@@ -88,6 +88,7 @@ import { BreakDownHost, CoopBriefHost } from "./BreakDownPanel.tsx";
 import { CarryProvider } from "./Carry.tsx";
 import type { SetupStep, SetupView } from "../plan/setup.ts";
 import { useAdmin } from "./settings/use-admin.ts";
+import { askEnv } from "./appenv.ts";
 import { clientColor, SampleSources, weekLabel } from "./labels.ts";
 import { useLayout, usePhone } from "./viewport.ts";
 import { InstallHowTo, PhoneReadOnly } from "./Phone.tsx";
@@ -95,7 +96,7 @@ import { setDesktopVersion, useDesktopVersion } from "./desktop-version.ts";
 import { PhoneVersionButton } from "./PhoneVersion.tsx";
 import { AheadNotice, sourceHealth, StatusSheet } from "./PhoneShell.tsx";
 import { TodoSheet, TodoSheetCtx } from "./TodoSheet.tsx";
-import { commandList, withoutAhead, type MenuEnv, type View } from "./menu.ts";
+import { commandList, deployClients, withoutAhead, type MenuEnv, type View } from "./menu.ts";
 import { CommandMenu, MenuHost } from "./Menus.tsx";
 import { WeekDndProvider } from "./WeekStories.tsx";
 import { WeekItems } from "./ItemLookup.tsx";
@@ -144,6 +145,12 @@ function storedLoc(): Loc | null {
 }
 
 /** RS-1: each tab's icon says what it is for: one day, the week in columns, the backlog's indented list, bars, a tray. */
+/** SA-5: a PTO day's reason, in the words Week's day menu uses for it (Most used's Today's hours is off then). */
+const offOn = (days: readonly { date: string; pto?: { titles: readonly string[] } | null }[], date: string) => {
+  const d = days.find((x) => x.date === date);
+  return d?.pto ? `PTO day (${d.pto.titles.join(", ")})` : undefined;
+};
+
 const TAB_ICONS: Record<Tab, IconName> = { today: "day", week: "week", ahead: "backlog", status: "status", inbox: "inbox", calls: "calls", code: "code" };
 const TAB_TITLES: Record<Tab, string> = {
   today: "Day: what's next, what's urgent and the day's blocks",
@@ -254,6 +261,13 @@ export function App() {
   // ADM-1: whether the signed-in person is a FocusTime admin (Admin in ⋯ and the Settings sidebar).
   const isAdmin = useAdmin();
   const [cmdOpen, setCmdOpen] = useState(false);
+  // SA-5: Settings' search in the command menu, loaded the first time the menu opens (it stays out of the first
+  // download), with whether this is the developer loop (asked then too: production's start asks /version for nothing).
+  const [settingsSearch, setSettingsSearch] = useState<{ mod: typeof import("./settings/menu-results.ts"); dev: boolean } | null>(null);
+  useEffect(() => {
+    if (cmdOpen && !settingsSearch)
+      void Promise.all([import("./settings/menu-results.ts"), askEnv()]).then(([mod, env]) => setSettingsSearch({ mod, dev: env === "local" }), () => {});
+  }, [cmdOpen, settingsSearch]);
   const [keysOpen, setKeysOpen] = useState(false);
   /**
    * Step 16.2: where the window is: a tab and its mode (Today · Week · Roadmap · Inbox), or an overlay (the focus
@@ -2261,6 +2275,7 @@ export function App() {
           weekDays={weekDays}
           setWeekDays={(v) => void saveWeekDays(v)}
           catchUpName={catchUpWord(data.week.days)}
+          todayOff={offOn(data.week.days, Temporal.Now.plainDateISO(userZone(data.week)).toString())}
           everyWeekendDay={showWeekend}
           setEveryWeekendDay={saveShowWeekend}
           textSize={textSize}
@@ -2729,7 +2744,25 @@ export function App() {
           }}
         />
       )}
-      {cmdOpen && <CommandMenu commands={phone ? withoutAhead(commandList(env)) : commandList(env)} onClose={() => setCmdOpen(false)} />}
+      {cmdOpen && (
+        <CommandMenu
+          commands={phone ? withoutAhead(commandList(env)) : commandList(env)}
+          onClose={() => setCmdOpen(false)}
+          // SA-5: Settings' own search, for what was typed, under the commands.
+          extra={(q) =>
+            !settingsSearch
+              ? []
+              : settingsSearch.mod.settingsResults(q, { demo: !!data.demo, dev: settingsSearch.dev, phone, admin: isAdmin === true }, {
+              openSettings: env.openSettings,
+              clients: deployClients(env).map((c) => ({ key: c.value, name: c.label })),
+              go: (href) => {
+                const to = parseHash(href);
+                if (to) go(to);
+              },
+            })
+          }
+        />
+      )}
       {noticesOpen && <NoticesPanel items={noticesOpen} onClose={() => setNoticesOpen(null)} onOpen={(r) => (setNoticesOpen(null), openRouteRef.current(r))} />}
       {undoToast && (
         <div className="undo-toast app-undo" role="status" aria-live="polite">

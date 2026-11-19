@@ -32,6 +32,20 @@ const teamsPayload = (t: TeamsRhythm) => {
   return rest;
 };
 
+/** SA-5: what Reminders and notices loads and saves, the same for its own page and the phone's Most used. */
+export const notifyInitial = (n: FormProps["data"]["notify"]) => ({ kinds: { ...n.kinds } as Record<NotifyKind, boolean>, quiet: n.quiet as QuietMode, quietPto: n.quietPto, pushDetails: n.pushDetails, asksThroughFocus: n.asksThroughFocus ?? false, teamsMessages: n.teamsMessages ?? false, fromTestSite: n.fromTestSite ?? false, teams: { ...DEFAULT_TEAMS_RHYTHM, ...(n.teams ?? {}) } as TeamsRhythm, status: { ...DEFAULT_STATUS_TIMES, ...(n.status ?? {}) } as StatusTimes });
+export const notifyPayload = (v: ReturnType<typeof notifyInitial>) => ({ ...v, teams: teamsPayload(v.teams) });
+
+/** SA-5: Let FocusTime message me in Teams, as its own page saves it (the phone's Most used). */
+export function TeamsMessagesRow(p: FormProps) {
+  const a = useAutoSave({ section: "notify", initial: notifyInitial(p.data.notify), payload: notifyPayload, onSaved: p.onSavedData, label: () => labelOf("teams-messages") });
+  return (
+    <Row id="teams-messages" help="Off: FocusTime only answers when you message it in Teams." more="On: it may send the reminders and notices you turn on for Teams, only in your own chat with it, never in quiet hours, on days off or weekends, and held while you focus." mark={markOf(a, "teamsMessages")}>
+      <Switch checked={a.v.teamsMessages} onChange={(on) => a.change("teamsMessages", on)} />
+    </Row>
+  );
+}
+
 export function NotificationsSection(p: FormProps) {
   const n = p.data.notify;
   // The row a kinds or Teams change came from: its mark and its Undo name.
@@ -40,8 +54,8 @@ export function NotificationsSection(p: FormProps) {
   const [, rerender] = useState(0);
   const a = useAutoSave({
     section: "notify",
-    initial: { kinds: { ...n.kinds } as Record<NotifyKind, boolean>, quiet: n.quiet as QuietMode, quietPto: n.quietPto, pushDetails: n.pushDetails, asksThroughFocus: n.asksThroughFocus ?? false, teamsMessages: n.teamsMessages ?? false, fromTestSite: n.fromTestSite ?? false, teams: { ...DEFAULT_TEAMS_RHYTHM, ...(n.teams ?? {}) } as TeamsRhythm, status: { ...DEFAULT_STATUS_TIMES, ...(n.status ?? {}) } as StatusTimes },
-    payload: (v) => ({ ...v, teams: teamsPayload(v.teams) }),
+    initial: notifyInitial(n),
+    payload: notifyPayload,
     onSaved: p.onSavedData,
     label: (k) => (k === "kinds" ? labelOf(kindId(lastKind.current)) : k === "teams" ? labelOf(`teams-kind-${lastTeams.current}`) : labelOf(IDS[k as string] ?? "kinds")),
   });
@@ -302,7 +316,7 @@ function TeamsStatusLine() {
  * P1: push, per device. "Notify this device" asks the browser's permission only when tapped; the list shows every
  * device with push on, with Remove. In-app notifications (More › Notifications) work without any of this.
  */
-function PushDevices() {
+export function PushDevices() {
   const [st, setSt] = useState<PushStatus | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

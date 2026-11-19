@@ -1,6 +1,7 @@
 // DP-2: what a deployment moves. The checkboxes (Quick capture, and Deployment details on any to-do), the summary chip
 // on a row, and the data platform and list editor for admins and a client's leads. The lists come from the server
 // (`deploy.items`), never from here.
+import { HelpLine } from "./settings/help.tsx";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { call } from "./api.ts";
 import { placePopover } from "./popover-place.ts";
@@ -223,11 +224,11 @@ export function DeploySettings({ clientKey, clientName, teamNote, frame = (x) =>
             ))}
           </span>
         </span>
-        <span className="set-hint">Which list a deployment for this client offers. Not set shows both, with nothing ticked.</span>
+        <HelpLine as="span" className="set-hint" text="Which list a deployment for this client offers. Not set shows both, with nothing ticked." />
       </div>
-      <div className="set-field">
+      <div className="set-field" data-setting="client-deploy">
         <span className="set-label">Deployment items</span>
-        <span className="set-hint">Add this client's own, hide ones it doesn't use, reorder, and choose what's ticked by default. Only new deployments follow.</span>
+        <HelpLine as="span" className="set-hint" text="Add this client's own, hide ones it doesn't use, reorder, and choose what's ticked by default. Only new deployments follow." />
       </div>
       {lists.map((l) => (
         <div key={l.platform} className="dep-list" role="group" aria-label={`${clientName}: ${l.label} items`}>
