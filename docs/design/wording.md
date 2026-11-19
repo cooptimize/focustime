@@ -673,6 +673,23 @@ From `plan/call-words.ts` (`LIST_TEXT`, `PAGE_TEXT`, `ADD_TEXT`). What went: the
 - Add a call: **"Add a call"**, **"Only you see it"**, **"Name"**, **"Day"**, **"Starts"**, **"Length"**, **"About"**; a recording **"Call with the carrier"**, **"Tue, Nov 3 · 4:30 PM · 25 min"**, **"Goes with Harbor sprint planning"** with **"Review that call"**; **"Add and review"**, **"Add"**, **"Adding…"**.
 - A call started in a chat (MC-2c, merged after): its row's time **"Wed 12:00 PM to 12:35 PM"**, the mark **"Teams"** labelled **"Transcript in Teams · From a chat"**; its page's line **"From a chat"** (hover **"Teams gave this transcript without speaker names."** when so) and **"The chat sees it"** (the full sentence on hover).
 
+## MC-6 words (Nov 18)
+
+From `plan/call-words.ts` (`CHAT_OTHER_CLIENT`, `DISMISS_TEXT`, `CALL_ROW`, `LIST_TEXT`, `CLOSE_TEXT`, `TRANSCRIPT_TEXT`, `PAGE_TEXT`, `topNoParent`) and `plan/fit.ts`'s `hm`.
+
+- A chat call's client: its picker offers its chat's client and **"Cooptimize"** (Internal); another is refused with **"A call started in a client's chat is about that client, or Internal. Choose one of those."**
+- A group's head is its name only, the same as its chip's: **"New in DevOps"**, **"Promises"**, **"Comments"** (was **"Comments on stories"**).
+- The Undo message: **"Kept: <title>"**, **"Kept: 2 promises"**, **"Skipped: <title>"**, **"Skipped: 3 proposals"** (was the server's **"Added to Alex's Promises"** and **"3 skipped"**).
+- A line's time, on a quote and in the Transcript: **"1:35"** (time into the call), on hover **"1:01 PM on the clock"** (the Transcript showed **"1:01 PM"** with **"1:35 into the call"** on hover).
+- Lengths: **"25m"**, **"1h"**, **"2h 15m"** (was **"25 min"**, **"1 h"**, **"2 h 15 min"**): a recording's line **"Tue, Nov 3 · 4:30 PM · 25m"**, Add a call's Length, **"This recording is 2h 15m; the call was 1h. Which part comes in?"**
+- My own promise: **"in your Promises"**, kept **"Added to your Promises"**; another person's stays **"in Lee's Promises"**.
+- Hide: **"1 call hidden"**, **"3 calls hidden"** (was **"meeting"**); **"2 you hid aren't in the last 14 days."** (was **"2 hidden meetings have no call in the last 14 days."**).
+- A chat call's mark: **"Teams"** labelled **"Transcript in the chat"** (**"Transcript in the chat · From a chat"** on a row nobody kept yet; was **"Transcript in Teams"**).
+- After Teams refused a chat call's transcript, its row: **"Teams refused it"** beside **"Add transcript"**.
+- The gap form's No parent hover: **"An epic is at the top: no parent"**, **"A uat task is at the top: no parent"** ("a" or "an" from the name as written); a comment above story level: **"This comment is on an Epic, above story level. …"**
+- Add a call: a recording with its own row **"In your list"**; the chosen recording's time is said only on its line (the line beside About went).
+- Dismiss: **"Dismiss"** (label **"Dismiss: <call>"**; hover **"Remove this call: you added it, and it's nowhere else"** or **"Close it with no transcript. Adding one later opens it again"**); the call's menu **"Dismiss"**; the Undo message **"Removed: <name>"** or **"Closed with no transcript: <name>"**. Refusals: **"This call has a transcript. Skip all and close closes it."**, **"Only a call you added by hand can be removed, and only by you."**, **"Dismiss is for a call in Calls. A registered client call says No transcript this week from its menu."**, **"This call isn't closed with no transcript now, so there's nothing to undo."**
+
 ## MC-2c words (Nov 18)
 
 From `plan/call-words.ts` (`CALL_LIST`, `FETCH_WORDS`, `CHAT_WAY_ON`, `CHAT_NO_SPEAKERS`, `CALLS_TEXT`) and `plan/permissions.ts`.
