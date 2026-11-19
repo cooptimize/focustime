@@ -131,4 +131,19 @@ describe.skipIf(!CHROMIUM)("Code on a branch you choose (RB-7)", () => {
     expect(errors).toEqual([]);
     await page.close();
   });
+
+  it("1280 by 720: the list stays on screen and nothing scrolls sideways", { timeout: T }, async () => {
+    const { page, errors } = await freshPage(h, { width: 1280, height: 720 });
+    await go(page, addr("/README.md"));
+    await file(page).waitFor();
+    await panel(page).locator("[data-code-branch-btn]").click();
+    const pop = panel(page).locator("[data-code-branch-pop]");
+    await pop.locator("[data-code-branch-opt]").first().waitFor();
+    const box = (await pop.boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.y + box.height).toBeLessThanOrEqual(720);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(errors).toEqual([]);
+    await page.close();
+  });
 });

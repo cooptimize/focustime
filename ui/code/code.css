@@ -69,10 +69,13 @@
 .cv-locked { flex-basis: 100%; padding-left: 18px; font-size: var(--fs-1); color: var(--text-faint); }
 
 /* RB-7: the repo and its branch on one row; the branch picker is the client picker's button and list. */
-.cv-repo-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.cv-repo-row > .cv-repo { flex: 1 1 60%; min-width: 0; }
+.cv-repo-row { position: relative; display: flex; align-items: center; gap: 8px; min-width: 0; }
+/* The list opens under the whole row (the side is narrower than a long branch name). */
+.cv-repo-row > .cv-branch { position: static; }
+.cv-repo-row .cv-branch-pop { left: 0; right: 0; min-width: 0; }
+.cv-repo-row > .cv-repo { flex: 1 1 55%; min-width: 0; }
 .cv-repo-row > .cv-repo-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-.cv-repo-row > .cv-branch { flex: 0 1 auto; min-width: 0; max-width: 60%; }
+.cv-repo-row > .cv-branch { flex: 0 1 auto; min-width: 0; max-width: 45%; }
 .cv-branch-btn { padding-block: 5px; font-weight: 500; }
 .cv-branch-btn .cv-kind { flex: none; }
 .cv-branch-pop { left: auto; right: 0; min-width: min(320px, 86vw); }
