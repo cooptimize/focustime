@@ -1236,7 +1236,7 @@ function ReviewScreen(props: ReviewProps) {
     if (r?.meeting.teams && !r.occurrence.hasTranscript) items.push({ id: "call-teams", label: CALL_ACTIONS.fromTeams, ...(run.busy ? { disabled: "Busy" } : {}), run: () => void run.fromTeams() });
     items.push({ id: "call-upload", label: CALL_ACTIONS.upload, icon: "attach", ...(up.busy ? { disabled: "Reading…" } : {}), run: () => fileRef.current?.click() });
     // MC-7: beside Upload: the paste box, on the call's page.
-    items.push({ id: "call-paste", label: CALL_ACTIONS.paste, ...(up.busy ? { disabled: "Reading…" } : {}), run: () => setPasting((x) => x ?? { text: "" }) });
+    items.push({ id: "call-paste", label: CALL_ACTIONS.paste, icon: "docs", ...(up.busy ? { disabled: "Reading…" } : {}), run: () => setPasting((x) => x ?? { text: "" }) });
     if (props.onDismiss) items.push({ id: "call-dismiss", label: DISMISS_TEXT.dismiss, run: props.onDismiss });
     if (r && !r.meeting.call && r.occurrence.state !== "no_transcript" && !r.occurrence.hasTranscript) items.push({ id: "call-none", label: "No transcript this week", run: () => void call("meeting.no_transcript", { occurrenceId: r.occurrence.id }).then(load, (e: unknown) => setNote(errText(e))) });
     return { title: r?.meeting.name ?? "Call", items };
@@ -1852,6 +1852,8 @@ function DropFile({ up, dragging, children }: { up: Upload; dragging: boolean; c
  */
 function PasteReplace({ initial, busy, msg, kind, has, onUse, onClose }: { initial: string; busy: boolean; msg: string | null; kind: string | null; has: boolean; onUse: (v: Paste) => Promise<boolean>; onClose: () => void }) {
   const p = usePaste(initial);
+  // Only what this box's own press said: the page's last message (from an earlier paste or file) isn't this one's.
+  const [before] = useState(msg);
   const use = async () => {
     const v = p.value();
     if (!v || (has && !window.confirm(PASTE_TEXT.replace(kind)))) return;
@@ -1860,7 +1862,7 @@ function PasteReplace({ initial, busy, msg, kind, has, onUse, onClose }: { initi
   return (
     <section className="mtg-choices mtg-paste-replace" aria-label={CALL_ACTIONS.paste} data-paste-replace="">
       <PasteField p={p} autoFocus>
-        {msg && <p className="muted" role="status" data-paste-msg="">{msg}</p>}
+        {msg && msg !== before && <p className="muted" role="status" data-paste-msg="">{msg}</p>}
         <span className="mtg-upload-actions">
           <button type="button" className="mini primary" disabled={busy || !p.ok} onClick={() => void use()} data-paste-use="">{busy ? PASTE_TEXT.reading : PASTE_TEXT.use}</button>
           <button type="button" className="mini quiet" disabled={busy} onClick={() => mayDrop(p) && onClose()}>{PASTE_TEXT.cancel}</button>
