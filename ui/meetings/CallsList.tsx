@@ -88,14 +88,15 @@ export function NeedsRow({ r, open, zone, today, colors, selecting, ticked, onTi
 export type RowStatus = { busy: string | null; error: string | null; occurrenceId: number | null };
 
 /** MC-5: a week row's mark, short, with its full words as its label and on hover. */
-export function MarkShort({ mark, check }: { mark: CallMarkKind; check?: CallRow["check"] }) {
+export function MarkShort({ mark, check, from }: { mark: CallMarkKind; check?: CallRow["check"]; /** MC-2c: where the call came from ("From a chat"), said in the mark's label and hover. */ from?: string | undefined }) {
   const m = markShort(mark);
   // No mark yet: while Teams is asked, "Checking…"; past the cap, "Not checked" (MC-4's words, kept).
   if (!m) {
     const w = check === "checking" ? MARK_TEXT.checking : check === "unchecked" ? MARK_TEXT.unchecked : null;
     return w ? <span className="calls-mark quiet" data-call-mark={check ?? ""}>{w}</span> : null;
   }
-  return <span className={`calls-mark ${mark}`} title={m.full} aria-label={m.full} data-call-mark={mark ?? ""}>{m.short}</span>;
+  const full = from ? `${m.full} · ${from}` : m.full;
+  return <span className={`calls-mark ${mark}`} title={full} aria-label={full} data-call-mark={mark ?? ""}>{m.short}</span>;
 }
 
 /**
@@ -132,7 +133,7 @@ export function WeekRow({ r, open, zone, today, colors, selecting, ticked, onTic
         {picks ? (
           <label className={`calls-about${client ? "" : " none"}`} title={CLOSE_TEXT.aboutHint}>
             <span className="sr-only">{LIST_TEXT.clientFor(r.name)}</span>
-            <select value={client ?? ""} onChange={(e) => onClient(e.target.value)} data-call-about="">
+            <select className="plain-input" value={client ?? ""} onChange={(e) => onClient(e.target.value)} data-call-about="">
               {!client && <option value="">{LIST_TEXT.whichClient}</option>}
               {clients.map((c) => <option key={c.clientKey} value={c.clientKey}>{nameOf(c.clientKey)}</option>)}
             </select>
@@ -141,9 +142,8 @@ export function WeekRow({ r, open, zone, today, colors, selecting, ticked, onTic
           // A recording that fits says so by its mark alone.
           <span className="calls-state" data-call-state="">{r.state.label}</span>
         ) : null}
-        <MarkShort mark={r.mark} check={r.check} />
-        {/* MC-2c: where a chat call came from, in the mark's place. */}
-        {r.other?.chat && r.occurrenceId === null && <span className="calls-mark quiet" data-call-source="chat">{CALL_LIST.fromChat}</span>}
+        {/* MC-2c: a chat call says where it came from in its mark's label and hover, so its name keeps the room. */}
+        <MarkShort mark={r.mark} check={r.check} from={r.other?.chat && r.occurrenceId === null ? CALL_LIST.fromChat : undefined} />
         {canHide && <button type="button" className="mini quiet calls-hide" onClick={onHide} data-call-act="hide">{CLOSE_TEXT.hide}</button>}
       </span>
       {status?.busy && <p className="calls-row-status muted" role="status">{status.busy}</p>}

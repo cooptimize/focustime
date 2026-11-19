@@ -6,7 +6,7 @@ Measured on the demo (a fictional person and fictional calls, Thursday Nov 5, 20
 
 | | 1440 by 900, before | 1440 by 900, after | 390 by 844, before | 390 by 844, after |
 |---|---|---|---|---|
-| Words in the list | 133 for 7 calls (19 a call) | 140 for 9 calls (16 a call) | 100 for 7 calls (14 a call) | 107 for 9 calls (12 a call) |
+| Words in the list | 133 for 7 calls (19 a call) | 131 for 9 calls (15 a call) | 100 for 7 calls (14 a call) | 98 for 9 calls (11 a call) |
 | Calls visible in the list without scrolling | 4 of 7 | 9 of 9, room for 15 | 2 of 7 | 5 of 9, room for 6 |
 | Lines per Needs you row | 4 | 2 | 4 | 2 |
 | Lines per week row | 3 to 4 | 1 | 4 to 5 | 2 (when and name over the client and mark) |

@@ -1,7 +1,7 @@
 // MC-2c: calls started in a client's chat, in Calls with their Teams transcript, in demo mode. Northwind's delivery chat
 // has four earlier calls: one reviews cleanly, one comes without speaker names, one Microsoft refuses, and one with no
 // transcript event that never shows. Each listed one is a row under its week: "Call in <chat>", its times, Northwind,
-// Teams, From a chat (MC-5's one line); never in Needs you. A press on the row reads it; the refusal says so in plain
+// Teams with From a chat in its label (MC-5's one line); never in Needs you. A press on the row reads it; the refusal says so in plain
 // words under the row with the way on. At 390 by 844 every control on a row is at least 44 px. Clock: Thursday Nov 5, 2026 10:00 AM ET.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
@@ -27,9 +27,9 @@ describe.skipIf(!CHROMIUM)("MC-2c: calls started in a client's chat (browser, de
     await expect(page.locator("[data-section='needs']").filter({ hasText: CHAT }).count()).resolves.toBe(0);
     const first = chatRows.first();
     // MC-5: one line: its times, the client picker on the chat's client, the Teams mark, From a chat.
-    await expect.poll(() => first.textContent(), { timeout: 30_000 }).toMatch(/ to [\s\S]*Northwind[\s\S]*Teams[\s\S]*From a chat/);
+    await expect.poll(() => first.textContent(), { timeout: 30_000 }).toMatch(/ to [\s\S]*Northwind[\s\S]*Teams/);
     await expect(first.locator("[data-call-about]").inputValue()).resolves.toBe("Northwind");
-    await expect(first.locator("[data-call-mark='teams']").getAttribute("aria-label")).resolves.toBe("Transcript in Teams");
+    await expect(first.locator("[data-call-mark='teams']").getAttribute("aria-label")).resolves.toBe("Transcript in Teams · From a chat");
     // No people count on a chat call.
     await expect(first.textContent()).resolves.not.toMatch(/\d+ (people|person)\b/);
 
