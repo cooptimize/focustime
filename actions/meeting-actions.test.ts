@@ -564,3 +564,50 @@ describe("MC-4: closing a call", () => {
     expect(await act(ADMIN, "meeting.call_hide", { keys: [] })).toMatchObject({ ok: false, status: 400 });
   });
 });
+
+describe("MC-7: a pasted transcript or notes", () => {
+  const enc = (s: string) => new TextEncoder().encode(s);
+  const NOTES = "- Rates export is first\n- Dana needs a holiday calendar import\n- I'll send the export spec by Friday";
+
+  it("whoever may upload may paste: a reviewer yes; an attendee who only looks and another person no, and nothing is saved", async () => {
+    const { act, ctxAs, meetings } = await setup();
+    const m = data<{ meeting: { id: number } }>(await act(ADMIN, "meeting.register", { clientKey: "contoso", role: "status", eventId: "E-contoso" }, { admin: true })).meeting;
+    expect(await uploadTranscript(ctxAs(MATE), { seriesId: m.id, date: "2026-11-10", bytes: enc(NOTES), paste: "notes" })).toMatchObject({ ok: false, status: 403 });
+    expect(await uploadTranscript(ctxAs(OUTSIDER), { seriesId: m.id, date: "2026-11-10", bytes: enc(NOTES), paste: "notes" })).toMatchObject({ ok: false, status: 404 });
+    expect(await meetings.occurrencesOf(m.id)).toEqual([]);
+    const ok = data<{ occurrenceId: number; kind: string; lines: number }>(await uploadTranscript(ctxAs(LEAD), { seriesId: m.id, date: "2026-11-10", bytes: enc(NOTES), paste: "notes" }));
+    expect(ok).toMatchObject({ kind: "pasted_notes", lines: 3 });
+    expect((await meetings.transcript(ok.occurrenceId))!.map((l) => [l.speaker, l.at])).toEqual([["", null], ["", null], ["", null]]);
+  });
+
+  it("nearly empty and longer than a transcript may be are refused with their words; nothing is saved", async () => {
+    const { act, ctxAs, meetings } = await setup();
+    const m = data<{ meeting: { id: number } }>(await act(ADMIN, "meeting.register", { clientKey: "contoso", role: "status", eventId: "E-contoso" }, { admin: true })).meeting;
+    expect(await uploadTranscript(ctxAs(ADMIN), { seriesId: m.id, date: "2026-11-10", bytes: enc("ok"), paste: "notes" })).toMatchObject({ ok: false, status: 422, error: "Paste at least a few words." });
+    const long = Array.from({ length: 4001 }, (_, i) => `- note ${i}`).join("\n");
+    expect(await uploadTranscript(ctxAs(ADMIN), { seriesId: m.id, date: "2026-11-10", bytes: enc(long), paste: "notes" })).toMatchObject({ ok: false, status: 422, error: "That is longer than FocusTime can read for one call. Paste the part that matters." });
+    expect(await uploadTranscript(ctxAs(ADMIN), { seriesId: m.id, date: "2026-11-10", bytes: enc(NOTES), paste: "bad" })).toMatchObject({ ok: false, status: 400 });
+    expect(await meetings.occurrencesOf(m.id)).toEqual([]);
+  });
+
+  it("AI off for the client: saved and shown, with no pass and no proposals", async () => {
+    const { act, ctxAs, meetings, providerCalls } = await setup();
+    const m = data<{ meeting: { id: number } }>(await act(ADMIN, "meeting.register", { clientKey: "contoso", role: "status", eventId: "E-contoso" }, { admin: true })).meeting;
+    const off = createAi({
+      provider: async () => stubProvider({ respond: (c) => (providerCalls.push(c), JSON.stringify(ANSWER)) }),
+      app: anAiApp(),
+      rules: async () => anAiRules({ allowedClients: [] }),
+      guard: async () => ({ directory: [], homeDomains: ["cooptimize.example"], forbidden: [] }),
+      log: { add: async () => {}, spentMicros: async () => 0, recent: async () => [] },
+      appSpend: { get: async () => 0, add: async () => {} },
+      now: () => NOW,
+      sleep: async () => {},
+    });
+    const r = data<{ occurrenceId: number; outcome: string; proposals: number }>(await uploadTranscript({ ...ctxAs(ADMIN), ai: async () => off }, { seriesId: m.id, date: "2026-11-10", bytes: enc(NOTES), paste: "notes" }));
+    expect(r).toMatchObject({ outcome: "no_ai", proposals: 0 });
+    expect(providerCalls).toEqual([]);
+    expect((await meetings.transcript(r.occurrenceId))!.length).toBe(3);
+    const review = data<{ pasted: string; transcript: { lines: number } }>(await act(ADMIN, "meeting.review", { occurrenceId: r.occurrenceId }));
+    expect(review).toMatchObject({ pasted: "notes", transcript: { lines: 3 } });
+  });
+});
