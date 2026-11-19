@@ -6,6 +6,7 @@
 
 import { DAYS_OFF_WORDS, KIND_LABEL, type NotifyKind } from "../../plan/notify.ts";
 import { TEAMS_KIND_LABEL, type TeamsKind } from "../../plan/teams-rhythm.ts";
+import { settingLabel, type SettingScope } from "./admin/settings-list.ts";
 
 const WEEKDAYS = [["mon", "Monday"], ["tue", "Tuesday"], ["wed", "Wednesday"], ["thu", "Thursday"], ["fri", "Friday"], ["sat", "Saturday"], ["sun", "Sunday"]] as const;
 /**
@@ -55,8 +56,8 @@ export type SectionDef = {
   description: string;
   /** Old labels this section had, for search. */
   old?: readonly string[];
-  /** P1: laid out for a big screen; read-only on the phone. */
-  phoneReadOnly?: boolean;
+  /** SA-5: the words people use for it (search). */
+  keywords?: readonly string[];
   /** Only in a demo session. */
   demoOnly?: boolean;
   /** A sub-page: not in the rail, opened from its parent, with Back. */
@@ -67,9 +68,9 @@ export type SectionDef = {
 // sections went into others and their ids land there (OLD_SECTIONS).
 export const SECTIONS: readonly SectionDef[] = [
   { id: "you", label: "Profile", group: "you", description: "Who is signed in, your level, and first-run setup.", old: ["You", "Setup"] },
-  { id: "hours", label: "Working hours", group: "you", description: "Your hours, lunch and time zone, one-day changes and standing blocks.", old: ["Standing blocks", "Day shape"], phoneReadOnly: true },
-  { id: "display", label: "Display", group: "you", description: "Theme, text size, timelines, the days Week shows, personal events and motion." },
-  { id: "notifications", label: "Reminders and notices", group: "work", description: "Where FocusTime reaches you, each reminder with its time, quiet times, and every kind of notice.", old: ["Notifications"] },
+  { id: "hours", label: "Working hours", group: "you", description: "Your hours, lunch and time zone, one-day changes and standing blocks.", old: ["Standing blocks", "Day shape"], keywords: ["schedule", "work day", "hours"] },
+  { id: "display", label: "Display", group: "you", description: "Theme, text size, timelines, the days Week shows, personal events and motion.", keywords: ["accessibility", "appearance", "look"] },
+  { id: "notifications", label: "Reminders and notices", group: "work", description: "Where FocusTime reaches you, each reminder with its time, quiet times, and every kind of notice.", old: ["Notifications"], keywords: ["alerts", "nudges"] },
   { id: "planning", label: "Planning", group: "work", description: "How to-dos, timeboxes and DevOps updates work, with the fine tuning folded away.", old: ["Day and Week", "Today and Week", "Risk rules", "Backlog", "Roadmap", "Ahead"] },
   { id: "focus", label: "Focus", group: "work", description: "The focus timer, your Teams status while you focus, sounds and music." },
   { id: "clients", label: "Clients", group: "work", description: "The clients FocusTime follows for you, how each one shows, and what it looks for in their chats.", old: ["Client chats", "Requests", "Asks"] },
@@ -106,6 +107,11 @@ export type SettingDef = {
   phoneOnly?: boolean;
   /** SA-3: the fold it sits in, closed until opened ("Fine tuning"); a link or a search result opens it. */
   fold?: string;
+  /**
+   * SA-5: a team value shown here read-only, set in Admin: its name is Admin's (settingLabel), read from Admin's one
+   * list, so both sides say the same. The name it had here stays among `old`, for search.
+   */
+  team?: { scope: SettingScope; key: string };
 };
 /** SA-2: the kinds of choice; each has one control. */
 export type SettingKind = "switch" | "choice" | "select" | "number" | "time" | "text" | "list" | "action" | "status";
@@ -117,31 +123,31 @@ export const FOLDS = { tuning: "Fine tuning", kinds: "Each kind of notice" } as 
 // SA-2: the label here is the one name: the page, search, links and the Undo message all read it. `part` rows are a
 // setting's own rows (a weekday, one notice kind): on the page, found by search with their group beside them.
 // SA-3: ids, stored keys and defaults are main's (ui/settings/stored-keys.test.ts); sections, groups and folds moved.
-export const SETTINGS: readonly SettingDef[] = [
+const ROWS: readonly SettingDef[] = [
   // Profile
-  { id: "signed-in", section: "you", label: "Signed in", kind: "action", keywords: ["sign out", "sign in", "account", "microsoft", "log out"] },
+  { id: "signed-in", section: "you", label: "Signed in", kind: "action", keywords: ["sign out", "sign in", "account", "microsoft", "log out", "logout", "log in", "switch account"] },
   { id: "photos", section: "you", label: "Profile photos", old: ["Photos"], kind: "status", keywords: ["profile photo"] },
-  { id: "email", section: "you", label: "Email", old: ["Email when signed out"], kind: "status" },
+  { id: "email", section: "you", label: "Email", old: ["Email when signed out"], kind: "status", keywords: ["email address"] },
   { id: "level", section: "you", label: "Your level", kind: "status", keywords: ["guidance", "consultant", "senior", "lead"] },
   // SA-3: shown only to admins, and to nobody on production.
   { id: "dataverse-user", section: "you", label: "Dataverse user", kind: "status" },
   { id: "environment", section: "you", label: "Dataverse environment", old: ["Environment"], kind: "status" },
   { id: "setup", section: "you", label: "Setup", old: ["Run setup again", "Finish setup", "Start over"], kind: "action", keywords: ["first run", "onboarding"] },
   // Working hours
-  { id: "weekdays", section: "hours", label: "Hours per day", old: ["Working hours", "Day shape"], kind: "text", keywords: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "evening"] },
+  { id: "weekdays", section: "hours", label: "Hours per day", old: ["Working hours", "Day shape"], kind: "text", keywords: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "evening", "start time", "end time", "day starts", "day ends"] },
   ...WEEKDAYS.map(([k, label]) => ({ id: `hours-${k}`, section: "hours", label, group: "Hours per day", kind: "text" as const, part: true })),
   { id: "lunch", section: "hours", label: "Lunch", kind: "text" },
   { id: "time-zone", section: "hours", label: "Time zone", kind: "text", keywords: ["zone", "timezone"] },
-  { id: "one-day-changes", section: "hours", label: "One-day changes", kind: "list", keywords: ["override", "usual hours"] },
+  { id: "one-day-changes", section: "hours", label: "One-day changes", kind: "list", keywords: ["override", "usual hours", "today's hours", "one day", "leave early", "start late"] },
   { id: "standing-blocks", section: "hours", label: "Standing blocks", kind: "list", keywords: ["internal", "focus block"] },
   // Display
   { id: "theme", section: "display", label: "Theme", kind: "choice", keywords: ["dark", "light", "neutral", "dark mode"] },
-  { id: "text-size", section: "display", label: "Text size", kind: "choice", keywords: ["font", "larger", "zoom"] },
+  { id: "text-size", section: "display", label: "Text size", kind: "choice", keywords: ["font", "font size", "larger", "bigger", "smaller", "zoom"] },
   { id: "timelines", section: "display", label: "Timelines", kind: "choice", keywords: ["business hours", "12 hours", "24 hours", "view range"] },
   { id: "week-days", section: "display", label: "Days on Week", kind: "switch", keywords: ["friday", "weekend", "saturday", "sunday"] },
   { id: "show-friday", section: "display", label: "Show the catch-up day", old: ["Show Friday"], group: "Days on Week", kind: "switch", part: true },
   { id: "show-weekend", section: "display", label: "Weekend days", old: ["Show weekend", "Show the weekend", "Every weekend day"], group: "Days on Week", kind: "choice", part: true },
-  { id: "personal-events", section: "display", label: "Show personal events", old: ["Personal events"], kind: "switch", keywords: ["google"] },
+  { id: "personal-events", section: "display", label: "Show personal events", old: ["Personal events"], kind: "switch", keywords: ["google", "hide", "private events"] },
   // PH-2: only on a phone (the computer's Day switch is Cards or Timeline in Day's header).
   { id: "day-timeline", section: "display", label: "Show Day as a timeline", kind: "switch", phoneOnly: true, keywords: ["timeline", "phone", "cards", "timebox"] },
   { id: "reduce-motion", section: "display", label: "Reduce motion", old: ["Motion"], kind: "switch", keywords: ["animation", "loader", "accessibility"] },
@@ -194,8 +200,8 @@ export const SETTINGS: readonly SettingDef[] = [
   { id: "help-teams", section: "planning", label: "Add a Teams meeting to help sessions", old: ["Teams meeting", "Teams meeting for help sessions"], group: "Help sessions", fold: FOLDS.tuning, kind: "switch" },
   { id: "help-days", section: "planning", label: "Days to search for help", old: ["Days to search"], group: "Help sessions", fold: FOLDS.tuning, kind: "number", unit: "days" },
   { id: "exclude", section: "planning", label: "People I exclude", old: ["People to exclude"], group: "Help sessions", fold: FOLDS.tuning, kind: "list", keywords: ["helpers", "who"] },
-  { id: "never-suggested", section: "planning", label: "Never suggested, for everyone", group: "Help sessions", fold: FOLDS.tuning, kind: "status" },
-  { id: "invite-domains", section: "planning", label: "Invites go only to", group: "Help sessions", fold: FOLDS.tuning, kind: "status", keywords: ["domains"] },
+  { id: "never-suggested", section: "planning", label: "Never suggested, for everyone", group: "Help sessions", fold: FOLDS.tuning, kind: "status", team: { scope: "org", key: "org.never_suggest" } },
+  { id: "invite-domains", section: "planning", label: "Invites go only to", group: "Help sessions", fold: FOLDS.tuning, kind: "status", keywords: ["domains"], team: { scope: "org", key: "org.invite_domains" } },
   { id: "stale-weeks", section: "planning", label: "Stale after", old: ["Stale after (weeks)"], group: "Backlog", fold: FOLDS.tuning, kind: "number", unit: "weeks", keywords: ["backlog"] },
   { id: "stalled-days", section: "planning", label: "Stalled after", old: ["Stalled after (days)"], group: "Backlog", fold: FOLDS.tuning, kind: "number", unit: "days" },
   { id: "watch-weeks", section: "planning", label: "Watch within", old: ["Watch within (weeks)"], group: "Backlog", fold: FOLDS.tuning, kind: "number", unit: "weeks", keywords: ["forecast"] },
@@ -212,27 +218,27 @@ export const SETTINGS: readonly SettingDef[] = [
   { id: "pause-media", section: "focus", label: "Pause music when focus ends", old: ["Pause and resume music", "Pause music"], group: "Music players", kind: "switch", keywords: ["spotify", "player"] },
   { id: "playlists", section: "focus", label: "Playlists", kind: "list", keywords: ["spotify", "youtube", "music"] },
   // Clients (SA-3: with Client chats' phrases and the chats FocusTime reads)
-  { id: "client-list", section: "clients", label: "Your clients", kind: "list", keywords: ["color", "shown as", "name", "keep following", "house style", "client chats", "rename client", "unfollow"] },
+  { id: "client-list", section: "clients", label: "Your clients", kind: "list", keywords: ["clients list", "followed clients"] },
   { id: "follow-grace", section: "clients", label: "Keep following after focus time ends", old: ["Keep following", "Clients followed"], kind: "number", unit: "days", keywords: ["grace days"] },
   // A client's own page (#/settings/client/<key>): not searched on its own (it needs the client), named once here.
-  { id: "client-nickname", section: "client", label: "Dataverse nickname", kind: "status", part: true },
+  { id: "client-nickname", section: "client", label: "Dataverse nickname", kind: "status", part: true, keywords: ["nickname"] },
   { id: "client-identity", section: "client", label: "Your DevOps identity", kind: "status", part: true },
-  { id: "client-shown-as", section: "client", label: "Shown as", kind: "text", part: true },
-  { id: "client-color", section: "client", label: "Color", kind: "choice", part: true },
-  { id: "client-followed", section: "client", label: "Keep following", old: ["Followed"], kind: "switch", part: true },
-  { id: "client-open-states", section: "client", label: "States treated as open", kind: "status", part: true },
-  { id: "client-writes", section: "client", label: "DevOps writes", kind: "status", part: true },
-  { id: "client-chats", section: "client", label: "Client chats", kind: "list", part: true },
-  { id: "client-ai", section: "client", label: "AI for this client", kind: "status", part: true },
-  { id: "client-platform", section: "client", label: "Data platform", kind: "choice", part: true },
-  { id: "client-deploy", section: "client", label: "Deployment items", kind: "list", part: true },
-  { id: "client-house-style", section: "client", label: "House style for Break down", kind: "status", part: true },
+  { id: "client-shown-as", section: "client", label: "Shown as", kind: "text", part: true, keywords: ["rename client", "rename", "client name", "display name"] },
+  { id: "client-color", section: "client", label: "Color", kind: "choice", part: true, keywords: ["colour", "client color"] },
+  { id: "client-followed", section: "client", label: "Keep following", old: ["Followed"], kind: "switch", part: true, keywords: ["unfollow", "stop following", "follow"] },
+  { id: "client-open-states", section: "client", label: "States treated as open", kind: "status", part: true, team: { scope: "client", key: "open_states" } },
+  { id: "client-writes", section: "client", label: "DevOps writes", kind: "status", part: true, keywords: ["write access"] },
+  { id: "client-chats", section: "client", label: "Client chats", kind: "list", part: true, keywords: ["teams chat", "delivery chat"] },
+  { id: "client-ai", section: "client", label: "AI for this client", kind: "status", part: true, team: { scope: "client", key: "allow_ai" } },
+  { id: "client-platform", section: "client", label: "Data platform", kind: "choice", part: true, keywords: ["fabric", "deployments"], team: { scope: "client", key: "data_platform" } },
+  { id: "client-deploy", section: "client", label: "Deployment items", kind: "list", part: true, keywords: ["deployment", "deploy", "release"], team: { scope: "client", key: "deploy_items" } },
+  { id: "client-house-style", section: "client", label: "House style for Break down", kind: "status", part: true, keywords: ["how stories are split"], team: { scope: "client", key: "house_style" } },
   { id: "team-phrases", section: "clients", label: "Team phrases", group: "What FocusTime looks for in chats", kind: "status" },
-  { id: "team-request-phrases", section: "clients", label: "Team asking phrases", group: "What FocusTime looks for in chats", kind: "status", part: true },
-  { id: "team-ack-phrases", section: "clients", label: "Team acknowledgements", group: "What FocusTime looks for in chats", kind: "status", part: true },
-  { id: "team-promise-phrases", section: "clients", label: "Team promise phrases", group: "What FocusTime looks for in chats", kind: "status", part: true },
+  { id: "team-request-phrases", section: "clients", label: "Team asking phrases", group: "What FocusTime looks for in chats", kind: "status", part: true, team: { scope: "org", key: "conv.request_phrases" } },
+  { id: "team-ack-phrases", section: "clients", label: "Team acknowledgements", group: "What FocusTime looks for in chats", kind: "status", part: true, team: { scope: "org", key: "conv.ack_phrases" } },
+  { id: "team-promise-phrases", section: "clients", label: "Team promise phrases", group: "What FocusTime looks for in chats", kind: "status", part: true, team: { scope: "org", key: "conv.promise_phrases" } },
   { id: "request-phrases", section: "clients", label: "My asking phrases", old: ["My request phrases", "Requests"], group: "What FocusTime looks for in chats", kind: "text" },
-  { id: "ack-phrases", section: "clients", label: "My acknowledgements", old: ["Acknowledgements"], group: "What FocusTime looks for in chats", kind: "text" },
+  { id: "ack-phrases", section: "clients", label: "My thanks and short replies", old: ["Acknowledgements", "My acknowledgements"], group: "What FocusTime looks for in chats", kind: "text" },
   { id: "promise-phrases", section: "clients", label: "My promise phrases", old: ["Promise phrases"], group: "What FocusTime looks for in chats", kind: "text" },
   { id: "chats-read", section: "clients", label: "Client chats FocusTime reads", old: ["Client chats read for requests"], group: "Chats FocusTime reads", kind: "status", keywords: ["polling", "reconnect"] },
   // Connections (SA-3: was Accounts and calendars, with DevOps)
@@ -246,19 +252,19 @@ export const SETTINGS: readonly SettingDef[] = [
   { id: "find-item", section: "connections", label: "Find an item", group: "DevOps", kind: "action", keywords: ["missing item", "why isn't it showing", "not showing", "item number", "scope", "area"] },
   { id: "pocket", section: "connections", label: "Pocket recorder", group: "Pocket recorder", kind: "action", keywords: ["pocket", "recorder", "recording", "api key", "transcript"] },
   { id: "teams-app", section: "connections", label: "FocusTime in Teams", group: "FocusTime in Teams", kind: "status", keywords: ["bot", "teams"] },
-  { id: "vm", section: "connections", label: "My VM", group: "My VM", kind: "action", keywords: ["azure", "find my vm", "resource id", "auto shutdown"] },
+  { id: "vm", section: "connections", label: "My VM", group: "My VM", kind: "action", keywords: ["azure", "find my vm", "resource id", "virtual machine"] },
   { id: "vm-start", section: "connections", label: "Start without a preview", old: ["Start my VM without asking", "Start right away"], group: "My VM", kind: "switch" },
   { id: "vm-autostart", section: "connections", label: "Start my VM before my day", group: "My VM", kind: "switch", keywords: ["auto-start", "auto start", "automatically", "before work"] },
   // AI and assistant
-  { id: "ai-team", section: "ai", label: "AI for FocusTime", kind: "status", keywords: ["allowed for", "monthly limit", "admin"] },
-  { id: "ai-allowed", section: "ai", label: "Allowed for", group: "AI for FocusTime", kind: "status", part: true },
-  { id: "ai-limit", section: "ai", label: "Your monthly limit", group: "AI for FocusTime", kind: "status", part: true },
+  { id: "ai-team", section: "ai", label: "AI for FocusTime", kind: "status", keywords: ["allowed for", "monthly limit", "admin"], team: { scope: "org", key: "ai.on" } },
+  { id: "ai-allowed", section: "ai", label: "Allowed for", group: "AI for FocusTime", kind: "status", part: true, team: { scope: "client", key: "allow_ai" } },
+  { id: "ai-limit", section: "ai", label: "Your monthly limit", group: "AI for FocusTime", kind: "status", part: true, team: { scope: "org", key: "ai.person_cap_usd" } },
   { id: "ai-month", section: "ai", label: "This month's AI spend", old: ["This month"], kind: "status", keywords: ["cost", "budget", "cap"] },
   { id: "draft-months", section: "ai", label: "Break down looks back", old: ["Break down looks back (months)"], kind: "number", unit: "months" },
   { id: "ai-test", section: "ai", label: "Test AI", kind: "action" },
   { id: "ai-sent", section: "ai", label: "What is sent to AI", old: ["What is sent"], kind: "status" },
   { id: "ai-log", section: "ai", label: "Last 20 AI requests", old: ["Last 20 requests"], kind: "status" },
-  { id: "assistant-history", section: "ai", label: "Assistant history", kind: "action", keywords: ["clear", "ask", "voice", "push-to-talk"] },
+  { id: "assistant-history", section: "ai", label: "Assistant history", kind: "action", keywords: ["clear", "ask", "voice", "push to talk", "chat history"] },
   // Your data (SA-3: with Activity's five logs)
   { id: "what-we-keep", section: "data", label: "What FocusTime keeps about you", kind: "status", keywords: ["privacy", "what do you keep", "retention", "how long", "kept"] },
   { id: "write-log", section: "data", label: "Outlook write log", old: ["Write log", "Activity"], group: "What FocusTime changed in other apps", kind: "status", keywords: ["undo", "retry", "timebox"] },
@@ -266,19 +272,26 @@ export const SETTINGS: readonly SettingDef[] = [
   { id: "azure-log", section: "data", label: "Azure write log", group: "What FocusTime changed in other apps", kind: "status", keywords: ["vm"] },
   { id: "teams-log", section: "data", label: "Teams status log", group: "What FocusTime changed in other apps", kind: "status", keywords: ["presence"] },
   { id: "loop-log", section: "data", label: "Close the loop sends", group: "What FocusTime changed in other apps", kind: "status", keywords: ["promise", "sent", "email", "teams message"] },
-  { id: "export", section: "data", label: "Export my data", kind: "action", keywords: ["download", "json"] },
+  { id: "export", section: "data", label: "Export my data", kind: "action", keywords: ["download", "json", "backup", "copy of my data"] },
   { id: "reset-plan", section: "data", label: "Reset my plan", kind: "action" },
-  { id: "delete", section: "data", label: "Delete my data", kind: "action" },
+  { id: "delete", section: "data", label: "Delete my data", kind: "action", keywords: ["delete account", "remove my data", "forget me"] },
   { id: "diagnostics", section: "data", label: "Diagnostics", kind: "action", keywords: ["promises check", "chatter"] },
   { id: "demo-mode", section: "data", label: "Show demo data", old: ["Demo mode"], group: "Demo", kind: "switch", devOnly: true },
   { id: "demo-reset", section: "data", label: "Reset demo", old: ["Demo"], group: "Demo", kind: "action", demoOnly: true },
   { id: "demo-be", section: "data", label: "Use the demo as", group: "Demo", kind: "select", demoOnly: true, keywords: ["teammate", "person"] },
   // About (SA-3: with Send feedback)
   { id: "version", section: "about", label: "Version", kind: "status" },
-  { id: "guide", section: "about", label: "Guide", old: ["Open the Guide"], kind: "action", keywords: ["help", "shortcuts", "keyboard"] },
+  { id: "guide", section: "about", label: "Guide", old: ["Open the Guide"], kind: "action", keywords: ["help", "how to", "manual"] },
   { id: "feedback", section: "about", label: "Send feedback", kind: "status" },
   { id: "style-guide", section: "about", label: "Style guide", old: ["Open the style guide"], kind: "action", keywords: ["tokens"], devOnly: true },
 ];
+
+/** The rows, with each team value named as Admin names it (SA-5: one name, both sides). */
+export const SETTINGS: readonly SettingDef[] = ROWS.map((d) => {
+  if (!d.team) return d;
+  const label = settingLabel(d.team.scope, d.team.key);
+  return label === d.label ? d : { ...d, label, old: [...(d.old ?? []), d.label] };
+});
 
 /** Section ids before ST-1 that moved: where they open now. */
 export const OLD_SECTIONS: Readonly<Record<string, { section: string; setting?: string }>> = {
@@ -315,38 +328,21 @@ function moved(r: { section: string; setting: string | null }): { section: strin
   return d && d.section !== r.section && d.section !== "client" ? { section: d.section, setting: d.id } : r;
 }
 
-export type SearchHit = { section: string; setting: string | null; label: string; where: string; matched: string | null };
-
-const norm = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[^\p{L}\p{N}%]+/gu, " ").trim();
-
 /**
- * Settings and sections whose label, old label or keywords contain every word typed, best first: a label match before
- * an old label, before a keyword. `matched` names the old label when that is what matched.
+ * SA-5: things people look for in Settings that aren't settings: where they are, or that FocusTime doesn't have them.
+ * Search answers them with `text` (and `href` or a Settings place to open, when there is one). Pointers name only
+ * places a person can see (ui/places.ts checks them).
  */
-export function searchSettings(q: string, opts: { demo?: boolean; dev?: boolean; phone?: boolean; limit?: number } = {}): SearchHit[] {
-  const words = norm(q).split(" ").filter(Boolean);
-  if (!words.length) return [];
-  const has = (s: string) => {
-    const n = norm(s);
-    return words.every((w) => n.includes(w));
-  };
-  const hits: (SearchHit & { score: number })[] = [];
-  const shown = (s: SectionDef | undefined) => !!s && (!s.demoOnly || opts.demo);
-  for (const s of SECTIONS) {
-    if (!shown(s) || s.parent) continue;
-    const old = s.old?.find(has);
-    if (has(s.label) || old) hits.push({ section: s.id, setting: null, label: s.label, where: groupLabel(s.group), matched: has(s.label) ? null : old!, score: has(s.label) ? 0 : 1 });
-  }
-  for (const d of SETTINGS) {
-    const s = sectionOf(d.section);
-    if (!shown(s) || s!.parent || (d.devOnly && !opts.dev) || (d.demoOnly && !opts.demo) || (d.phoneOnly && !opts.phone)) continue;
-    const old = d.old?.find(has);
-    const score = has(d.label) ? 0 : old ? 1 : d.keywords?.some(has) || has(`${d.label} ${s!.label} ${(d.keywords ?? []).join(" ")}`) ? 2 : -1;
-    if (score < 0) continue;
-    hits.push({ section: d.section, setting: d.id, label: d.label, where: whereOf(d), matched: score === 1 ? old! : null, score });
-  }
-  return hits.sort((a, b) => a.score - b.score).slice(0, opts.limit ?? 12).map(({ score: _s, ...h }) => h);
-}
+export type NotSetting = { id: string; label: string; keywords: readonly string[]; text: string; where?: string; href?: string; section?: string; setting?: string };
+export const NOT_SETTINGS: readonly NotSetting[] = [
+  { id: "password", label: "Password", keywords: ["change password", "reset password", "passcode", "two factor", "mfa"], text: "FocusTime has no password of its own: you sign in with Microsoft. Change your password where you change it for Microsoft." },
+  { id: "language", label: "Language", keywords: ["english", "spanish", "french", "translate", "translation", "locale"], text: "FocusTime is in English only; there is no language to choose." },
+  { id: "shortcuts", label: "Keyboard shortcuts", keywords: ["keys", "hotkeys", "keyboard", "shortcut"], text: "Not a setting: More › Keyboard shortcuts lists every key. They can't be changed." },
+  { id: "vm-shutdown", label: "Your VM's shutdown time", keywords: ["auto shutdown", "auto-shutdown", "shutdown", "shut down", "turn off vm", "stop my vm"], text: "Set in Azure, on the VM's own auto-shutdown schedule. FocusTime only reads it and shows it in Connections › My VM.", section: "connections", setting: "vm" },
+  { id: "gantt", label: "Gantt", keywords: ["timeline view", "gantt chart"], text: "A view, not a setting: Backlog › Gantt.", href: "#/ahead/gantt" },
+  { id: "contrast", label: "High contrast", keywords: ["contrast", "high contrast", "colour blind", "color blind"], text: "FocusTime has no contrast setting of its own. Theme, Text size and Reduce motion are in Display.", section: "display", setting: "theme" },
+  { id: "code", label: "Code", keywords: ["repo", "repos", "repository", "who can read code", "read code", "git"], text: "Not a setting: Code is its own tab (More › Code on a phone). It lists the clients whose code you can read.", href: "#/code" },
+];
 
 /** Where a setting is, as search shows it: its section, and its group when it has one ("Reminders and notices › Quiet"). */
 export const whereOf = (d: SettingDef) => {
@@ -354,8 +350,6 @@ export const whereOf = (d: SettingDef) => {
   const path = [d.fold && d.fold !== d.group ? d.fold : null, d.group && d.group !== d.label ? d.group : null].filter(Boolean);
   return path.length ? `${s} › ${path.join(" › ")}` : s;
 };
-
-export const groupLabel = (g: SettingsGroupId) => SETTINGS_GROUPS.find(([id]) => id === g)![1];
 
 /** The address of a section, or of one setting in it. */
 export const settingsHref = (section: string, setting?: string | null) => `#/settings/${section}${setting ? `/${setting}` : ""}`;

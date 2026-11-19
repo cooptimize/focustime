@@ -7,6 +7,7 @@
 // read every 5 minutes for all of them. Adding one asks the person to allow Chat.Read the first time (Microsoft, there
 // and back, then the add goes ahead). Each card says how it's read: "Polling via <name>", "Needs reconnecting" with the
 // last fetch, or the last check. Delete stored messages forgets a client's chat text that didn't become requests.
+import { HelpLine } from "./parts.tsx";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { activityOf, CHAT_KINDS, chatName, filterChats, KIND_HINT, KIND_NAME, memberLine, nameOf, suggestKind, type ChatKind, type ChatPickerData, type ChatsData, type ChatSummary, type DeliveryChatView } from "../../plan/chats.ts";
 import { ActionRefusal, call } from "../api.ts";
@@ -148,7 +149,7 @@ export function DeliveryChatField({ clientKey, clientName, readOnly = false, ref
     <div className="set-field dchat" role="group" aria-label={`Client chats for ${clientName}`}>
       <div className="dchat-head">
         <span className="set-label">Client chats</span>
-        <span className="muted dchat-hint">Teams group chats for {clientName}, shared with everyone on them who follows {clientName}. New messages are read for what they ask and promise.</span>
+        <HelpLine as="span" className="muted dchat-hint" text={`Teams group chats for ${clientName}, shared with everyone on them who follows ${clientName}. New messages are read for what they ask and promise.`} />
         {mine.length > 0 && (
           <button type="button" className="mini quiet" disabled={ctx.loading} onClick={() => void act("chats.refresh", { clientKey }, "Members read again")}>
             {ctx.loading ? "Refreshing…" : "Refresh"}

@@ -68,11 +68,11 @@ export function visibleItems(items: readonly MenuItem[]): MenuItem[] {
   return kept.some((i) => !i.disabled) || !items.length ? kept : [...items];
 }
 
-function StepView({ step, query, onDone, push, back, canBack, autoFocusList, popup = false }: { step: MenuStep; query: string; onDone: () => void; push: (s: MenuStep) => void; back: () => void; canBack: boolean; autoFocusList: boolean; popup?: boolean }) {
+function StepView({ step, query, onDone, push, back, canBack, autoFocusList, popup = false, extra }: { step: MenuStep; query: string; onDone: () => void; push: (s: MenuStep) => void; back: () => void; canBack: boolean; autoFocusList: boolean; popup?: boolean; /** SA-5: rows after the commands for what was typed (Settings' results), on the first step only. */ extra?: ((q: string) => MenuItem[]) | undefined }) {
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLUListElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const shown = "items" in step ? filterCommands(popup ? visibleItems(step.items) : step.items, query) : [];
+  const shown = "items" in step ? [...filterCommands(popup ? visibleItems(step.items) : step.items, query), ...(extra && !canBack && query.trim() ? extra(query) : [])] : [];
   useEffect(() => {
     setActive(Math.max(0, shown.findIndex((i) => !i.disabled)));
   }, [step, query]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -211,6 +211,8 @@ function StepView({ step, query, onDone, push, back, canBack, autoFocusList, pop
               role={it.toggle ? "menuitemcheckbox" : "menuitem"}
               aria-checked={it.toggle ? !!it.checked : undefined}
               data-i={i}
+              data-id={it.id}
+              data-group={it.group}
               className={`menu-item${i === active ? " active" : ""}${it.danger ? " danger" : ""}${it.checked ? " checked" : ""}`}
               aria-disabled={!!it.disabled}
               title={it.disabled ?? ""}
@@ -323,7 +325,7 @@ export function PopupMenu({ at, step: first, onClose }: { at: { x: number; y: nu
 }
 
 /** The command menu: search every command; commands that need a target ask for it in a next step. */
-export function CommandMenu({ commands, onClose }: { commands: MenuItem[]; onClose: () => void }) {
+export function CommandMenu({ commands, onClose, extra }: { commands: MenuItem[]; onClose: () => void; /** SA-5: Settings' results for what was typed (ui/settings/menu-results.ts). */ extra?: ((q: string) => MenuItem[]) | undefined }) {
   // Taken once when the menu opens, so a quiet reload behind it doesn't reset where you are.
   const [first] = useState<MenuStep>(() => ({ title: "Commands", items: commands }));
   const { step, push, back, canBack } = useSteps(first);
@@ -382,7 +384,7 @@ export function CommandMenu({ commands, onClose }: { commands: MenuItem[]; onClo
           )}
           <CloseButton onClose={onClose} />
         </div>
-        <StepView step={step} query={query} onDone={onClose} push={push} back={back} canBack={canBack} autoFocusList={false} />
+        <StepView step={step} query={query} onDone={onClose} push={push} back={back} canBack={canBack} autoFocusList={false} extra={extra} />
         <div className="command-foot muted">↑↓ move · Enter choose · Esc {canBack ? "back" : "close"}</div>
       </div>
     </div>

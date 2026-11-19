@@ -8,6 +8,7 @@ import { call } from "../api.ts";
 import { PanelShell, useNarrow, type RailGroup } from "../PanelShell.tsx";
 import { usePhone } from "../viewport.ts";
 import { AutoSaveProvider } from "./autosave.tsx";
+import { useRowLabels } from "./row-labels.ts";
 import { colorVar, useAdminChanged } from "./admin/shared.tsx";
 import "./admin/admin.css";
 import { ClientsPart } from "./admin/Clients.tsx";
@@ -46,28 +47,6 @@ function useRailData() {
   return { clients, people };
 }
 
-/** SA-4: a table on the phone is drawn as rows: each cell gets its column's name (CSS shows it before the value). */
-function useRowLabels(root: React.RefObject<HTMLElement | null>, key: string) {
-  useEffect(() => {
-    const el = root.current;
-    if (!el) return;
-    const label = () => {
-      for (const t of el.querySelectorAll<HTMLTableElement>(".ps-body table")) {
-        const heads = [...t.querySelectorAll<HTMLTableCellElement>("thead th")].map((h) => h.textContent?.trim() ?? "");
-        for (const tr of t.querySelectorAll<HTMLTableRowElement>("tbody tr")) {
-          [...tr.cells].forEach((c, i) => {
-            if (c.colSpan === 1 && heads[i] && c.getAttribute("data-label") !== heads[i]) c.setAttribute("data-label", heads[i]!);
-          });
-        }
-      }
-    };
-    label();
-    const mo = new MutationObserver(label);
-    mo.observe(el, { childList: true, subtree: true });
-    return () => mo.disconnect();
-  }, [root, key]);
-}
-
 type Props = {
   /** Admin's path ("" or null: Admin itself), as the address has it. */
   path: string | null;
@@ -93,7 +72,7 @@ export function AdminPlace(props: Props) {
   const [q, setQ] = useState("");
   const rail = useRailData();
   const root = useRef<HTMLDivElement>(null);
-  useRowLabels(root, `${part}/${at.client}/${tab}`);
+  useRowLabels(() => root.current?.closest<HTMLElement>(".ps-body") ?? root.current, `${part}/${at.client}/${tab}`);
   const hits = useMemo(() => (q.trim() ? searchAdmin(q, { clients: rail.clients ?? [], people: rail.people ?? [], at }) : []), [q, rail.clients, rail.people, at.client]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const groups: RailGroup[] = [

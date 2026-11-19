@@ -239,10 +239,12 @@ describe.skipIf(!CHROMIUM)("TP-1b: three plain questions in the New form (browse
       await expect(page.locator('[data-setting="work-templates"]').count()).resolves.toBe(0);
       // Not in the rail, nor Settings' search, nor the command menu.
       await expect(page.getByRole("link", { name: "Work templates" }).count()).resolves.toBe(0);
-      await page.locator(".ps-search input[type=search]").fill("work templates");
-      await expect.poll(() => page.locator(".ps-hit").count()).toBe(0);
-      await page.locator(".ps-search input[type=search]").fill("request type");
-      await expect.poll(() => page.locator(".ps-hit").count()).toBe(0);
+      // SA-5: nothing found answers with the nearest settings and the Guide; none of them is Work templates.
+      for (const q of ["work templates", "request type"]) {
+        await page.locator(".ps-search input[type=search]").fill(q);
+        await page.locator("#settings-search-results .ps-none").waitFor();
+        await expect(page.locator("#settings-search-results [data-result]").evaluateAll((es) => es.map((e) => e.textContent ?? "").join(" "))).resolves.not.toMatch(/templates|request type/i);
+      }
       await page.keyboard.press("Escape");
       await page.evaluate(() => (location.hash = "#/today"));
       await page.keyboard.press("Control+k");

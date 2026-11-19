@@ -1,6 +1,7 @@
 // DX-1: Settings › Data › Diagnostics. Counts only, for my own chats: the promises check (why a committed conversation
 // has no promise of mine) and the chatter filter check (where my chats' messages were sorted). Titles of my own
 // conversations show here; Copy as text copies counts only. Never message text.
+import { HelpLine } from "./parts.tsx";
 import { useRef, useState } from "react";
 import { call } from "../api.ts";
 import { copy } from "../FollowUps.tsx";
@@ -40,7 +41,7 @@ export function DiagnosticsPanel() {
   return (
     <section className="write-log dx" id="diagnostics" aria-label="Diagnostics">
       <h3>Diagnostics</h3>
-      <p className="muted">Counts for your own chats only, to answer "why is a promise missing" and "why wasn't this filtered as chatter". No message text is shown or copied.</p>
+      <HelpLine text={'Counts for your own chats only, to answer "why is a promise missing" and "why wasn\'t this filtered as chatter". No message text is shown or copied.'} />
       <div className="dx-actions">
         <button type="button" className="mini primary" disabled={busy} onClick={() => void run()}>
           {busy ? "Checking…" : d ? "Check again" : "Run checks"}
