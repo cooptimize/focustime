@@ -9,17 +9,18 @@ import { picksAfterEdit, PICKS_TEXT, putBack, spotAfterEdit, takeOut, type Taken
 /** What the box reports after a pick: where its words start in the text it wrote, and the words. */
 export type Picked = { start: number; text: string; /** The box's whole text with the pick in it. */ in: string };
 
-type Line = { kind: "taken"; n: number; from: string[]; to: string; taken: TakenOut[] } | { kind: "back"; text: string } | null;
+type Line = { kind: "taken"; n: number; from: string[]; to: string; taken: TakenOut[]; /** The client before the change, and its name. */ was: string | null; wasName: string } | { kind: "back"; text: string } | null;
 
 /**
  * The picks for one form. `where` is the box's text, `setWhere` sets it (as the form's own state); `clientKey` and
  * `clientName` are the form's client now.
  */
-export function useWherePicks(where: string, setWhere: (v: string) => void, clientKey: string | null, clientName: string) {
+export function useWherePicks(where: string, setWhere: (v: string) => void, clientKey: string | null, clientName: string, /** UC-3: puts the form's client (and what changed with it) back, for Undo. */ restore?: (was: string) => void) {
   const picks = useRef<WherePick[]>([]);
   const last = useRef(where);
   const pending = useRef<(Picked & { client: string; clientName: string })[]>([]);
   const client = useRef(clientKey);
+  const clientNameRef = useRef(clientName);
   const [line, setLine] = useState<Line>(null);
   const lineRef = useRef<Line>(null);
   const show = (l: Line) => ((lineRef.current = l), setLine(l));
@@ -42,7 +43,9 @@ export function useWherePicks(where: string, setWhere: (v: string) => void, clie
   // A client change: the other client's picks go, with one line and Undo. Changing back puts nothing back by itself.
   useLayoutEffect(() => {
     const was = client.current;
+    const wasName = clientNameRef.current;
     client.current = clientKey;
+    clientNameRef.current = clientName;
     if (was === clientKey) return;
     pending.current = [];
     const r = takeOut(last.current, picks.current, clientKey);
@@ -54,24 +57,33 @@ export function useWherePicks(where: string, setWhere: (v: string) => void, clie
     picks.current = r.kept;
     last.current = r.text;
     setWhere(r.text);
-    show({ kind: "taken", n: r.taken.length, from: r.taken.map((x) => x.pick.clientName), to: clientName, taken: r.taken });
+    show({ kind: "taken", n: r.taken.length, from: r.taken.map((x) => x.pick.clientName), to: clientName, taken: r.taken, was, wasName });
   }, [clientKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onPicked = useCallback((p: Picked) => {
     if (client.current) pending.current.push({ ...p, client: client.current, clientName });
   }, [clientName]);
 
+  // UC-3: with `restore`, Undo puts the client back first (so the names never sit under another client), then the names.
+  const withClient = !!restore;
   const undo = () => {
     const l = lineRef.current;
     if (l?.kind !== "taken") return;
+    const back = restore && l.was !== null && l.was !== client.current ? l.was : null;
+    if (back !== null) {
+      // The client goes back before the names, and this hook already knows it: the change back takes nothing out.
+      client.current = back;
+      clientNameRef.current = l.wasName;
+      restore!(back);
+    }
     const r = putBack(last.current, picks.current, l.taken);
     picks.current = r.picks;
     last.current = r.text;
     setWhere(r.text);
-    show({ kind: "back", text: PICKS_TEXT.putBack(l.n, l.from, l.to) });
+    show({ kind: "back", text: back !== null ? PICKS_TEXT.putBackWithClient(l.n, l.wasName) : PICKS_TEXT.putBack(l.n, l.from, l.to) });
   };
 
-  return { onPicked, line, undo };
+  return { onPicked, line, undo, withClient };
 }
 
 /** The one line after a client change, with Undo; screen readers hear it (a polite status that is always there). */
@@ -94,7 +106,7 @@ export function WherePicksLine({ state, className }: { state: ReturnType<typeof 
           <button
             type="button"
             className="link-btn"
-            aria-label={PICKS_TEXT.undoLabel(l.n)}
+            aria-label={state.withClient ? PICKS_TEXT.undoWithClient(l.n) : PICKS_TEXT.undoLabel(l.n)}
             onClick={(e) => {
               // The button goes once it is used: focus goes to the box the names went back into (review 3).
               const box = e.currentTarget.closest("[role=dialog]")?.querySelector<HTMLTextAreaElement>('textarea[data-question="where"]');

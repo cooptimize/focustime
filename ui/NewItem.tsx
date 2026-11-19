@@ -123,7 +123,24 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
   const clientName = clients.find((c) => c.clientKey === clientKey)?.clientName ?? clientKey ?? "";
   // RB-3b: names picked from one client's code are taken out of Where is it? when the client changes (Undo puts them back).
   const setWhere = useCallback((v: string) => setAnswers((a) => ({ ...a, where: v })), []);
-  const picks = useWherePicks(answers.where, setWhere, clientKey, clientName);
+  // UC-3: Undo puts the client back too, with the level, parent and owner it had, so picked names never sit under
+  // another client. What a client change resets is kept here, for that.
+  const beforeChange = useRef<{ type: string | null; parentId: number | null; assignTo: string } | null>(null);
+  const changeClient = (k: string) => {
+    beforeChange.current = { type, parentId, assignTo };
+    setClientKey(k);
+    setParentId(null);
+  };
+  const putClientBack = (was: string) => {
+    const b = beforeChange.current;
+    filled.current = was;
+    setClientKey(was);
+    if (!b) return;
+    setType(b.type);
+    setParentId(b.parentId);
+    setAssignTo(b.assignTo);
+  };
+  const picks = useWherePicks(answers.where, setWhere, clientKey, clientName, putClientBack);
   useEffect(() => {
     // On the phone the questions are under More: open it so the line's Undo and the box are in sight.
     if (picks.line && phone) setMore(true);
@@ -277,7 +294,7 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
             <span className="nf-fixed">{clientName}</span>
           ) : (
             <span className="nf-client">
-              <SelectField label="Client" value={clientKey ?? ""} options={clients.map((c) => ({ key: c.clientKey, label: c.clientName }))} onChange={(k) => (setClientKey(k), setParentId(null))} className="nf-select" empty="Choose a client" />
+              <SelectField label="Client" value={clientKey ?? ""} options={clients.map((c) => ({ key: c.clientKey, label: c.clientName }))} onChange={changeClient} className="nf-select" empty="Choose a client" />
               <WherePicksLine state={picks} />
             </span>
           )}

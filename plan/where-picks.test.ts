@@ -125,3 +125,12 @@ describe("the words", () => {
     expect(PICKS_TEXT.putBack(1, ["Northwind"], "Atlas")).toBe("Put back 1 name. It's from Northwind's code, not Atlas's.");
   });
 });
+
+// UC-3 item 8: when Undo puts the client back too, its words say so.
+describe("PICKS_TEXT with the client put back (UC-3)", () => {
+  it("names the client that came back", () => {
+    expect(PICKS_TEXT.putBackWithClient(2, "Northwind")).toBe("Put back 2 names and the client, Northwind.");
+    expect(PICKS_TEXT.putBackWithClient(1, "Northwind")).toBe("Put back 1 name and the client, Northwind.");
+    expect(PICKS_TEXT.undoWithClient(2)).toBe("Undo: put back the 2 names and the client");
+  });
+});

@@ -67,7 +67,12 @@ export function DraftEditor({ draft, data, onClose, onChanged }: { draft: DraftS
   const clientName = (k: string) => clients.find((c) => c.clientKey === k)?.clientName ?? k;
   // RB-3b: names picked from one client's code are taken out of Where is it? when the client changes (Undo puts them back).
   const setWhere = useCallback((v: string) => setAnswers((a) => ({ ...a, where: v })), []);
-  const picks = useWherePicks(answers.where, setWhere, client, clientName(client));
+  // UC-3: Undo puts the client back too, with its parent, so picked names never sit under another client.
+  const parentBefore = useRef<ItemValue | null>(null);
+  const picks = useWherePicks(answers.where, setWhere, client, clientName(client), (was) => {
+    setClient(was);
+    if (parentBefore.current) setParent(parentBefore.current);
+  });
   // TP-1b: the third question is the acceptance; a separate box only when the draft already holds acceptance text (CP-1's AI version, an older draft).
   const showAc = !feature && !!draft.acceptance?.trim() && (features?.acceptanceField ?? features?.status !== "ok");
   const startAfter = feature && start && target && start > target;
@@ -166,7 +171,7 @@ export function DraftEditor({ draft, data, onClose, onChanged }: { draft: DraftS
           <div className="draft-row">
             <label className="set-field">
               <span className="set-label">Client</span>
-              <select value={client} onChange={(e) => (setClient(e.target.value), setParent(NO_ITEM))}>
+              <select value={client} onChange={(e) => ((parentBefore.current = parent), setClient(e.target.value), setParent(NO_ITEM))}>
                 {!clients.some((c) => c.clientKey === client) && <option value={client}>{client}</option>}
                 {clients.map((c) => (
                   <option key={c.clientKey} value={c.clientKey}>
