@@ -23,6 +23,7 @@ import { callBatch, proposalWords, toReview, type Proposal } from "../../plan/me
 import { rememberCallsList as remember, rememberedCallsList as remembered, requestFetch, requestRerun, takeFetch, takeRerun, takeReviewCall, type MineData } from "./calls.ts";
 import { useMenu } from "../Menus.tsx";
 import type { MenuItem, MenuStep } from "../menu.ts";
+import { secondsOf } from "../../plan/transcript.ts";
 import { CALL_ACTIONS, CALL_BAR, CALL_FILTERS, CALL_LIST, CALL_ROW, CALL_STATE, CALLS_TEXT, ADD_TEXT, CHAT_NO_SPEAKERS, CLOSE_TEXT, FETCH_WORDS, LIST_TEXT, PAGE_TEXT, POCKET_TEXT, rerunLine, SECTION_HEAD, TRANSCRIPT_TEXT, type CallFilter, type FetchOutcome, type ProposalCheck } from "../../plan/call-words.ts";
 import { callClientChoices, callRows, chipClients, closedAtOf, closedLine, closedList, outcomeOfCall, weekOf, filterCounts, firstToOpen, hiddenList, hiddenMissing, LIST_FILTERS, openList, otherRowKey, hideKeyOf, type CallHides, type CallRow, type CheckState, type Entry, type ListedRecording, type ListFilter, type SeriesEntry } from "../../plan/call-list.ts";
 import { ClosedRow, HiddenRow, NeedsRow, SeriesRow, TickBar, WeekRow, whenOf, type RowStatus } from "./CallsList.tsx";
@@ -1298,7 +1299,7 @@ function ReviewScreen(props: ReviewProps) {
   const row = (p: Proposal, live: boolean) => (
     <ProposalRow key={p.id} p={p} check={live ? checkOf(p) : undefined} err={live ? rowErr[p.id] ?? null : null} ticked={live && ticked.has(p.id)} editable={editable} can={can} busy={busy} clientKey={m.clientKey} opts={opts} today={today}
       open={isOpen(p)} onOpen={(on) => setOpen(p, on)} onTick={(on) => tick(p, on)} onEdit={(patch) => void edit(p, patch)} onSend={() => void send([p])} onSendBreakDown={() => void send([p], { breakDown: true })} onKeep={() => void keep([p])} onSkip={(on) => void skip([p], on)} onEnable={() => w?.enable(m.clientKey)}
-      onQuote={r.transcript ? (n) => onPlace({ view: "transcript", line: n }) : undefined} />
+      onQuote={r.transcript ? (n) => onPlace({ view: "transcript", line: n }) : undefined} clockOf={(at) => { const sec = secondsOf(at); return sec === null ? null : TRANSCRIPT_TEXT.clockAt(timeOf(new Date(Date.parse(o.startAt) + sec * 1000).toISOString(), zone)); }} />
   );
 
   return (
@@ -1388,7 +1389,7 @@ function ReviewScreen(props: ReviewProps) {
         <TranscriptChoices series={m} occ={o} recs={m.call === "hand" ? anyRecs : pocketRecs} startRec={startRec} pocketOn={pocketOn} zone={zone} up={up} dragging={dragging} start={view === "upload" ? "file" : null} onTeams={() => void run.fromTeams()} teamsBusy={run.busy === "teams"} teamsRefused={run.refused} onDone={load} />
       )}
       {view === "transcript" ? (
-        <TranscriptView occurrenceId={o.id} startAt={o.startAt} proposals={r.proposals} line={line} onProposal={(pid) => onPlace({ proposal: pid })} />
+        <TranscriptView occurrenceId={o.id} startAt={o.startAt} zone={zone} proposals={r.proposals} line={line} onProposal={(pid) => onPlace({ proposal: pid })} />
       ) : (<>
         {shownKinds.map((kind) => {
           const all = r.proposals.filter((p) => p.body.kind === kind);
@@ -1453,9 +1454,9 @@ type Line = { n: number; speaker: string; at: string; sec: number | null; text: 
  * installed app's kept files), so closing the view drops it. A line in the address (a proposal's Show in transcript)
  * is scrolled to and focused.
  */
-function TranscriptView({ occurrenceId, startAt, proposals, line, onProposal }: { occurrenceId: number; startAt: string; proposals: Proposal[]; line: number | null; /** MC-1e: back to a proposal, in view and focused. */ onProposal: (id: number) => void }) {
-  // A line's time of day (the call's start plus its offset), so "1:05" never reads as five past one.
-  const time = (sec: number) => new Date(Date.parse(startAt) + sec * 1000).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+function TranscriptView({ occurrenceId, startAt, zone, proposals, line, onProposal }: { occurrenceId: number; startAt: string; zone: string; proposals: Proposal[]; line: number | null; /** MC-1e: back to a proposal, in view and focused. */ onProposal: (id: number) => void }) {
+  // MC-6: a line shows its time into the call, as its quotes do; its clock time (the call's start plus that) on hover.
+  const time = (sec: number) => TRANSCRIPT_TEXT.clockAt(timeOf(new Date(Date.parse(startAt) + sec * 1000).toISOString(), zone));
   const [data, setData] = useState<{ lines: Line[]; gone: boolean; missing: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
@@ -1497,7 +1498,7 @@ function TranscriptView({ occurrenceId, startAt, proposals, line, onProposal }: 
           const on = marks.get(l.n);
           return (
             <li key={l.n} id={`mtg-line-${l.n}`} tabIndex={-1} className={`${on ? "marked" : ""}${line === l.n ? " at" : ""}`} {...(on ? { "aria-description": `${TRANSCRIPT_TEXT.marked}: ${on.map((x) => x.what).join("; ")}` } : {})}>
-              {l.sec !== null && <span className="mtg-line-at" title={`${l.at} into the call`}>{time(l.sec)}</span>}
+              {l.sec !== null && <span className="mtg-line-at" title={time(l.sec)}>{l.at}</span>}
               <span className="mtg-who">{l.speaker}</span>
               <span className="mtg-line-text">{l.text}</span>
               {on && (

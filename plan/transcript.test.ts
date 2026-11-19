@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_LINE_CHARS, numbered, parseDocxXml, parseVtt, quotesOf, timeOf, TranscriptError, windowsOf } from "./transcript.ts";
+import { atOf, MAX_LINE_CHARS, numbered, secondsOf, parseDocxXml, parseVtt, quotesOf, timeOf, TranscriptError, windowsOf } from "./transcript.ts";
 
 const VTT = `WEBVTT
 
@@ -80,5 +80,14 @@ describe("transcripts (MC-1)", () => {
     expect(w[0]!.at(-1)!.n).toBeGreaterThan(w[1]![0]!.n);
     expect(w.at(-1)!.at(-1)!.n).toBe(3000);
     expect(numbered(long.slice(0, 1))).toBe("L1 [0:00] A: word word word word word word word word word word word word word word word");
+  });
+});
+
+describe("MC-6: secondsOf, the reverse of a quote's time", () => {
+  it("reads back what atOf writes, and nothing else", () => {
+    for (const at of [0, 40, 65, 3599, 3600, 3725]) expect(secondsOf(atOf({ at }))).toBe(at);
+    expect(secondsOf("")).toBeNull();
+    expect(secondsOf("1:5")).toBeNull();
+    expect(secondsOf("soon")).toBeNull();
   });
 });

@@ -331,6 +331,8 @@ export const POCKET_TEXT = {
 
 /** The Transcript view's words. */
 export const TRANSCRIPT_TEXT = {
+  /** MC-6: a line's time is time into the call; its clock time on hover, the same for a quote and the Transcript. */
+  clockAt: (clock: string) => `${clock} on the clock`,
   tabProposals: "Proposals",
   tab: "Transcript",
   filter: "Filter the transcript",

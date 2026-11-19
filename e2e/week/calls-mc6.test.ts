@@ -200,4 +200,32 @@ describe.skipIf(!CHROMIUM)("MC-6: Calls polish (browser, demo mode)", () => {
     await expect.poll(() => toast.textContent(), { timeout: W }).toContain(`Skipped: ${title}`);
     await expect(toast.count()).resolves.toBe(1);
   }, T);
+
+  it("11: a quote and its Transcript line show the same time, into the call, with the clock time on hover (Teams and Pocket)", async () => {
+    const { page } = await open();
+    /** Each quote's time and hover beside its line's, opened from the quote. */
+    const compare = async () => {
+      await expect.poll(() => page.locator("button.mtg-p3 .mtg-at").count(), { timeout: W }).toBeGreaterThan(0);
+      const q = page.locator("button.mtg-p3").filter({ has: page.locator(".mtg-at") }).first();
+      const at = { text: await q.locator(".mtg-at").textContent(), title: await q.locator(".mtg-at").getAttribute("title") };
+      await q.click();
+      const line = page.locator(".mtg-lines li.at .mtg-line-at");
+      await line.waitFor({ timeout: W });
+      expect({ text: await line.textContent(), title: await line.getAttribute("title") }).toEqual(at);
+      expect(at.text).toMatch(/^\d+:\d\d$/);
+      expect(at.title).toMatch(/^\d+:\d\d [AP]M on the clock$/);
+    };
+    await weeklyCall(page);
+    await compare();
+    // A Pocket recording, added and reviewed.
+    await calls(page);
+    await page.getByRole("button", { name: "Add a call" }).first().click();
+    const add = page.locator("[data-add-call]");
+    await add.locator("[data-rec-pick]").first().click();
+    await add.locator("#mtg-add-client").selectOption({ index: 1 });
+    const name = await add.getByLabel("Name", { exact: true }).inputValue();
+    await add.getByRole("button", { name: "Add and review" }).click();
+    await page.getByRole("heading", { level: 2, name }).waitFor({ timeout: W });
+    await compare();
+  }, T);
 });

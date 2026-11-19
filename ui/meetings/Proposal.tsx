@@ -27,6 +27,8 @@ export function fieldsLine(p: Proposal): string {
 }
 
 export type ProposalProps = {
+  /** MC-6: a quote's clock time ("1:05 PM on the clock") from its time into the call, for its hover. */
+  clockOf?: (at: string) => string | null;
   p: Proposal;
   check: ProposalCheck | undefined;
   err: string | null;
@@ -50,7 +52,7 @@ export type ProposalProps = {
   onQuote?: ((line: number) => void) | undefined;
 };
 
-export function ProposalRow({ p, check, err, ticked, editable, can, busy, clientKey, opts, today, open, onOpen, onTick, onEdit, onSend, onSendBreakDown, onKeep, onSkip, onEnable, onQuote }: ProposalProps) {
+export function ProposalRow({ p, check, err, ticked, editable, can, busy, clientKey, opts, today, open, onOpen, onTick, onEdit, onSend, onSendBreakDown, onKeep, onSkip, onEnable, onQuote, clockOf }: ProposalProps) {
   const b = p.body;
   // RQ-1: a new item at the feature tier (the lowest portfolio level of the client's process, never a type's name).
   const featureTier = b.kind === "gap" && isFeatureTier(opts?.levels, b.type);
@@ -107,7 +109,7 @@ export function ProposalRow({ p, check, err, ticked, editable, can, busy, client
       {q ? (
         <button type="button" className="mtg-p3" disabled={!onQuote} onClick={() => onQuote?.(q.n)} aria-label={PAGE_TEXT.openQuote(q.speaker)} title={q.text}>
           <span className="mtg-who">{q.speaker}</span>
-          {q.at && <span className="mtg-at">{q.at}</span>}
+          {q.at && <span className="mtg-at" title={clockOf?.(q.at) ?? undefined}>{q.at}</span>}
           <span className="mtg-said">{q.text}</span>
         </button>
       ) : p.quotes === null ? (
