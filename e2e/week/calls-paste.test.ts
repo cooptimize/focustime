@@ -69,6 +69,9 @@ describe.skipIf(!CHROMIUM)("MC-7: paste a transcript or your notes into a call (
     const add = page.getByRole("form", { name: "Add a call" });
     await add.locator("[data-choice='paste']").click();
     const box = add.getByLabel("Paste a transcript or your notes");
+    // No autocomplete and no spellcheck: a browser's online checker would send the words away before any press.
+    await expect(box.getAttribute("spellcheck")).resolves.toBe("false");
+    await expect(box.getAttribute("autocomplete")).resolves.toBe("off");
     await box.fill(TRANSCRIPT);
     const line = add.locator("[data-paste-line]");
     await expect.poll(() => line.getAttribute("data-paste-line"), { timeout: W }).toBe("transcript");

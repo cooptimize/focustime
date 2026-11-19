@@ -1,8 +1,8 @@
 // MC-7: Paste, beside the other transcript choices: one box that takes a transcript or the reviewer's notes, says what
 // FocusTime took it for and how much, and switches to the other reading on a press. The text is held only in this
 // component's memory until the press: never in the browser's storage (no autocomplete, nothing saved), so a reload
-// loses it, and leaving the page with text in the box asks first. Plain text only: a textarea takes no formatting,
-// and nothing in it is drawn as markup.
+// loses it, and leaving the page with text in the box asks first. Spellcheck is off, so a browser's online checker never
+// sends it anywhere. Plain text only: a textarea takes no formatting, and nothing in it is drawn as markup.
 import { useDeferredValue, useEffect, useId, useMemo, useState } from "react";
 import { readPaste, type PasteAs, type PasteRead } from "../../plan/transcript.ts";
 import { PASTE_TEXT } from "../../plan/call-words.ts";
@@ -47,7 +47,7 @@ export function PasteField({ p, autoFocus = false, children }: { p: PasteState; 
   return (
     <div className="mtg-paste" data-paste="">
       <label htmlFor={`${id}-box`} className="mtg-paste-label">{PASTE_TEXT.label}</label>
-      <TextBox id={`${id}-box`} className="mtg-paste-box" minRows={12} maxRows={24} value={p.text} onChange={(e) => p.setText(e.target.value)} autoComplete="off" autoFocus={autoFocus} aria-describedby={`${id}-hint ${id}-line`} data-paste-box="" />
+      <TextBox id={`${id}-box`} className="mtg-paste-box" minRows={12} maxRows={24} value={p.text} onChange={(e) => p.setText(e.target.value)} autoComplete="off" spellCheck={false} autoFocus={autoFocus} aria-describedby={`${id}-hint ${id}-line`} data-paste-box="" />
       <span id={`${id}-hint`} className="mtg-drop-kinds">{PASTE_TEXT.hint}</span>
       <p id={`${id}-line`} className="mtg-paste-line" role="status" aria-live="polite" data-paste-line={r ? (r.tooLong ? "long" : r.tooShort ? "short" : r.as) : ""}>
         {!r ? null : r.tooLong ? (
