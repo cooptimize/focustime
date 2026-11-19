@@ -150,6 +150,8 @@ type SuggestView = {
   onSuggest: ((c: StatusClient, f: StatusFeature) => void) | null;
   suggesting: Record<string, boolean>;
 };
+/** A feature counts as updated when it has a line on the report and doesn't still need one of mine (its tag is off). */
+const isUpdated = (f: StatusFeature) => (f.thisWeek ?? []).length > 0 && !(f.needsYou && !(f.thisWeek ?? []).some((cm) => cm.who === "mine"));
 const skey = (clientKey: string, itemId: number) => `${clientKey}:${itemId}`;
 /** The suggestion a feature shows: there, not dismissed. */
 const shownSugg = (v: SuggestView | undefined, c: StatusClient, f: StatusFeature) => (v && !v.dismissed.has(skey(c.clientKey, f.id)) ? v.by[skey(c.clientKey, f.id)] : undefined);
@@ -287,7 +289,7 @@ function StatusBody({ tz, switcher, colors, readOnly, version, onChanged, group,
       void call<SuggestAnswer>("status.suggest", { clientKey: n.clientKey, itemIds: ask.slice(0, 40) }).then(
         (r) => {
           // GD-2: the check after generation replaced another client's name; the note goes in the suggestion itself.
-          setSugg((s) => ({ ...s, ...Object.fromEntries(r.suggestions.filter((x) => x.text.trim() && !s[skey(n.clientKey, x.itemId)]).map((x) => [skey(n.clientKey, x.itemId), { ...x, ...(r.namesRemoved && x.source === "ai" ? { namesRemoved: r.namesRemoved } : {}) }])) }));
+          setSugg((s) => ({ ...s, ...Object.fromEntries(r.suggestions.filter((x) => x.text.trim() && !s[skey(n.clientKey, x.itemId)]).map((x) => [skey(n.clientKey, x.itemId), { ...x, ...(r.namesRemoved && x.source === "ai" && /another client/i.test(x.text) ? { namesRemoved: r.namesRemoved } : {}) }])) }));
           setSuggNote((m) => ({ ...m, [n.clientKey]: r.ai !== "ok" ? (r.message ?? "") : "" }));
         },
         (e) => setSuggNote((m) => ({ ...m, [n.clientKey]: errText(e) })),
@@ -301,10 +303,11 @@ function StatusBody({ tz, switcher, colors, readOnly, version, onChanged, group,
     setLines((ls) => ls.filter((l) => l.key !== key));
     setOpen((o) => (o === key ? null : o));
   };
-  const add = (c: StatusClient, f: StatusFeature, text = "", from: Line["from"] = "me", openIt = true) => {
+  const add = (c: StatusClient, f: StatusFeature, text = "", from: Line["from"] = "me", openIt = true): string => {
     const key = newKey();
     setLines((ls) => [...ls, { key, clientKey: c.clientKey, itemId: f.id, kind: "comment", commentId: null, text, from }]);
     if (openIt) setOpen(key);
+    return key;
   };
   const edit = (c: StatusClient, f: StatusFeature, cm: StatusComment) => {
     const had = lines.find((l) => (l.kind === "comment_edit" || l.kind === "comment_delete") && l.commentId === cm.id);
@@ -348,7 +351,7 @@ function StatusBody({ tz, switcher, colors, readOnly, version, onChanged, group,
       if (r.ai !== "ok") setDraftNote((n) => ({ ...n, [c.clientKey]: r.message ?? "AI couldn't suggest a line this time" }));
       const got = r.drafts.filter((d) => d.text.trim());
       if (r.ai === "ok" && !got.length) setDraftNote((n) => ({ ...n, [c.clientKey]: ST_WORDS.nothingToSuggest }));
-      setSugg((s) => ({ ...s, ...Object.fromEntries(got.map((d) => [skey(c.clientKey, d.itemId), { itemId: d.itemId, text: d.text, source: "ai" as const, ...(r.namesRemoved ? { namesRemoved: r.namesRemoved } : {}) }])) }));
+      setSugg((s) => ({ ...s, ...Object.fromEntries(got.map((d) => [skey(c.clientKey, d.itemId), { itemId: d.itemId, text: d.text, source: "ai" as const, ...(r.namesRemoved && /another client/i.test(d.text) ? { namesRemoved: r.namesRemoved } : {}) }])) }));
       // A new suggestion shows again on a feature where the last one was dismissed.
       setDismissed((ds) => ds.filter((x) => !got.some((d) => x === skey(c.clientKey, d.itemId))));
     } catch (e) {
@@ -357,14 +360,25 @@ function StatusBody({ tz, switcher, colors, readOnly, version, onChanged, group,
       setDrafting((d) => ({ ...d, [k]: false }));
     }
   };
-  const dismissedSet = useMemo(() => new Set(dismissed), [dismissed]);
   const dismiss = (k: string, id: number) => setDismissed((d) => (d.includes(skey(k, id)) ? d : [...d, skey(k, id)]));
-  // Add makes it Ready to push (Edit: opened as my line with its text); either way the suggestion is used up.
+  // Add makes it Ready to push (Edit: opened as my line with its text). The suggestion hides while its line is there or
+  // pushed, and comes back when the line is removed (as Use did on main); Dismiss hides it for the report.
+  const [usedBy, setUsedBy] = useState<Record<string, string>>({});
   const addSugg = (c: StatusClient, f: StatusFeature, s: Suggestion, openIt: boolean) => {
-    add(c, f, s.text, s.source === "ai" ? "ai" : "me", openIt);
-    dismiss(c.clientKey, f.id);
+    const key = add(c, f, s.text, s.source === "ai" ? "ai" : "me", openIt);
+    setUsedBy((u) => ({ ...u, [skey(c.clientKey, f.id)]: key }));
   };
-  const suggestView: SuggestView = { by: sugg, loading: suggLoading, dismissed: dismissedSet, onAdd: addSugg, onDismiss: dismiss, onSuggest: readOnly ? null : (c, f) => void draft(c, [f.id]), suggesting: drafting };
+  const hidden = useMemo(() => {
+    const out = new Set(dismissed);
+    for (const [k, s] of Object.entries(sugg)) {
+      const [ck] = [k.slice(0, k.lastIndexOf(":"))];
+      const used = usedBy[k];
+      const same = (l: { clientKey: string; itemId: number; text: string; key: string }) => l.clientKey === ck && l.itemId === s.itemId && (l.key === used || l.text.trim() === s.text.trim());
+      if (lines.some((l) => l.kind === "comment" && same(l)) || pushed.some((p) => p.ok && !p.undone && p.kind === "comment" && same(p))) out.add(k);
+    }
+    return out;
+  }, [dismissed, sugg, usedBy, lines, pushed]);
+  const suggestView: SuggestView = { by: sugg, loading: suggLoading, dismissed: hidden, onAdd: addSugg, onDismiss: dismiss, onSuggest: readOnly ? null : (c, f) => void draft(c, [f.id]), suggesting: drafting };
   /** Add all: every suggestion showing for the client becomes Ready to push. */
   const addAll = (c: StatusClient, features: StatusFeature[]) => {
     for (const f of features) {
@@ -438,6 +452,8 @@ function StatusBody({ tz, switcher, colors, readOnly, version, onChanged, group,
     setAdded(next);
     const there = [...shownReport.features, ...shownReport.needsYou, ...shownReport.noUpdate, ...shownReport.added].some((x) => x.id === f.id);
     if (!there) await load();
+    // Under Needs an update the added feature wouldn't show: Show goes to All, where its box opens.
+    setShow("all");
     add(reportClient(shownReport), { id: f.id } as StatusFeature);
   };
 
@@ -462,7 +478,7 @@ function StatusBody({ tz, switcher, colors, readOnly, version, onChanged, group,
     }
   }, [group, data, report, filter]);
 
-  const withUpdate = onReport ? (shownReport?.features.length ?? 0) : (data?.counts.withUpdate ?? 0);
+  const withUpdate = onReport ? (shownReport?.features.filter(isUpdated).length ?? 0) : (data?.clients.flatMap((c) => c.features).filter(isUpdated).length ?? 0);
   const ofFeatures = onReport ? allCount : (data?.counts.features ?? 0);
   const scopeSwitch = teams && teams.length > 0 ? <ScopeSwitch scope={onReport ? scope : "mine"} teams={teams} onPick={(v) => { setScope(v); setOpen(null); }} /> : null;
   const shownMode = readOnly ? "preview" : mode;
@@ -503,12 +519,12 @@ function StatusBody({ tz, switcher, colors, readOnly, version, onChanged, group,
     else out.push({ name, n: p.items.length });
     return out;
   }, []);
-  const footBar = !readOnly && ready.length > 0 && (
+  const footBar = shownMode === "edit" && ready.length > 0 && (
     <div className="bl-bulk st-foot" role="region" aria-label={ST_WORDS.ready(ready.length)} data-foot-bar="">
       <strong className="st-pending-count">{ST_WORDS.ready(ready.length)}</strong>
       <span className="muted st-foot-clients">{ST_WORDS.forClients(byClient)}</span>
       {partsSaid && <span className="muted st-parts">{partsSaid}</span>}
-      <button type="button" className="mini primary st-push-btn" data-tour="st-push" disabled={push || !writes} onClick={startPush}>{ST_WORDS.push}</button>
+      <button type="button" className="commit st-push-btn" data-tour="st-push" disabled={push || !writes} onClick={startPush}>{ST_WORDS.push}</button>
     </div>
   );
   // F: Preview's one line while lines are Ready to push: how many, Show them, Push.
@@ -516,7 +532,7 @@ function StatusBody({ tz, switcher, colors, readOnly, version, onChanged, group,
     <p className="st-preview-top" role="status" data-preview-top="">
       <span>{ST_WORDS.notOnYet(ready.length)}</span>
       <button type="button" className="link-btn" aria-pressed={showReady} onClick={() => setShowReady(!showReady)}>{showReady ? ST_WORDS.hideThem : ST_WORDS.showThem}</button>
-      <button type="button" className="mini primary" disabled={push || !writes} onClick={startPush}>{ST_WORDS.push}</button>
+      <button type="button" className="commit" disabled={push || !writes} onClick={startPush}>{ST_WORDS.push}</button>
     </p>
   );
   const pushedList = pushed.length > 0 && <PushedList pushed={pushed} data={known} onRetry={(p) => void retry(p)} onUndo={startUndo} onClear={() => setPushed([])} />;
@@ -639,13 +655,16 @@ function ReportSection({ r, color, mode, readOnly, lines, ops, sugg, suggNote, o
   const needsIds = new Set(r.needsYou.map((f) => f.id));
   const owner = (f: ReportFeature) => ({ owner: f.owner, authorAs: r.authorAs });
   const zone = useContext(ZoneCtx);
-  const sentTitle = r.window.source === "kat" && r.window.katSentAt ? `Kat last sent ${r.clientName}'s report ${when(r.window.katSentAt, zone)}` : (r.window.note ?? undefined);
+  const sentTitle = r.window.source === "kat" && r.window.katSentAt ? `Kat last sent ${r.clientName}'s report ${when(r.window.katSentAt, zone)}` : undefined;
+  // Without Kat's last send the window is a fallback: said on screen, since the report's start isn't the usual one.
+  const fallback = r.window.source !== "kat" && r.window.note ? <p className="muted st-note">{r.window.note}</p> : null;
   if (mode === "preview") {
     // ST-1: only what is in DevOps now; Show them adds the features that have only Ready to push lines, drawn as such.
     const list = showReady ? previewFeatures<ReportFeature>(r.features, [...r.needsYou, ...r.added, ...r.noUpdate], lines) : r.features;
     return (
       <section className="st-client st-report st-email" style={{ "--c": color } as CSSProperties} aria-label={`${r.clientName} report`}>
         <header className="st-client-head"><h3 className="carry-client-name" title={sentTitle}><span className="swatch" aria-hidden="true" />{r.clientName}</h3></header>
+        {fallback}
         {r.message && <p className="set-problem">{r.message}</p>}
         {r.status === "ok" && !list.length && <p className="muted">No feature has a comment since Kat's last send yet, so Monday's report has no features so far.</p>}
         <div className="st-features">
@@ -660,7 +679,7 @@ function ReportSection({ r, color, mode, readOnly, lines, ops, sugg, suggNote, o
   const addedIds = new Set(r.added.map((f) => f.id));
   // Already on screen (with their own Write a line), so not offered again.
   const shownIds = new Set([...r.features, ...r.needsYou, ...r.added, ...r.noUpdate].map((f) => f.id));
-  const updated = r.features.length;
+  const updated = r.features.filter(isUpdated).length;
   const suggs = writable ? [...r.needsYou, ...body].filter((f) => shownSugg(sugg, c, f)) : [];
   return (
     <section className="st-client st-report" style={{ "--c": color } as CSSProperties} aria-label={`${r.clientName} report`}>
@@ -672,6 +691,7 @@ function ReportSection({ r, color, mode, readOnly, lines, ops, sugg, suggNote, o
           {writable && r.status === "ok" && <AddFeature catalog={r.catalog} shown={shownIds} onPick={onAddFeature} />}
         </span>
       </header>
+      {fallback}
       {r.message && <p className="set-problem">{r.message}</p>}
       {!r.canWrite && r.status === "ok" && <p className="muted st-note">Read only: add your DevOps write access for {r.clientName} in <a href="#/settings/connections/devops-write">Settings › Connections › DevOps</a> to add lines here.</p>}
       {suggNote && <p className="muted st-note" role="status">{suggNote}</p>}
@@ -684,7 +704,7 @@ function ReportSection({ r, color, mode, readOnly, lines, ops, sugg, suggNote, o
           <FeatureBlock key={f.id} c={c} f={f} mode="edit" lines={lines.filter((l) => l.itemId === f.id)} ops={ops} report={owner(f)} writableOverride={writable} added={addedIds.has(f.id)} sugg={sugg} />
         ))}
       </div>
-      {filter === "all" && <PtoBlock pto={r.pto} />}
+      <PtoBlock pto={r.pto} />
       {filter === "all" && r.noUpdate.some((f) => !needsIds.has(f.id)) && <NoUpdateList r={r} c={c} writable={writable} lines={lines} ops={ops} skip={needsIds} />}
     </section>
   );
@@ -758,12 +778,12 @@ function ClientSection({ c, color, mode, lines, drafting, draftNote, ops, sugg, 
 }) {
   const zone = useContext(ZoneCtx);
   // The time Kat last sent stays on hover of the client's name.
-  const sent = c.window.source === "kat" && c.window.katSentAt ? `Kat last sent ${c.clientName}'s report ${when(c.window.katSentAt, zone)}` : (c.window.note ?? undefined);
+  const sent = c.window.source === "kat" && c.window.katSentAt ? `Kat last sent ${c.clientName}'s report ${when(c.window.katSentAt, zone)}` : undefined;
   const canDraft = mode === "edit" && c.canWrite && c.ai === "ok" && c.features.length > 0;
   const needs = mode === "edit" ? c.features.filter((f) => f.needsYou) : [];
   const rest = mode === "edit" ? (filter === "needs" ? [] : c.features.filter((f) => !f.needsYou)) : c.features;
   if (mode === "edit" && filter === "needs" && !needs.length) return null;
-  const updated = c.features.filter((f) => (f.thisWeek ?? []).length > 0).length;
+  const updated = c.features.filter(isUpdated).length;
   const suggs = mode === "edit" && c.canWrite ? [...needs, ...rest].filter((f) => shownSugg(sugg, c, f)) : [];
   return (
     <section className={`st-client${mode === "preview" ? " st-email" : ""}`} style={{ "--c": color } as CSSProperties} aria-label={c.clientName}>
@@ -782,6 +802,7 @@ function ClientSection({ c, color, mode, lines, drafting, draftNote, ops, sugg, 
           )}
         </span>
       </header>
+      {c.window.source !== "kat" && c.window.note && <p className="muted st-note">{c.window.note}</p>}
       {c.status !== "ok" ? <p className="set-problem">{c.message}</p> : c.message && <p className="set-problem">{c.message}</p>}
       {mode === "edit" && draftNote && <p className="muted st-note" role="status">{draftNote}</p>}
       {mode === "edit" && suggNote && <p className="muted st-note" role="status">{suggNote}</p>}
@@ -853,7 +874,8 @@ function FeatureBlock({ c, f, mode, lines, ops, report, writableOverride, added,
   const delOf = (id: number) => lines.find((l) => l.kind === "comment_delete" && l.commentId === id);
   const writable = mode === "edit" && (writableOverride ?? c.canWrite);
   const readyLines = lines.filter((l) => l.text.trim() || ops.open === l.key);
-  const authorOf = (cm: StatusComment) => cm.author;
+  // Write says which lines are mine (and Coop's); Preview names everyone, as the email does.
+  const authorOf = (cm: StatusComment) => (cm.who === "mine" ? "You" : cm.author) + (cm.who === "coop" ? " · Coop" : "");
 
   if (mode === "preview") {
     // ST-1: as Monday's email reads if it were sent now: only what is in DevOps. Show them draws the Ready to push lines
@@ -866,7 +888,7 @@ function FeatureBlock({ c, f, mode, lines, ops, report, writableOverride, added,
           <p className="set-problem st-line">Comments couldn't be read</p>
         ) : comments.length ? (
           <ul className="st-bullets">
-            {comments.map((cm) => <li key={cm.id} data-state="on_report">{cm.text} <span className="st-author">· {authorOf(cm)}</span></li>)}
+            {comments.map((cm) => <li key={cm.id} data-state="on_report">{cm.text} <span className="st-author">· {cm.author}</span></li>)}
           </ul>
         ) : (
           <p className="st-none">{ST_WORDS.noUpdate}</p>
@@ -890,7 +912,7 @@ function FeatureBlock({ c, f, mode, lines, ops, report, writableOverride, added,
       <div className="st-feature-head">
         <h4><WorkLink clientKey={c.clientKey} url={f.url} className="st-title">{f.title}</WorkLink></h4>
         <span className="muted st-meta">#{f.id} · {f.state}{report ? ` · ${report.owner ? `Owner ${report.owner}` : "No owner"}` : ""}</span>
-        {needsTag && <span className="st-badge" title={f.you ? `You worked on this: ${f.you.line}` : undefined}>{ST_WORDS.needsUpdate}</span>}
+        {needsTag && <span className="st-badge" title={f.you ? `You worked on this: ${f.you.line}` : undefined} {...(f.you ? { "aria-description": `You worked on this: ${f.you.line}` } : {})}>{ST_WORDS.needsUpdate}</span>}
         {f.lastWeek.length > 0 && <button type="button" className="link-btn st-last-link" aria-expanded={last} onClick={() => setLast(!last)}>{last ? ST_WORDS.hideLastWeek : ST_WORDS.lastWeek}</button>}
       </div>
       {last && (
@@ -912,8 +934,8 @@ function FeatureBlock({ c, f, mode, lines, ops, report, writableOverride, added,
                     <span className="st-text">{cm.text}</span>{" "}
                     <span className="st-by">
                       <span className="st-author">· {authorOf(cm)}, <Day at={cm.at} /></span>
-                      {mineEditable && !busy && <button type="button" className="link-btn" onClick={() => ops.edit(c, f, cm)}>{ST_WORDS.edit}</button>}
-                      {mineEditable && !busy && <button type="button" className="link-btn" onClick={() => ops.del(c, f, cm)}>{ST_WORDS.delete}</button>}
+                      {mineEditable && !busy && <button type="button" className="mini quiet" onClick={() => ops.edit(c, f, cm)}>{ST_WORDS.edit}</button>}
+                      {mineEditable && !busy && <button type="button" className="mini quiet" onClick={() => ops.del(c, f, cm)}>{ST_WORDS.delete}</button>}
                     </span>
                   </li>
                 );
@@ -960,7 +982,7 @@ function SuggestionCard({ s, hints, open, onBasis, onAdd, onEdit, onDismiss }: {
       <span className="st-sugg-actions">
         <button type="button" className="mini" onClick={onAdd}>{ST_WORDS.add}</button>
         <button type="button" className="mini quiet" onClick={onEdit}>{ST_WORDS.edit}</button>
-        <button type="button" className="link-btn" onClick={onDismiss}>{ST_WORDS.dismiss}</button>
+        <button type="button" className="mini quiet" onClick={onDismiss}>{ST_WORDS.dismiss}</button>
       </span>
       {s.namesRemoved && <p className="st-sugg-note" role="note">{s.namesRemoved}</p>}
       {hints.length > 0 && <button type="button" className="link-btn st-basis" aria-expanded={open} onClick={onBasis}>{ST_WORDS.basedOn(hints.length)}</button>}
@@ -995,7 +1017,7 @@ function LineRow({ line, label, ops, authorAs }: { line: Line; label: string; op
       )}
       <span className="st-box-foot">
         <span className="st-pending-tag">{STATE_NAME.ready}{note ? ` · ${note}` : ""}</span>
-        <button type="button" className="link-btn" onClick={() => ops.remove(line.key)}>{del ? ST_WORDS.keep : ST_WORDS.remove}</button>
+        <button type="button" className="mini quiet" onClick={() => ops.remove(line.key)}>{del ? ST_WORDS.keep : ST_WORDS.remove}</button>
       </span>
     </div>
   );
@@ -1047,7 +1069,7 @@ function LineBox({ line, label, ops, authorAs }: { line: Line; label: string; op
       {flag && <MentionFlag names={flag.names} where="this client's status report" onReplace={() => ops.change(line.key, { text: flag.replaced, from: "me" })} />}
       <span className="st-box-foot">
         <span className="muted">{line.kind === "comment_edit" ? ST_WORDS.editHint : ST_WORDS.lineHint}{authorAs !== undefined ? ` · ${ST_WORDS.showsAs(authorAs)}` : ""}</span>
-        <button type="button" className="link-btn" onClick={() => ops.remove(line.key)}>{line.kind === "comment_edit" ? "Cancel edit" : ST_WORDS.remove}</button>
+        <button type="button" className="mini quiet" onClick={() => ops.remove(line.key)}>{line.kind === "comment_edit" ? "Cancel edit" : ST_WORDS.remove}</button>
       </span>
     </div>
   );
@@ -1064,13 +1086,13 @@ function PushedList({ pushed, data, onRetry, onUndo, onClear }: { pushed: Pushed
     <section className="st-pushed" aria-label="Pushed">
       <header className="st-pushed-head">
         <h3>Pushed just now</h3>
-        <button type="button" className="link-btn" onClick={onClear}>Hide</button>
+        <button type="button" className="mini quiet" onClick={onClear}>Hide</button>
       </header>
       <ul>
         {pushed.map((p) => (
           <li key={p.key} className={p.ok ? "ok" : "bad"} data-state={!p.ok ? "ready" : p.undone || p.kind === "comment_delete" ? undefined : "on_report"}>
             <span className="st-pushed-what">{featureTitle(data, p.clientKey, p.itemId)}: {p.kind === "comment_delete" ? "deleted " : ""}{p.text.length > 90 ? `${p.text.slice(0, 89)}…` : p.text}</span>
-            <span className={p.ok ? "muted" : "set-problem"}>{p.undone ? LINE_NOTE.undone : !p.ok ? `${STATE_NAME.ready} · ${LINE_NOTE.failed(p.message)}` : p.kind === "comment_delete" ? p.message : `${STATE_NAME.on_report} · ${p.message}`}</span>
+            <span className={p.ok ? "muted" : "set-problem"}>{p.undone ? LINE_NOTE.undone : !p.ok ? `${STATE_NAME.ready} · ${LINE_NOTE.failed(p.message)}` : p.kind === "comment_delete" ? p.message : STATE_NAME.on_report}</span>
             {!p.ok && p.writeId !== null && <button type="button" className="mini" onClick={() => onRetry(p)}>Retry</button>}
             {p.ok && !p.undone && p.writeId !== null && <button type="button" className="mini quiet" onClick={() => onUndo(p)}>Undo</button>}
           </li>

@@ -31,7 +31,8 @@ describe.skipIf(!CHROMIUM)("Status (SR-1)", () => {
     const { page, errors } = await freshPage(h);
     await openStatus(page);
     await expect.poll(() => page.locator(".st-sends").textContent()).toBe("For Monday, Nov 9 · Kat sends it 7:00 AM");
-    await expect.poll(() => page.locator("[data-updated]").textContent()).toBe("2 of 5 features have an update");
+    // Harbor has teammates' lines but still needs mine (its tag is on), so it isn't counted as updated.
+    await expect.poll(() => page.locator("[data-updated]").textContent()).toBe("1 of 5 features have an update");
     await expect.poll(() => page.locator("[data-show=needs] .seg-count").textContent()).toBe("3");
     await page.locator("[data-show=all]").click();
     // WD-1: Status is its own tab, current.
@@ -60,7 +61,7 @@ describe.skipIf(!CHROMIUM)("Status (SR-1)", () => {
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/sr1-push-preview-1920.png` });
     await dialog.getByRole("button", { name: "Add comment in DevOps" }).click();
     await dialog.waitFor({ state: "detached", timeout: 30_000 });
-    await expect.poll(() => page.locator("[data-updated]").textContent()).toBe("3 of 5 features have an update");
+    await expect.poll(() => page.locator("[data-updated]").textContent()).toBe("2 of 5 features have an update");
     expect(await page.locator("[data-foot-bar]").count()).toBe(0);
     await page.locator(".st-pushed").getByRole("button", { name: "Undo" }).waitFor();
     // Preview reads like the email: the line is a bullet under its heading, with its author.

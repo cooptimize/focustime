@@ -32,7 +32,7 @@ The rule is `stateOf` in `ui/status-states.ts`; `ui/status-states.test.ts` has t
 | An edit of my comment | Edit | Not this text | Yes | the comment's text replaced, "Edited, not pushed yet", Undo edit | **Ready to push**: in Not on it yet, "Ready to push · Edit of your line", Remove; the bullet keeps DevOps' text |
 | A delete of my comment | Delete | Yes, until pushed | Yes | the comment struck through, "Deleted when you push", Keep it | **Ready to push**: in Not on it yet, struck through, "Ready to push · Deletes your line", Keep it |
 | A line being pushed | Push's preview open | No | In the preview | unchanged under the preview | **Ready to push**, unchanged under the preview |
-| A pushed line | Confirm in the preview | Yes | No | "Pushed just now": "Comment added in DevOps", Undo | **On the report**: in its feature as a bullet, and in Pushed just now "On the report · Comment added in DevOps", Undo |
+| A pushed line | Confirm in the preview | Yes | No | "Pushed just now": "Comment added in DevOps", Undo | **On the report**: in its feature as a bullet, and in Pushed just now "On the report", Undo |
 | A line that failed to push | DevOps refused or didn't read back | No | Yes (Retry) | "Pushed just now": the reason in red, Retry; the line stays pending | **Ready to push**: stays in Not on it yet; Pushed just now "Ready to push · Didn't push: <why>", Retry |
 | Last week's lines | DevOps, last week's window | Yes (last week's report) | No | folded "Last week (1)" | **On the report** (last week's): a bullet with author and day, behind "See last week's lines" |
 

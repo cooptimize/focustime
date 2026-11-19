@@ -143,6 +143,12 @@ describe.skipIf(!CHROMIUM)("ST-1: three states", () => {
     await box.press("Escape");
     await expect.poll(() => atlas.locator('.st-pending-line[data-state="ready"]').count()).toBe(1);
     expect(await atlas.locator('[data-state="suggested"]').count()).toBe(0);
+    // Remove brings the suggestion back (as Use's Remove did); Edit again keeps the test's line.
+    await atlas.locator(".st-pending-line").getByRole("button", { name: "Remove" }).click();
+    await expect.poll(() => atlas.locator('[data-state="suggested"]').count()).toBe(1);
+    await atlas.getByRole("button", { name: "Edit", exact: true }).click();
+    await atlas.getByRole("textbox").press("Escape");
+    await expect.poll(() => atlas.locator('.st-pending-line[data-state="ready"]').count()).toBe(1);
     // Dismiss (AI): gone, nothing ready.
     await internal.getByRole("button", { name: "Dismiss" }).click();
     expect(await internal.locator('[data-state="suggested"]').count()).toBe(0);

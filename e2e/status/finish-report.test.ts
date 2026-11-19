@@ -120,7 +120,7 @@ describe.skipIf(!CHROMIUM)("Status you can finish (SR-3)", () => {
     await page.locator("[data-updated]").waitFor({ timeout: 30_000 });
     await page.getByRole("combobox", { name: "Client report" }).selectOption({ label: "Northwind report" });
     await page.getByRole("heading", { name: "Northwind report" }).waitFor({ timeout: 30_000 });
-    await page.locator("[data-show=all]").click();
+    // Under Needs an update (as it opens): PTO still shows, and Add a feature goes to All, where the new box opens.
     await expect.poll(() => page.locator(".st-pto li.st-holiday").allTextContents()).toEqual(["Founders Day (observed) · Thu, Nov 12", "Holiday · Mon, Nov 16"]);
     await page.getByRole("button", { name: "Add a feature" }).click();
     const pop = page.getByRole("dialog", { name: /^Add a feature/ });
@@ -130,7 +130,8 @@ describe.skipIf(!CHROMIUM)("Status you can finish (SR-3)", () => {
     const first = pop.getByRole("option").first();
     const title = (await first.locator(".fl-label").textContent())?.trim() ?? "";
     await first.click();
-    await expect.poll(() => page.locator(".st-report .st-features > .st-feature").count()).toBe(before + 1);
+    await expect.poll(() => page.locator("[data-show=all]").getAttribute("aria-pressed")).toBe("true");
+    await expect.poll(() => page.locator(".st-report .st-features > .st-feature").count()).toBeGreaterThan(before);
     await expect.poll(() => page.evaluate(() => document.activeElement?.tagName)).toBe("TEXTAREA");
     expect(title.length).toBeGreaterThan(0);
     await page.keyboard.type("Kicked off with the store team.");
