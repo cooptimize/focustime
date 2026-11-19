@@ -23,7 +23,7 @@ async function pickStory(f: Locator) {
         return 0;
       }
       return ++steady;
-    }, { timeout: 30_000, intervals: [200] })
+    }, { timeout: 30_000, interval: 200 })
     .toBeGreaterThanOrEqual(3);
 }
 
