@@ -16,7 +16,7 @@
 // Within a tier: the person's own before Admin's, a setting's own row before one of its parts, the whole of what was
 // typed being one of its names, fewer words in the label, then the registry's order.
 import { NOT_SETTINGS, SECTIONS, SETTINGS, sectionOf, whereOf, type NotSetting, type SectionDef, type SettingDef } from "./registry.ts";
-import { ADMIN_PARTS, CLIENT_TABS, PART_NAME, PART_TABS, adminHref, type TabbedPart } from "./admin/places.ts";
+import { ADMIN_PARTS, CLIENT_TABS, PART_NAME, PART_TABS, TAB_WORDS, adminHref, type TabbedPart } from "./admin/places.ts";
 import { SETTINGS_ON_SCREEN, type AdminSetting } from "./admin/settings-list.ts";
 
 export type ResultKind = "section" | "setting" | "client" | "admin" | "answer";
@@ -134,7 +134,9 @@ function candidates(ws: readonly string[], o: SearchOpts): Scored[] {
 }
 
 /** The best first, by the tiers and the order within a tier at the top of this file. */
-const byRank = (a: Scored, b: Scored) => a.tier - b.tier || +a.admin - +b.admin || +a.part - +b.part || +b.exact - +a.exact || a.size - b.size || a.order - b.order;
+// Admin's results come under all of the person's own, except an Admin part named by the words ("audit", "health").
+const under = (x: Scored) => (x.admin && !(x.tier === 0 && /^admin:(part|place):/.test(x.id)) ? 1 : 0);
+const byRank = (a: Scored, b: Scored) => under(a) - under(b) || a.tier - b.tier || +a.admin - +b.admin || +a.part - +b.part || +b.exact - +a.exact || a.size - b.size || a.order - b.order;
 const strip = ({ admin: _a, part: _p, exact: _e, size: _s, order: _o, ...r }: Scored): SearchResult => r;
 
 /** Settings' search: everything that matches, best first. Nothing typed is nothing found. */
@@ -203,7 +205,7 @@ export function adminItems(client: string | null = null): AdminItem[] {
   const items: AdminItem[] = [item("place:admin", { label: "Admin", words: ["admin console", "team settings"] }, "Admin", "#/admin", "section")];
   for (const [p, name] of ADMIN_PARTS) items.push(item(`part:${p}`, { label: name }, "Admin", adminHref({ part: p }), "section"));
   for (const p of Object.keys(PART_TABS) as TabbedPart[])
-    for (const [t, name] of PART_TABS[p]) if (norm(name) !== norm(PART_NAME[p])) items.push(item(`tab:${p}/${t}`, { label: name, place: PART_NAME[p] }, PART_NAME[p], adminHref({ part: p, tab: t }), "tab"));
+    for (const [t, name] of PART_TABS[p]) if (norm(name) !== norm(PART_NAME[p])) items.push(item(`tab:${p}/${t}`, { label: name, place: PART_NAME[p], words: TAB_WORDS[`${p}/${t}`] }, PART_NAME[p], adminHref({ part: p, tab: t }), "tab"));
   for (const [t, name] of CLIENT_TABS) items.push(item(`tab:client/${t}`, { label: name, place: "client" }, client ? `${client}'s page` : "A client's page", client ? adminHref({ part: "clients", client, tab: t }) : adminHref({ part: "clients" }), "tab", true));
   for (const x of SETTINGS_ON_SCREEN) items.push(adminSettingItem(x, client));
   return items;

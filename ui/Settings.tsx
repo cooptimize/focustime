@@ -70,6 +70,11 @@ function SettingsPanel(props: Props & { admin: boolean | null }) {
   const [clientSetting, setClientSetting] = useState<string | null>(() => takeLanding());
   // A jump to a setting is owed once, until it lands or the person moves on (see the effect below).
   const jumpDue = useRef(false);
+  // SA-5: moving to another section by its address (a link, Back) leaves the search, as a rail pick does.
+  useEffect(() => {
+    setQ("");
+    setAsking(null);
+  }, [props.section]);
   const phone = usePhone();
   const list = useNarrow() || phone;
   const admin = props.admin;
