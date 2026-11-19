@@ -57,7 +57,9 @@ describe("MC-4: Calls' list", () => {
     const c = filterCounts(rows, null, gone.keys.length);
     expect(c.closed).toBe(1);
     expect(c.hidden).toBe(2);
-    expect(c.open + c.closed + c.hidden - gone.keys.length).toBe(rows.length);
+    // MC-6: the no-transcript fold says its own number; Open counts the rest.
+    const fold = openList(rows, null, TODAY).foldCount;
+    expect(c.open + fold + c.closed + c.hidden - gone.keys.length).toBe(rows.length);
     expect(closedList(rows, null).map((r) => r.occurrenceId)).toEqual([13]);
     expect(hiddenList(rows, null).map((r) => r.key)).toEqual(["chid"]);
   });
@@ -169,7 +171,7 @@ describe("MC-2b: my Pocket recordings in the list", () => {
       ["puntitled", "Pocket recording", "2026-11-04", "open", "Not reviewed"],
       ["pno-call", "Call with the carrier", "2026-11-01", "open", "Not reviewed"],
     ]);
-    expect(filterCounts(rows, null).open).toBe(rows.filter((r) => r.bucket === "open").length);
+    expect(filterCounts(rows, null).open).toBe(rows.filter((r) => r.bucket === "open" && r.place !== "fold").length);
   });
 
   it("MC-4: Hidden counts a meeting hidden every one once, as its list shows it", () => {
@@ -246,5 +248,13 @@ describe("MC-6: a chat call's client choices", () => {
   });
   it("any other call offers every client I follow", () => {
     expect(callClientChoices(clients, null).map((c) => c.clientKey)).toEqual(["Atlas", "Cooptimize", "northwind", "Harbor"]);
+  });
+});
+
+describe("MC-6: Open's number", () => {
+  it("counts the calls outside the no-transcript fold; the fold keeps its own number", () => {
+    const row = (key: string, place: "needs" | "week" | "fold") => ({ key, bucket: "open", place, seriesKey: null, clientKey: null, suggested: null }) as unknown as Parameters<typeof filterCounts>[0][number];
+    const rows = [row("a", "needs"), row("b", "week"), row("c", "fold"), row("d", "fold")];
+    expect(filterCounts(rows, null).open).toBe(2);
   });
 });

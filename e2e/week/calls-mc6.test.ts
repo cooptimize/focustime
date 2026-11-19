@@ -261,4 +261,15 @@ describe.skipIf(!CHROMIUM)("MC-6: Calls polish (browser, demo mode)", () => {
     const kept = (await call(page, "meeting.review", { occurrenceId: id })).data.proposals.find((p: { id: number }) => String(p.id) === pid);
     expect(kept.result.message).toBe("Added to your Promises");
   }, T);
+
+  it("14: Open's number counts the calls outside the no-transcript fold; the fold keeps its own", async () => {
+    const { page } = await open();
+    await calls(page);
+    const openN = Number(await page.locator("[data-calls-filter='open'] .seg-count").textContent());
+    const foldN = Number((await page.locator("[data-calls-fold='no-transcript'] > button").textContent())!.match(/(\d+)/)![1]);
+    expect(foldN).toBeGreaterThan(0);
+    // The calls in Needs you and the weeks (the closed in the weeks are said apart, "1 closed"): Open's number.
+    const outside = await page.locator("[data-calls-list] li[data-row]").evaluateAll((ls) => ls.filter((l) => !l.closest("[data-calls-fold]")).length);
+    expect(openN).toBe(outside);
+  }, T);
 });

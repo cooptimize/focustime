@@ -198,6 +198,7 @@ export function forClient(rows: readonly CallRow[], client: string | null): Call
 /**
  * Each filter's count for a client choice: the calls (a repeating meeting's row counts each of its calls), except that
  * Hidden counts what its list shows: a meeting hidden every one is one, however many of its calls are in the window.
+ * Open leaves out the calls in the no-transcript fold (MC-6).
  */
 export function filterCounts(rows: readonly CallRow[], client: string | null, hiddenMissing = 0, hiddenSeries: ReadonlySet<string> = new Set()): Record<ListFilter, number> {
   const out: Record<ListFilter, number> = { open: 0, closed: 0, hidden: client === null ? hiddenMissing : 0 };
@@ -207,6 +208,8 @@ export function filterCounts(rows: readonly CallRow[], client: string | null, hi
       if (seen.has(r.seriesKey)) continue;
       seen.add(r.seriesKey);
     }
+    // MC-6: Open counts the calls outside the no-transcript fold; the fold says its own number.
+    if (r.bucket === "open" && r.place === "fold") continue;
     out[r.bucket]++;
   }
   return out;
