@@ -264,7 +264,7 @@ describe.skipIf(!CHROMIUM)("MC-5: Calls made scannable (browser, demo mode)", ()
     const recs = add.locator("[data-rec-pick] label");
     await expect.poll(() => recs.count()).toBeGreaterThan(1);
     // Newest first; each line its title, when and length.
-    await expect(recs.first().textContent()).resolves.toMatch(/^Call with the carrier.*Nov 3.*25 min/);
+    await expect(recs.first().textContent()).resolves.toMatch(/^Call with the carrier.*Nov 3.*25m/);
     // One that fits a listed call says which.
     await expect(recs.filter({ hasText: "Sprint planning" }).locator(".mtg-rec-fits").textContent()).resolves.toBe("Goes with Harbor sprint planning Review that call");
     // Choosing one fills the name and takes its time (not typed); the client is mine to choose and marked until chosen.
@@ -316,7 +316,7 @@ describe.skipIf(!CHROMIUM)("MC-5: Calls made scannable (browser, demo mode)", ()
     const choices = page.locator("[data-no-transcript]");
     await expect(choices.locator("[data-choice='pocket']").getAttribute("aria-pressed")).resolves.toBe("true");
     await choices.locator("[data-rec-pick] label").filter({ hasText: "Call with the carrier" }).click();
-    await expect(choices.locator("[data-takes-time]").textContent()).resolves.toMatch(/^The call takes the recording's time: Tue, Nov 3 · 4:30 PM · 25 min\.$/);
+    await expect(choices.locator("[data-takes-time]").textContent()).resolves.toMatch(/^The call takes the recording's time: Tue, Nov 3 · 4:30 PM · 25m\.$/);
     sent.length = 0;
     await choices.getByRole("button", { name: "Use this recording" }).click();
     await expect.poll(() => page.locator("[data-call-meta]").textContent(), { timeout: W }).toMatch(/Nov 3/);

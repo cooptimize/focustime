@@ -1,5 +1,6 @@
 // MC-2b: which call a person's Pocket recording goes with, from times alone. Pure and small (Calls' list uses it in the
 // first download); the rest of the Pocket rules are in plan/pocket-recordings.ts.
+import { hm } from "./fit.ts";
 
 /** A recording longer than its call by more than this asks which part comes in. */
 export const LONGER_BY_S = 10 * 60;
@@ -46,8 +47,7 @@ export function longerThanCall(r: RecordingSpan, c: Span): boolean {
   return r.seconds - (ms(c.endAt) - ms(c.startAt)) / 1000 > LONGER_BY_S;
 }
 
-/** "1 h 40 min", "45 min". */
+/** "1h 40m", "45m": MC-6, the app's own words for a length. */
 export function lengthWords(seconds: number): string {
-  const m = Math.max(1, Math.round(seconds / 60));
-  return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""}`;
+  return hm(Math.max(1, Math.round(seconds / 60)));
 }

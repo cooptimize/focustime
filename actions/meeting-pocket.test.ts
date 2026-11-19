@@ -250,7 +250,7 @@ describe("Bringing one in (MC-2b)", () => {
     const t = await setup();
     t.data(await t.act(ME, "meeting.pocket_list", {}));
     const occ = await t.keep();
-    expect(t.data(await t.act(ME, "meeting.pocket_bring", { recordingId: "r-notimes", occurrenceId: occ }))).toEqual({ ask: "whole", length: "2 h" });
+    expect(t.data(await t.act(ME, "meeting.pocket_bring", { recordingId: "r-notimes", occurrenceId: occ }))).toEqual({ ask: "whole", length: "2h" });
     expect(await t.meetings.transcript(occ)).toBeNull();
     expect(t.providerCalls).toEqual([]);
     t.data(await t.act(ME, "meeting.pocket_bring", { recordingId: "r-notimes", occurrenceId: occ, part: "all" }));

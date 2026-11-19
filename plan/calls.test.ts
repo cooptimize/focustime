@@ -33,9 +33,9 @@ describe("your other calls (MC-2)", () => {
   });
 
   it("says a length plainly", () => {
-    expect(lengthLabel(45)).toBe("45 min");
-    expect(lengthLabel(60)).toBe("1 h");
-    expect(lengthLabel(90)).toBe("1 h 30 min");
+    expect(lengthLabel(45)).toBe("45m");
+    expect(lengthLabel(60)).toBe("1h");
+    expect(lengthLabel(90)).toBe("1h 30m");
   });
 });
 

@@ -93,7 +93,7 @@ describe.skipIf(!CHROMIUM)("my Pocket recordings in Calls (MC-2b, browser, demo 
     await pocketMark(page, "Harbor sprint planning").waitFor({ timeout: 30_000 });
     await row(page, "Harbor sprint planning").click();
     const part = page.locator("[data-pocket-part]");
-    await expect(part.locator("legend").textContent()).resolves.toBe("This recording is 2 h 15 min; the call was 1 h. Which part comes in?");
+    await expect(part.locator("legend").textContent()).resolves.toBe("This recording is 2h 15m; the call was 1h. Which part comes in?");
     await expect(part.getByLabel("Only the part during the call (5 minutes either side)").isChecked()).resolves.toBe(true);
     await expect(part.getByLabel("Bring in all of it").isChecked()).resolves.toBe(false);
     await page.locator(".mtg-setup select").selectOption({ index: 1 });

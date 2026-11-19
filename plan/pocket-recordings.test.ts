@@ -121,8 +121,8 @@ describe("which call a recording goes with", () => {
   it("longer than its call by more than 10 minutes", () => {
     expect(longerThanCall(rec("a", "2026-11-16T16:00:00Z", 70), c)).toBe(false);
     expect(longerThanCall(rec("b", "2026-11-16T16:00:00Z", 71), c)).toBe(true);
-    expect(lengthWords(8100)).toBe("2 h 15 min");
-    expect(lengthWords(2820)).toBe("47 min");
+    expect(lengthWords(8100)).toBe("2h 15m");
+    expect(lengthWords(2820)).toBe("47m");
   });
 });
 

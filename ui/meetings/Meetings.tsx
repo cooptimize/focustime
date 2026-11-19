@@ -743,7 +743,7 @@ function Fold({ id, title, hint, children }: { id: string; title: string; /** MC
 }
 
 
-/** "Tue, Nov 10 · 2:00 PM · 45 min": a call's day, start and length in my zone. */
+/** "Tue, Nov 10 · 2:00 PM · 45m": a call's day, start and length in my zone. */
 const whenLine = (startAt: string, endAt: string, zone: string) => {
   const d = new Date(startAt);
   return `${d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: zone })} · ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: zone })} · ${lengthLabel(Math.round((Date.parse(endAt) - Date.parse(startAt)) / 60_000))}`;

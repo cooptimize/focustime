@@ -170,5 +170,5 @@ export const POCKET_COUNT_WORDS = {
 
 /** PK-4: "4 of your recordings in the last 14 days." */
 export const yoursLine = (n: number) => (n ? (n === 1 ? "1 of your recordings in the last 14 days." : `${n} of your recordings in the last 14 days.`) : "No recordings of yours in the last 14 days.");
-/** A recording's start and length on the setup: "Mon 10:58 AM · 47 min". */
+/** A recording's start and length on the setup: "Mon 10:58 AM · 47m". */
 export const recordingLine = (when: string, length: string) => `${when} · ${length}`;

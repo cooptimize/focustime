@@ -228,4 +228,16 @@ describe.skipIf(!CHROMIUM)("MC-6: Calls polish (browser, demo mode)", () => {
     await page.getByRole("heading", { level: 2, name }).waitFor({ timeout: W });
     await compare();
   }, T);
+
+  it("12: lengths use the app's words", async () => {
+    const { page } = await open();
+    await calls(page);
+    await page.getByRole("button", { name: "Add a call" }).first().click();
+    const recs = page.locator("[data-add-call] [data-rec-pick]");
+    await expect.poll(() => recs.count(), { timeout: W }).toBeGreaterThan(0);
+    for (const t of await recs.allTextContents()) {
+      expect(t).not.toMatch(/\d (min|h)\b/);
+      expect(t).toMatch(/· \d+(h|m)( \d+m)?\b/);
+    }
+  }, T);
 });
