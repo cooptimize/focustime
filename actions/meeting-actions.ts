@@ -924,6 +924,13 @@ export type PassDeps = {
   retriesHere?: boolean;
 };
 
+/** MC-7: who pasted a call's notes (a note's "I"), by FocusTime id and name; null when not known. */
+async function writerOf(store: MeetingStore, occurrenceId: number, users: readonly MeetingUser[]): Promise<{ id: string; name: string } | null> {
+  const by = await store.transcriptBy(occurrenceId).catch(() => null);
+  const u = by ? users.find((x) => lower(x.id) === lower(by)) : null;
+  return u ? { id: lower(u.id), name: u.name } : null;
+}
+
 /**
  * Runs the AI pass on a stored transcript and records its proposals and outcome. MC-1d: a pass that ran is "ready"
  * (with its proposals, or none); one that failed is "failed" with its kind (and, for a call sent in parts, which part),
@@ -945,7 +952,7 @@ export async function runPass(d: PassDeps, series: MeetingSeries, occ: Occurrenc
     const cooptimizers = series.attendees.flatMap((a) => users.filter((u) => lower(u.id) === lower(a)).map((u) => ({ id: lower(u.id), name: u.name })));
     // PK-1: a Pocket export's speakers are numbered, never named: the AI is told so, and promises' owners checked for it.
     // MC-2: a call that isn't registered has no role (it isn't a weekly status or planning call): none is said.
-    const r = await capturePass(ai, { clientKey: series.clientKey, clientName: cap.clientName, internal: cap.internal, meeting: { name: series.name, role: isCall(series) ? null : series.role, date: occ.date }, cooptimizers, items: cap.items, model: cap.model, directory: cap.directory, lines, speakersNamed: speakersNamed(occ.transcriptKind, [...new Set(lines.map((l) => l.speaker))]) });
+    const r = await capturePass(ai, { clientKey: series.clientKey, clientName: cap.clientName, internal: cap.internal, meeting: { name: series.name, role: isCall(series) ? null : series.role, date: occ.date }, cooptimizers, items: cap.items, model: cap.model, directory: cap.directory, lines, speakersNamed: speakersNamed(occ.transcriptKind, [...new Set(lines.map((l) => l.speaker))]), ...(occ.transcriptKind === "pasted_notes" ? { notes: true, writer: await writerOf(d.store, occ.id, users) } : {}) });
     if (r.ok) {
       await d.store.saveSummary(occ.id, r.summary);
       // MC-1e: what the page already has done, skipped or failed stays as it is, and the same thing again is left out.

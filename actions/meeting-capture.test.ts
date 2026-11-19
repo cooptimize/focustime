@@ -8,7 +8,7 @@ import type { ProviderCall } from "../ai/types.ts";
 import { buildProcessModel } from "../plan/process.ts";
 import type { TranscriptLine } from "../plan/transcript.ts";
 import { aClientEntry, aClientProcess, anAiApp, anAiRules, aWorkItem } from "../test/builders/index.ts";
-import { capturePass, summaryOf, type CaptureInput } from "./meeting-capture.ts";
+import { capturePass, NOTES_INSTRUCTION, SUMMARY_INSTRUCTION, summaryOf, type CaptureInput } from "./meeting-capture.ts";
 
 const lines: TranscriptLine[] = [
   { n: 1, speaker: "Sam Tester", at: 5, text: "Morning. Rates export first, like we did for Fabrikam on Orion." },
@@ -209,5 +209,59 @@ describe("a call's summary (MC-2)", () => {
     // A name at the clip is replaced before it is cut, so no part of it survives.
     const long = `${"x".repeat(295)} Fabrikam`;
     expect(summaryOf([[long]], { clientKey: "contoso", directory })[0]).not.toMatch(/Fabr|Fab/);
+  });
+});
+
+describe("MC-7: pasted notes", () => {
+  // The same words as `lines`, as a person's notes: no speaker, no time.
+  const notes: TranscriptLine[] = lines.map((l) => ({ ...l, speaker: "", at: null }));
+
+  it("the AI is given the notes sentence for notes and not for a transcript; nothing else it is given changes", async () => {
+    const file = setup(ANSWER);
+    await capturePass(file.ai, file.input);
+    const pasted = setup(ANSWER);
+    await capturePass(pasted.ai, { ...pasted.input, speakersNamed: true });
+    const n = setup(ANSWER);
+    await capturePass(n.ai, { ...n.input, lines: notes, speakersNamed: false, notes: true, writer: { id: "me-id", name: "Sam Tester" } });
+    const [f, p, x] = [file.calls[0]!, pasted.calls[0]!, n.calls[0]!];
+    // A pasted transcript is given exactly what a file of the same words is.
+    expect(p.instructions).toBe(f.instructions);
+    expect(p.input).toBe(f.input);
+    // Notes: the one sentence, and no other instruction changes.
+    expect(f.instructions).not.toContain(NOTES_INSTRUCTION);
+    expect(x.instructions).toBe(f.instructions.replace(`\n${SUMMARY_INSTRUCTION}`, `\n${NOTES_INSTRUCTION}\n${SUMMARY_INSTRUCTION}`));
+    expect(x.instructions).not.toContain("Labels like Speaker 1");
+    // The input: the same, without the speakers (there are none) or a time; each line as the person wrote it.
+    const strip = f.input.replace(/Speakers:\n(?:- .*\n)+\n/, "").replace(/^(L\d+) \[[^\]]*\] [^:]+: /gm, "$1 ");
+    expect(x.input).toBe(strip);
+    expect(x.input).toContain("L3 I'll send the export spec by 2026-11-13.");
+  });
+
+  it("a promise is someone's only where the note says whose: I is the writer, a name is that person; otherwise nobody's", async () => {
+    const t = setup({
+      gaps: [],
+      comments: [],
+      commitments: [
+        { who: "I", what: "Send the export spec", toName: null, due: null, lines: [3] },
+        { who: "Dana Client", what: "Check the CSV", toName: null, due: null, lines: [2] },
+        { who: "Sam Tester", what: "Decide about Excel", toName: null, due: null, lines: [4] },
+        { who: "I", what: "Something the note doesn't say", toName: null, due: null, lines: [4] },
+      ],
+    });
+    const r = await capturePass(t.ai, { ...t.input, lines: notes, speakersNamed: false, notes: true, writer: { id: "me-id", name: "Sam Tester" } });
+    if (!r.ok) throw new Error(r.message);
+    expect(r.proposals.map((p) => p.body)).toEqual([
+      expect.objectContaining({ what: "Send the export spec", who: "Sam Tester", whoId: "me-id", side: "cooptimize" }),
+      expect.objectContaining({ what: "Check the CSV", who: "Dana Client", whoId: null, side: "client" }),
+      expect.objectContaining({ what: "Decide about Excel", who: "", whoId: null, side: "unknown" }),
+      expect.objectContaining({ what: "Something the note doesn't say", who: "", whoId: null, side: "unknown" }),
+    ]);
+    // Its quotes are note lines: no speaker, no time.
+    expect(r.proposals.flatMap((p) => p.quotes).every((q) => q.speaker === "" && q.at === "")).toBe(true);
+    // Without a known writer, "I" is nobody.
+    const u = setup({ gaps: [], comments: [], commitments: [{ who: "I", what: "Send the export spec", toName: null, due: null, lines: [3] }] });
+    const r2 = await capturePass(u.ai, { ...u.input, lines: notes, speakersNamed: false, notes: true, writer: null });
+    if (!r2.ok) throw new Error(r2.message);
+    expect(r2.proposals[0]!.body).toMatchObject({ who: "", side: "unknown" });
   });
 });

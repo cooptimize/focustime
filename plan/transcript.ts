@@ -202,9 +202,10 @@ export function quotesOf(lines: readonly TranscriptLine[], refs: readonly number
   });
 }
 
-/** The lines as the AI gets them: "L12 [4:05] Name: words"; PK-1: "L12 Speaker 1: words" for a line with no time. */
+/** The lines as the AI gets them: "L12 [4:05] Name: words"; PK-1: "L12 Speaker 1: words" for a line with no time; MC-7: "L4 words" for a note. */
 export function numbered(lines: readonly TranscriptLine[]): string {
-  return lines.map((l) => `L${l.n}${l.at === null ? "" : ` [${clock(l.at)}]`} ${l.speaker}: ${l.text}`).join("\n");
+  // MC-7: a note line has no speaker: "L4 words".
+  return lines.map((l) => `L${l.n}${l.at === null ? "" : ` [${clock(l.at)}]`} ${l.speaker ? `${l.speaker}: ` : ""}${l.text}`).join("\n");
 }
 
 /** Rough tokens of a text (4 characters a token), for chunking. */

@@ -47,6 +47,12 @@ export const UNNAMED_SPEAKERS = [
   "Never decide who a label is. Name a person only where the words themselves name them (someone says their own name, or names who will do it). For a commitment's who, give that name as the words say it; when the words don't say who, give the label as it appears (for example Speaker 2).",
 ].join("\n");
 
+/**
+ * MC-7: added only for pasted notes, the one sentence: they are a person's notes, not what was said word for word, so
+ * no line is anyone's words and no note is a quote. Nothing else about the task changes.
+ */
+export const NOTES_INSTRUCTION = "This text is notes written by a person who was on the call, not what was said word for word: never credit a line to a speaker or treat a note as a quote, and for a commitment's who give only a name the note itself writes, or I where the writer says I or I'll.";
+
 const LINES: JsonSchema = { type: "array", items: { type: "integer" }, minItems: 1, maxItems: 3 };
 const nullable = (t: "string" | "integer"): JsonSchema => ({ type: [t, "null"] });
 export const MEETING_CAPTURE_SCHEMA: JsonSchema = {
@@ -98,6 +104,10 @@ export type CaptureInput = {
   lines: readonly TranscriptLine[];
   /** PK-1: false for a transcript whose speakers are numbered labels, not names (a Pocket export). */
   speakersNamed?: boolean;
+  /** MC-7: pasted notes (no speakers, no times): the AI is told so, and a promise is someone's only where the note says whose. */
+  notes?: boolean;
+  /** MC-7: who pasted the notes: a note's "I" is them. */
+  writer?: { id: string; name: string } | null;
 };
 
 export type CaptureResult =
@@ -116,7 +126,9 @@ export function contextOf(x: Pick<CaptureInput, "clientName" | "meeting" | "item
   const items = [...x.items].sort((a, b) => Number(!!b.tier) - Number(!!a.tier) || a.id - b.id).slice(0, CONTEXT_ITEMS);
   const out = [`Client: ${x.clientName}`, `Meeting: ${x.meeting.name}${x.meeting.role ? ` (${ROLE_LABEL[x.meeting.role]})` : ""}, ${x.meeting.date} (${Temporal.PlainDate.from(x.meeting.date).toLocaleString("en-US", { weekday: "long" })})`, ""];
   const coop = new Set(x.cooptimizers.map((c) => norm(c.name)));
-  out.push("Speakers:", ...speakers.map((s) => `- ${s}${coop.has(norm(s)) ? " (Cooptimize)" : ""}`), "");
+  // MC-7: notes have no speakers, so none are listed.
+  const named = speakers.filter((s) => s);
+  if (named.length) out.push("Speakers:", ...named.map((s) => `- ${s}${coop.has(norm(s)) ? " (Cooptimize)" : ""}`), "");
   if (x.model) {
     out.push("Work item types and what each takes as children:");
     for (const t of x.model.types.filter((t) => t.level && t.level !== "task")) out.push(`- ${t.name} (${t.level})${t.validChildren.length ? `: children ${t.validChildren.join(", ")}` : ""}`);
@@ -163,7 +175,10 @@ export function checkAnswer(a: Answer, x: CaptureInput, window: readonly Transcr
       dropped++;
       continue;
     }
-    const said = unnamed ? namedIn(who, window.filter((l) => lines.includes(l.n)).map((l) => l.text), x.cooptimizers) : null;
+    const cited = window.filter((l) => lines.includes(l.n)).map((l) => l.text);
+    // MC-7: in notes, "I" is the writer, and only where the cited note says I.
+    const writer = x.notes && x.writer && /^(i|me|myself)$/i.test(who) && cited.some((t) => /\b(I|I'll|I’ll|I will|I'm|I am|me|my)\b/.test(t)) ? { mate: x.writer } : null;
+    const said = writer ?? (x.notes && /^(i|me|myself)$/i.test(who) ? null : unnamed ? namedIn(who, cited, x.cooptimizers) : null);
     const mate = unnamed ? said?.mate ?? null : coop.get(norm(who)) ?? null;
     const side: CommitmentProposal["side"] = mate ? "cooptimize" : unnamed && !said ? "unknown" : "client";
     const due = c.due && /^\d{4}-\d{2}-\d{2}$/.test(c.due) ? (() => { try { return Temporal.PlainDate.from(c.due!).toString(); } catch { return null; } })() : null;
@@ -232,7 +247,7 @@ export async function capturePass(ai: AiService, x: CaptureInput): Promise<Captu
   let cost = 0;
   for (const [i, w] of windows.entries()) {
     const speakers = [...new Set(w.map((l) => l.speaker))];
-    const instructions = `${MEETING_CAPTURE_INSTRUCTIONS}${x.speakersNamed === false ? `\n${UNNAMED_SPEAKERS}` : ""}\n${SUMMARY_INSTRUCTION}`;
+    const instructions = `${MEETING_CAPTURE_INSTRUCTIONS}${x.notes ? `\n${NOTES_INSTRUCTION}` : x.speakersNamed === false ? `\n${UNNAMED_SPEAKERS}` : ""}\n${SUMMARY_INSTRUCTION}`;
     const m = maskTranscript(`${contextOf(x, speakers)}Transcript:\n${numbered(w)}`, x.clientKey, x.directory, { internal: x.internal });
     masked.client += m.masked.client;
     masked.email += m.masked.email;
