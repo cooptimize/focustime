@@ -74,6 +74,7 @@ function fake(o: { fail?: string } = {}) {
   const repo = (id: string, name: string): GitRepo => ({ id, name, defaultBranch: "main", disabled: false, webUrl: null });
   const git: CodeGit = {
     repos: async () => [repo(REPO, "ops-reporting"), repo(OTHER, "other")],
+    branches: async () => ({ names: ["main"], cut: false }),
     folder: async () => ({ commit: "c", entries: [], cut: false }),
     files: async (_c, r) => ({ commit: "c", paths: r.id === REPO ? Object.keys(FILES).sort() : ["/x/Y.Report/report.json", "/x/Y.Report/definition.pbir"], cut: false }),
     search: async () => ({ count: 0, hits: [], info: 0 }),
@@ -102,6 +103,7 @@ function ctx(git: CodeGit, o: { why?: "guest"; rule?: CodeAccess; views?: "fail"
     notCooptimizer: async () => o.why ?? null,
     clients: async () => [{ clientKey: "Contoso", name: "Contoso", color: null }],
     rule: async () => o.rule ?? "company",
+    opening: async () => null,
     team: async () => ({ myClients: [], onClient: () => false }),
     git,
     views: { add: async (v) => (o.views === "fail" ? Promise.reject(new Error("db down")) : void views.push(v)) },
@@ -118,7 +120,7 @@ describe("a report's pages in today's format", () => {
     const r = await list(c, "pages", "/rpt/Weekly ops.Report/definition/report.json");
     expect(data(r)).toEqual({ list: "pages", pages: [{ name: "Summary", hidden: false }, { name: "Detail", hidden: false }, { name: "Drill: one site", hidden: true }], unreadable: 0 });
     expect(f.opened.sort()).toEqual(["/rpt/Weekly ops.Report/definition/pages/a1/page.json", "/rpt/Weekly ops.Report/definition/pages/b2/page.json", "/rpt/Weekly ops.Report/definition/pages/c3/page.json", "/rpt/Weekly ops.Report/definition/pages/pages.json"]);
-    expect(views).toEqual([{ actorId: ME.id, actorName: ME.name, clientKey: "Contoso", repoId: REPO, repoName: "ops-reporting", path: "/rpt/Weekly ops.Report/definition/report.json", event: "pages_listed" }]);
+    expect(views).toEqual([{ actorId: ME.id, actorName: ME.name, clientKey: "Contoso", repoId: REPO, repoName: "ops-reporting on main", path: "/rpt/Weekly ops.Report/definition/report.json", event: "pages_listed" }]);
   });
   it("one page, with no pages.json", async () => {
     const f = fake();

@@ -16,6 +16,11 @@
 // (Files, more than one repo), By kind's filter and the tree, with the line about the log at their foot; the file on
 // the right. On a narrow window the list and the file are pages of their own, with Back.
 //
+// RB-7: a repo is read on a branch: the one chosen in the picker beside the repo's name (in the address, only while it
+// differs from the usual one), else the client's opening branch, else the repo's default. Every list and file here is
+// kept per branch; a line says when the branch on screen isn't the usual one, when a chosen branch is gone, and when a
+// file isn't on the branch chosen (Code goes to the nearest folder that is). The choice is never stored.
+//
 // A file is always drawn as text: each colored piece is a text node in a span (ui/code/highlight.ts), never markup,
 // so an .html or .svg file shows its source and nothing in it runs. Nothing of the code is kept in the browser's
 // storage: folder lists, names, file text and the words typed live only in this page's memory while Code is open.
@@ -27,6 +32,8 @@ import { colorize, plainLines, type Line } from "./highlight.ts";
 import { formatJson, looksSquashed } from "./format.ts";
 import { INSIDE_WORDS_MAX, SEARCH_CLIENTS_AT_ONCE, type CodeEntry, type CodeFileView, type CodeRepoView } from "../../plan/code.ts";
 import { insideTerms, termRanges, type InsideAnswer, type Kind, type RepoThings, type SqlGrouping, type SqlType } from "../../plan/code-kinds.ts";
+import { BRANCH_TEXT, foldersUp, type BranchPick } from "../../plan/code-branch.ts";
+import { BranchPicker } from "./BranchPicker.tsx";
 import { ByKind, InsideResults, NAMES_TEXT, newKindsMemo, SearchChoices, SearchResults, type InsideRun, type KindsMemo, type SearchRun } from "./Names.tsx";
 import type { CodeAt } from "../nav.ts";
 import "./code.css";
@@ -526,7 +533,47 @@ export default function Code({ at, onGo, sqlGroup = "schema", onSqlGroup }: { at
   const client = at.clientKey ? (list.find((c) => c.clientKey === at.clientKey) ?? null) : null;
   const repoList = at.clientKey ? repos.get(at.clientKey) : undefined;
   const repo = Array.isArray(repoList) && at.repoId ? (repoList.find((r) => r.id === at.repoId) ?? null) : null;
-  const rk = (path: string) => `${at.clientKey}\u0000${at.repoId}\u0000${path}`;
+  // RB-7: what was read is kept per branch: the same repo on another branch is another set of folders and files.
+  const bk = at.branch ?? "";
+  const repoKey = `${at.clientKey}\u0000${at.repoId}@${bk}`;
+  const rk = (path: string) => `${repoKey}\u0000${path}`;
+  /** The branch each repo (per branch asked) was read on, from the server's answers. */
+  const [picks, setPicks] = useState<Map<string, BranchPick>>(new Map());
+  const pick = picks.get(repoKey) ?? null;
+  /** A chosen branch that was gone (said once, on the repo's usual branch), and a file that wasn't on a chosen branch. */
+  const [gone, setGone] = useState<{ key: string; asked: string; opening: string } | null>(null);
+  const [moved, setMoved] = useState<{ key: string; path: string; name: string; folder: string } | null>(null);
+  /** The file open when a branch was chosen: if it isn't on that branch, Code goes to the nearest folder that is. */
+  const moving = useRef<{ key: string; path: string; name: string } | null>(null);
+  const atRef = useRef(at);
+  atRef.current = at;
+  const notePick = useCallback((key: string, p: BranchPick | undefined) => {
+    if (!p) return;
+    setPicks((m) => (m.get(key)?.name === p.name && m.get(key)?.why === p.why ? m : new Map(m).set(key, p)));
+    if (p.gone) {
+      // The address asked for a branch that isn't there any more: say so, and drop it from the address.
+      const a = atRef.current;
+      const usualKey = `${a.clientKey}\u0000${a.repoId}@`;
+      setPicks((m) => new Map(m).set(usualKey, { ...p, gone: null }));
+      setGone({ key: usualKey, asked: p.gone, opening: p.opening });
+      if (a.branch) {
+        const { branch: _drop, ...rest } = a;
+        onGoRef.current(rest, { replace: true });
+      }
+    }
+  }, []);
+  const onGoRef = useRef(onGo);
+  onGoRef.current = onGo;
+  /** RB-7: the picker's choice: the usual branch drops out of the address; the open file stays if that branch has it. */
+  const chooseBranch = (name: string) => {
+    if (!at.clientKey || !at.repoId) return;
+    const usual = pick?.opening ?? null;
+    const branch = name === usual ? undefined : name;
+    setGone(null);
+    setMoved(null);
+    moving.current = at.path ? { key: `${at.clientKey}\u0000${at.repoId}@${branch ?? ""}\u0000${at.path}`, path: at.path, name } : null;
+    onGo({ clientKey: at.clientKey, repoId: at.repoId, path: at.path, ...(at.view ? { view: at.view } : {}), ...(branch ? { branch } : {}) });
+  };
 
   // The client's repos (once per client while Code is open); one repo opens on its own.
   useEffect(() => {
@@ -549,18 +596,18 @@ export default function Code({ at, onGo, sqlGroup = "schema", onSqlGroup }: { at
   const loadFolder = useCallback(
     (path: string) => {
       if (!at.clientKey || !at.repoId) return;
-      const key = `${at.clientKey}\u0000${at.repoId}\u0000${path}`;
+      const rKey = `${at.clientKey}\u0000${at.repoId}@${at.branch ?? ""}`;
+      const key = `${rKey}\u0000${path}`;
       if (asked.current.has(`folder\u0000${key}`)) return;
       asked.current.add(`folder\u0000${key}`);
       setFolders((m) => new Map(m).set(key, { state: "loading" }));
-      call<{ entries: CodeEntry[]; cut: boolean }>("code.folder", { clientKey: at.clientKey, repoId: at.repoId, path }).then(
-        (r) => setFolders((m) => new Map(m).set(key, { state: "ok", entries: r.entries, cut: r.cut })),
+      call<{ entries: CodeEntry[]; cut: boolean; branch?: BranchPick }>("code.folder", { clientKey: at.clientKey, repoId: at.repoId, path, ...(at.branch ? { branch: at.branch } : {}) }).then(
+        (r) => (setFolders((m) => new Map(m).set(key, { state: "ok", entries: r.entries, cut: r.cut })), notePick(rKey, r.branch)),
         (e) => (asked.current.delete(`folder\u0000${key}`), setFolders((m) => new Map(m).set(key, { state: "failed", failure: failureOf(e) }))),
       );
     },
-    [at.clientKey, at.repoId],
+    [at.clientKey, at.repoId, at.branch, notePick],
   );
-  const repoKey = `${at.clientKey}\u0000${at.repoId}`;
   const openSet = open.get(repoKey) ?? new Set<string>();
   const setOpenFor = (f: (s: Set<string>) => Set<string>) => setOpen((m) => new Map(m).set(repoKey, f(new Set(m.get(repoKey) ?? []))));
 
@@ -574,19 +621,22 @@ export default function Code({ at, onGo, sqlGroup = "schema", onSqlGroup }: { at
       for (const p of ps) loadFolder(p);
       setOpenFor((s) => (ps.forEach((p) => s.add(p)), s));
     }
-  }, [repo, at.path, view]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [repo, at.path, view, at.branch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // RB-2: By kind reads the client's file names once, when the view first opens on it.
+  // RB-7: with a branch chosen for the repo on screen, that repo's names are read on it (the rest on their usual branch).
+  const kindsKey = at.clientKey ? `${at.clientKey}${at.branch && at.repoId ? `\u0000${at.repoId}@${at.branch}` : ""}` : null;
   useEffect(() => {
     const k = at.clientKey;
-    if (view !== "kinds" || !k || !client || client.locked || asked.current.has(`kinds\u0000${k}`)) return;
-    asked.current.add(`kinds\u0000${k}`);
-    setKinds((m) => new Map(m).set(k, "loading"));
-    call<{ repos: RepoThings[]; max: number }>("code.kinds", { clientKey: k }).then(
-      (r) => setKinds((m) => new Map(m).set(k, { repos: r.repos, max: r.max })),
-      (e) => (asked.current.delete(`kinds\u0000${k}`), setKinds((m) => new Map(m).set(k, failureOf(e)))),
+    const kk = kindsKey;
+    if (view !== "kinds" || !k || !kk || !client || client.locked || asked.current.has(`kinds\u0000${kk}`)) return;
+    asked.current.add(`kinds\u0000${kk}`);
+    setKinds((m) => new Map(m).set(kk, "loading"));
+    call<{ repos: RepoThings[]; max: number }>("code.kinds", { clientKey: k, ...(at.branch && at.repoId ? { repoId: at.repoId, branch: at.branch } : {}) }).then(
+      (r) => setKinds((m) => new Map(m).set(kk, { repos: r.repos, max: r.max })),
+      (e) => (asked.current.delete(`kinds\u0000${kk}`), setKinds((m) => new Map(m).set(kk, failureOf(e)))),
     );
-  }, [view, at.clientKey, client]);
+  }, [view, kindsKey, client]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // RB-2: inside another client the search starts on This client again. A results page (the command menu's "Code:
   // search names" lands on one) puts the caret in the box once the clients are known.
@@ -603,6 +653,10 @@ export default function Code({ at, onGo, sqlGroup = "schema", onSqlGroup }: { at
   /** RB-2: Search. Reads the names of the clients I may read, a few at a time; each fills in as it arrives. */
   const search = () => {
     const all = !at.clientKey || scopeAll;
+    // RB-7: the repo on screen and its chosen branch (where browsing was): its client's search reads that repo on it.
+    const b = searching ? browseAt.current : at;
+    const onScreen = b?.clientKey && b.repoId && b.branch ? { clientKey: b.clientKey, repoId: b.repoId, branch: b.branch } : null;
+    const branchFor = (k: string) => (onScreen && onScreen.clientKey === k ? { repoId: onScreen.repoId, branch: onScreen.branch } : {});
     const inScope = list.filter((c) => all || c.clientKey === at.clientKey);
     const targets = inScope.filter((c) => !c.locked);
     const id = ++runId.current;
@@ -616,7 +670,7 @@ export default function Code({ at, onGo, sqlGroup = "schema", onSqlGroup }: { at
       const worker = async () => {
         for (let n = next++; n < targets.length && runId.current === id; n = next++) {
           const k = targets[n]!.clientKey;
-          await call<InsideAnswer>("code.inside", { clientKey: k, words, ...(kind ? { kind } : {}) }).then(
+          await call<InsideAnswer>("code.inside", { clientKey: k, words, ...(kind ? { kind } : {}), ...branchFor(k) }).then(
             (r) => put(k, r),
             (e) => put(k, failureOf(e)),
           );
@@ -632,7 +686,7 @@ export default function Code({ at, onGo, sqlGroup = "schema", onSqlGroup }: { at
     const worker = async () => {
       for (let n = next++; n < targets.length && runId.current === id; n = next++) {
         const k = targets[n]!.clientKey;
-        await call<{ repos: RepoThings[] }>("code.search", { clientKey: k }).then(
+        await call<{ repos: RepoThings[] }>("code.search", { clientKey: k, ...branchFor(k) }).then(
           (r) => put(k, r.repos),
           (e) => put(k, failureOf(e)),
         );
@@ -648,7 +702,7 @@ export default function Code({ at, onGo, sqlGroup = "schema", onSqlGroup }: { at
     // A results page opened by its address has no browsing to go back to: it stays, so a key in the box reads nothing.
     if (searching && browseAt.current) onGo(browseAt.current);
   };
-  const kindsState = at.clientKey ? kinds.get(at.clientKey) : undefined;
+  const kindsState = kindsKey ? kinds.get(kindsKey) : undefined;
   // A file opened from the results keeps its way back until the person goes somewhere else in Code.
   useEffect(() => {
     if (view !== "files" || !at.path) setFromRun(false);
@@ -669,11 +723,44 @@ export default function Code({ at, onGo, sqlGroup = "schema", onSqlGroup }: { at
     if (asked.current.has(`file\u0000${key}`)) return;
     asked.current.add(`file\u0000${key}`);
     setFiles((m) => new Map(m).set(key, { state: "loading" }));
-    call<{ file: CodeFileView }>("code.file", { clientKey: at.clientKey, repoId: at.repoId, path: at.path }).then(
-      (r) => setFiles((m) => new Map(m).set(key, { state: "ok", file: r.file })),
-      (e) => (asked.current.delete(`file\u0000${key}`), setFiles((m) => new Map(m).set(key, { state: "failed", failure: failureOf(e) }))),
+    const where = { clientKey: at.clientKey!, repoId: at.repoId!, ...(at.branch ? { branch: at.branch } : {}) };
+    const rKey = repoKey;
+    const v = at.view;
+    call<{ file: CodeFileView; branch?: BranchPick }>("code.file", { ...where, path: at.path }).then(
+      (r) => (setFiles((m) => new Map(m).set(key, { state: "ok", file: r.file })), notePick(rKey, r.branch)),
+      (e) => {
+        asked.current.delete(`file\u0000${key}`);
+        const f = failureOf(e);
+        // RB-7: a branch chosen while this file was open, and the file isn't on it: go to the nearest folder that is.
+        if (f.code === "not_found" && moving.current?.key === key) {
+          const { path, name } = moving.current;
+          moving.current = null;
+          void (async () => {
+            for (const folder of foldersUp(path)) {
+              const r = await call<{ entries: CodeEntry[]; cut: boolean; branch?: BranchPick }>("code.folder", { ...where, path: folder }).catch(() => null);
+              if (!r) continue;
+              const fk = `${rKey}\u0000${folder}`;
+              asked.current.add(`folder\u0000${fk}`);
+              setFolders((m) => new Map(m).set(fk, { state: "ok", entries: r.entries, cut: r.cut }));
+              notePick(rKey, r.branch);
+              setMoved({ key: rKey, path, name, folder });
+              if (v === "kinds") onGo({ clientKey: where.clientKey, repoId: where.repoId, path: null, view: "kinds", ...(where.branch ? { branch: where.branch } : {}) }, { replace: true });
+              else {
+                const ps = folder === "/" ? [] : [...parentsOf(folder), folder];
+                for (const p of ps) loadFolder(p);
+                setOpen((m) => new Map(m).set(rKey, new Set([...(m.get(rKey) ?? []), ...ps])));
+                onGo({ clientKey: where.clientKey, repoId: where.repoId, path: null, ...(where.branch ? { branch: where.branch } : {}) }, { replace: true });
+              }
+              return;
+            }
+            setFiles((m) => new Map(m).set(key, { state: "failed", failure: f }));
+          })();
+          return;
+        }
+        setFiles((m) => new Map(m).set(key, { state: "failed", failure: f }));
+      },
     );
-  }, [repo, at.path]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [repo, at.path, at.branch]); // eslint-disable-line react-hooks/exhaustive-deps
   // A result from another client, or a file opened by its address, reads that client's repos first.
   useEffect(() => {
     const k = at.clientKey;
@@ -696,11 +783,37 @@ export default function Code({ at, onGo, sqlGroup = "schema", onSqlGroup }: { at
     const ps = path === "/" ? [] : [...parentsOf(path), path];
     for (const p of ps) loadFolder(p);
     setOpenFor((s) => (ps.forEach((p) => s.add(p)), s));
-    if (narrow) onGo({ clientKey: at.clientKey, repoId: at.repoId, path: null });
+    if (narrow) onGo({ clientKey: at.clientKey, repoId: at.repoId, path: null, ...(at.branch ? { branch: at.branch } : {}) });
     requestAnimationFrame(() => document.querySelector<HTMLElement>(path === "/" ? ".cv-tree [role=treeitem]" : `.cv-tree [data-path="${CSS.escape(path)}"]`)?.focus());
   };
-  const openFile = (path: string) => onGo({ clientKey: at.clientKey, repoId: at.repoId, path });
+  const openFile = (path: string) => onGo({ clientKey: at.clientKey, repoId: at.repoId, path, ...(at.branch ? { branch: at.branch } : {}) });
   const fileState = at.path ? files.get(rk(at.path)) : undefined;
+
+  // RB-7: the lines about the branch on screen: not the usual one (with one press back), a chosen one gone, a file not on it.
+  const usualKey = `${at.clientKey}\u0000${at.repoId}@`;
+  const branchLines =
+    repo && repo.state === "ok" ? (
+      <>
+        {gone && gone.key === repoKey && repoKey === usualKey && (
+          <p className="cv-branch-line" role="status" data-code-gone={gone.asked}>
+            {BRANCH_TEXT.gone(gone.asked, gone.opening)}
+          </p>
+        )}
+        {moved && moved.key === repoKey && !at.path && (
+          <p className="cv-branch-line" role="status" data-code-moved={moved.path}>
+            {BRANCH_TEXT.moved(moved.path, moved.name, moved.folder)}
+          </p>
+        )}
+        {pick && pick.why === "chosen" && (
+          <p className="cv-branch-line off" data-code-off-usual={pick.name}>
+            <span title={pick.name}>{BRANCH_TEXT.offUsual(pick.name, pick.opening)}</span>
+            <button type="button" className="mini" data-code-back-usual="" onClick={() => chooseBranch(pick.opening)}>
+              {BRANCH_TEXT.backTo(pick.opening)}
+            </button>
+          </p>
+        )}
+      </>
+    ) : null;
 
   const failedClients = clients && !Array.isArray(clients) ? clients : null;
   const logFoot = <p className="cv-log-line" data-code-log-line="">{logLine}</p>;
@@ -770,10 +883,10 @@ export default function Code({ at, onGo, sqlGroup = "schema", onSqlGroup }: { at
         <div className="cv-side-scroll">
           {Array.isArray(repoList) && repoList.length > 0 && (
             <div className="seg cv-views" role="group" aria-label="View">
-              <button type="button" className={`seg-btn${view === "files" ? " on" : ""}`} aria-pressed={view === "files"} data-code-view="files" onClick={() => onGo({ clientKey: at.clientKey, repoId: at.repoId, path: at.path })}>
+              <button type="button" className={`seg-btn${view === "files" ? " on" : ""}`} aria-pressed={view === "files"} data-code-view="files" onClick={() => onGo({ clientKey: at.clientKey, repoId: at.repoId, path: at.path, ...(at.branch ? { branch: at.branch } : {}) })}>
                 Files
               </button>
-              <button type="button" className={`seg-btn${view === "kinds" ? " on" : ""}`} aria-pressed={view === "kinds"} data-code-view="kinds" onClick={() => onGo({ clientKey: at.clientKey, repoId: null, path: null, view: "kinds" })}>
+              <button type="button" className={`seg-btn${view === "kinds" ? " on" : ""}`} aria-pressed={view === "kinds"} data-code-view="kinds" onClick={() => onGo({ clientKey: at.clientKey, repoId: at.branch ? at.repoId : null, path: null, view: "kinds", ...(at.branch ? { branch: at.branch } : {}) })}>
                 By kind
               </button>
             </div>
@@ -784,22 +897,34 @@ export default function Code({ at, onGo, sqlGroup = "schema", onSqlGroup }: { at
             ) : "message" in kindsState ? (
               <p className="cv-note problem" role="alert" data-code-state={kindsState.code ?? "error"}>{kindsState.message}</p>
             ) : (
-              <ByKind id={at.clientKey!} narrow={narrow} sqlType={narrow ? null : sqlType} {...(narrow ? {} : { onSqlType: setSqlType })} sqlGroup={sqlGroup} onSqlGroup={(g) => onSqlGroup?.(g)} memo={kindsMemo.get(at.clientKey!) ?? newKindsMemo()} onMemo={(change) => setKindsMemo((m) => new Map(m).set(at.clientKey!, change(m.get(at.clientKey!) ?? newKindsMemo())))} repos={kindsState.repos} max={kindsState.max} selected={{ repoId: at.repoId, path: at.path }} onOpen={(repoId, file) => onGo({ clientKey: at.clientKey, repoId, path: file, view: "kinds" })} />
+              <ByKind id={at.clientKey!} narrow={narrow} sqlType={narrow ? null : sqlType} {...(narrow ? {} : { onSqlType: setSqlType })} sqlGroup={sqlGroup} onSqlGroup={(g) => onSqlGroup?.(g)} memo={kindsMemo.get(at.clientKey!) ?? newKindsMemo()} onMemo={(change) => setKindsMemo((m) => new Map(m).set(at.clientKey!, change(m.get(at.clientKey!) ?? newKindsMemo())))} repos={kindsState.repos} max={kindsState.max} selected={{ repoId: at.repoId, path: at.path }} onOpen={(repoId, file) => {
+                  // RB-7: a thing opens on the branch its repo's names were read on.
+                  const b = kindsState.repos.find((r) => r.repo.id === repoId)?.branch;
+                  onGo({ clientKey: at.clientKey, repoId, path: file, view: "kinds", ...(b ? { branch: b } : {}) });
+                }} />
             ))}
-          {view === "files" && Array.isArray(repoList) && repoList.length > 1 && (
-            <label className="cv-repo">
-              <span className="sr-only">Repo</span>
-              <select aria-label="Repo" value={at.repoId ?? ""} onChange={(e) => onGo({ clientKey: at.clientKey, repoId: e.target.value || null, path: null })}>
-                <option value="">Choose a repo</option>
-                {repoList.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
-                    {r.state === "empty" ? " (empty)" : r.state === "disabled" ? " (disabled)" : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
+          {view === "files" && Array.isArray(repoList) && (repoList.length > 1 || (repo && repo.state === "ok")) && (
+            <div className="cv-repo-row" data-code-repo-row="">
+              {repoList.length > 1 ? (
+                <label className="cv-repo">
+                  <span className="sr-only">Repo</span>
+                  <select aria-label="Repo" value={at.repoId ?? ""} onChange={(e) => onGo({ clientKey: at.clientKey, repoId: e.target.value || null, path: null })}>
+                    <option value="">Choose a repo</option>
+                    {repoList.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name}
+                        {r.state === "empty" ? " (empty)" : r.state === "disabled" ? " (disabled)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : (
+                <span className="cv-repo-name">{repo!.name}</span>
+              )}
+              {repo && repo.state === "ok" && <BranchPicker clientKey={at.clientKey!} repoId={repo.id} current={pick?.name ?? null} onPick={chooseBranch} />}
+            </div>
           )}
+          {view === "files" && narrow && !at.path && branchLines}
           {view === "files" && repo && repo.state === "ok" && (
             <>
               <Tree root={folders.get(rk("/"))} folders={new Map([...folders].filter(([k]) => k.startsWith(`${repoKey}\u0000`)).map(([k, v]) => [k.slice(repoKey.length + 1), v]))} open={openSet} selected={at.path} onToggle={toggle} onFile={openFile} />
@@ -827,7 +952,13 @@ export default function Code({ at, onGo, sqlGroup = "schema", onSqlGroup }: { at
         <p className="cv-next">A FocusTime admin set it that way. If you need something from it, ask someone on {client.name}'s team.</p>
       </div>
     );
-  else if (view === "kinds" && !at.path) body = <p className="cv-empty">{NAMES_TEXT.pickThing}</p>;
+  else if (view === "kinds" && !at.path)
+    body = (
+      <>
+        {branchLines}
+        <p className="cv-empty">{NAMES_TEXT.pickThing}</p>
+      </>
+    );
   else if (repoList === undefined || repoList === "loading") body = <p className="cv-note" role="status">Loading…</p>;
   else if (!Array.isArray(repoList))
     body = (
@@ -841,12 +972,18 @@ export default function Code({ at, onGo, sqlGroup = "schema", onSqlGroup }: { at
   else if (!repo) body = <p className="cv-state" data-code-state="no_repo">That repo isn't one of {client.name}'s.</p>;
   else if (repo.state === "empty") body = <p className="cv-state" data-code-state="empty">{TEXT.empty}</p>;
   else if (repo.state === "disabled") body = <p className="cv-state" data-code-state="disabled">{TEXT.disabled}</p>;
-  else if (!at.path) body = <p className="cv-empty">{TEXT.pickFile}</p>;
+  else if (!at.path) body = (
+      <>
+        {!narrow && branchLines}
+        <p className="cv-empty">{TEXT.pickFile}</p>
+      </>
+    );
   else if (!fileState || fileState.state === "loading") body = <p className="cv-note" role="status">Loading…</p>;
   else if (fileState.state === "failed") body = <p className="cv-state" data-code-state={fileState.failure.code ?? "error"}>{fileState.failure.message}</p>;
   else
     body = (
       <>
+        {branchLines}
         {fromRun && backRun && view === "files" && !narrow && (
           <p className="cv-lives">
             <button type="button" className="mini" data-code-back-to-results="" onClick={toResults}>
@@ -859,12 +996,13 @@ export default function Code({ at, onGo, sqlGroup = "schema", onSqlGroup }: { at
             <span>
               In {repo.name}, {at.path!.slice(0, at.path!.lastIndexOf("/")) || "/"}
             </span>
-            <button type="button" className="mini" data-code-show-in-files="" onClick={() => onGo({ clientKey: at.clientKey, repoId: at.repoId, path: at.path })}>
+            <BranchPicker clientKey={at.clientKey!} repoId={repo.id} current={pick?.name ?? null} onPick={chooseBranch} />
+            <button type="button" className="mini" data-code-show-in-files="" onClick={() => onGo({ clientKey: at.clientKey, repoId: at.repoId, path: at.path, ...(at.branch ? { branch: at.branch } : {}) })}>
               {NAMES_TEXT.showInFiles}
             </button>
           </p>
         )}
-        <FileView file={fileState.file} repo={repo} clientName={client.name} words={fromRun === "inside" && markAt?.key === rk(at.path!) ? markAt.words : null} onFolder={view === "kinds" ? (path) => (onGo({ clientKey: at.clientKey, repoId: at.repoId, path: at.path }), openFolder(path)) : openFolder} phone={narrow} />
+        <FileView file={fileState.file} repo={repo} clientName={client.name} words={fromRun === "inside" && markAt?.key === rk(at.path!) ? markAt.words : null} onFolder={view === "kinds" ? (path) => (onGo({ clientKey: at.clientKey, repoId: at.repoId, path: at.path, ...(at.branch ? { branch: at.branch } : {}) }), openFolder(path)) : openFolder} phone={narrow} />
       </>
     );
 
@@ -879,11 +1017,12 @@ export default function Code({ at, onGo, sqlGroup = "schema", onSqlGroup }: { at
               <InsideResults
                 run={inRun}
                 kind={kind}
-                onOpen={(clientKey, repoId, file) => {
+                onOpen={(clientKey, repoId, file, branch) => {
                   // The file opens through code.file, logged as a file open before its text is returned, as any file is.
-                  setMarkAt({ key: `${clientKey}\u0000${repoId}\u0000${file}`, words: inRun.q });
+                  // RB-7: on the branch it was found on.
+                  setMarkAt({ key: `${clientKey}\u0000${repoId}@${branch ?? ""}\u0000${file}`, words: inRun.q });
                   openingResult.current = true;
-                  onGo({ clientKey, repoId, path: file });
+                  onGo({ clientKey, repoId, path: file, ...(branch ? { branch } : {}) });
                   setTimeout(() => setFromRun("inside"), 0);
                 }}
               />
@@ -892,7 +1031,7 @@ export default function Code({ at, onGo, sqlGroup = "schema", onSqlGroup }: { at
             )
           ) : /* A search shows only where it was made: one client's results never sit under another client's name. */
           run && run.scope === (at.clientKey ?? null) ? (
-            <SearchResults run={run} kind={kind} sqlType={narrow ? null : sqlType} onOpen={(clientKey, repoId, file) => ((openingResult.current = true), onGo({ clientKey, repoId, path: file }), setTimeout(() => setFromRun("search"), 0))} />
+            <SearchResults run={run} kind={kind} sqlType={narrow ? null : sqlType} onOpen={(clientKey, repoId, file, branch) => ((openingResult.current = true), onGo({ clientKey, repoId, path: file, ...(branch ? { branch } : {}) }), setTimeout(() => setFromRun("search"), 0))} />
           ) : (
             <p className="cv-empty">{NAMES_TEXT.searchStart}</p>
           )}
@@ -922,7 +1061,7 @@ export default function Code({ at, onGo, sqlGroup = "schema", onSqlGroup }: { at
     // A narrow window: the list (Files or By kind) is one page, the file another with Back.
     main = at.path ? (
       <div className="cv-file-page">
-        <button type="button" className="cv-back quiet" data-code-back="" onClick={fromRun && backRun && view === "files" ? toResults : () => onGo({ clientKey: at.clientKey, repoId: view === "kinds" ? null : at.repoId, path: null, ...(view === "kinds" ? { view } : {}) })}>
+        <button type="button" className="cv-back quiet" data-code-back="" onClick={fromRun && backRun && view === "files" ? toResults : () => onGo({ clientKey: at.clientKey, repoId: view === "kinds" && !at.branch ? null : at.repoId, path: null, ...(view === "kinds" ? { view } : {}), ...(at.branch ? { branch: at.branch } : {}) })}>
           <Icon name="back" /> {fromRun && backRun && view === "files" ? NAMES_TEXT.backToResults : view === "kinds" ? "By kind" : (repo?.name ?? TEXT.back)}
         </button>
         <div className="cv-body">{body}</div>

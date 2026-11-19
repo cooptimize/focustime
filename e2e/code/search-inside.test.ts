@@ -180,7 +180,7 @@ describe.skipIf(!CHROMIUM)("Code's search finds what is inside items, and inside
     expect(await results.locator('[data-code-result-client="Cooptimize"] [data-code-result-failed]').textContent()).toBe("Cooptimize's DevOps doesn't have code search turned on, so FocusTime can't search inside its files. An administrator of that DevOps organization can add Microsoft's Code Search extension to it.");
     expect(await results.locator('[data-code-result-client="Harbor"] [data-code-result-failed]').textContent()).toBe("FocusTime can't read Harbor's code yet. The company DevOps token for Harbor needs Code (read).");
     expect(await results.locator("[data-code-left-out]").textContent()).toBe("Left out: Fabrikam. Only its team can read its code.");
-    expect(await results.locator("[data-code-inside-scope]").textContent()).toBe("Only each repo's default branch is searched. Forks aren't searched.");
+    expect(await results.locator("[data-code-inside-scope]").textContent()).toBe("DevOps searches each repo's default branch, and any others its admins chose. Forks aren't searched.");
     await shots(page, "03-inside-files-across-clients");
     await results.locator('[data-code-result-client="Cooptimize"]').scrollIntoViewIfNeeded();
     if (SHOTS) await results.locator('[data-code-result-client="Cooptimize"]').screenshot({ path: `${SHOTS}/04-no-code-search-dark.png` });
@@ -312,8 +312,8 @@ describe.skipIf(!CHROMIUM)("Code's search finds what is inside items, and inside
     const table = page.locator('[data-setting="code-views"] table');
     await table.waitFor();
     const rows = await table.locator("tbody tr").evaluateAll((trs) => trs.map((tr) => [...tr.querySelectorAll("td")].slice(2).map((td) => td.textContent)));
-    expect(rows.filter((r) => r[0] === "Atlas" && r[2] === "Searched inside files")).toEqual([["Atlas", "All its repos", "Searched inside files", ""]]);
-    expect(rows.filter((r) => r[0] === "Atlas" && r[2] === "Opened a file")).toEqual([["Atlas", "freight-ingest", "Opened a file", "/sql/etl/StoredProcedures/usp_SetWatermark.sql"]]);
+    expect(rows.filter((r) => r[0] === "Atlas" && r[2] === "Searched inside files")).toEqual([["Atlas", "All its repos on their default branches", "Searched inside files", ""]]);
+    expect(rows.filter((r) => r[0] === "Atlas" && r[2] === "Opened a file")).toEqual([["Atlas", "freight-ingest on main", "Opened a file", "/sql/etl/StoredProcedures/usp_SetWatermark.sql"]]);
     expect(await table.textContent()).not.toContain("zzqx");
     expect(errors).toEqual([]);
   });

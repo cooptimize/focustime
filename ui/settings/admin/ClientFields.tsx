@@ -51,6 +51,7 @@ export function CodeAccessField({ c, saver }: { c: ClientRow; saver: Saver }) {
       <AField label="Who can read this client's code" kind="Rule" s={saver.status(scope, "code_access")} retry={() => void saver.save(scope, "code_access", value, `${c.key}: who can read its code`)} hint="Every Cooptimizer by default, read only. Its team only keeps it to the people on this client." >
         <Select label={`${c.key}: who can read its code`} value={value} options={[{ value: "company", label: "Whole company" }, { value: "team", label: "Its team only" }]} onChange={(v) => void saver.save(scope, "code_access", v, `${c.key}: who can read its code`)} />
       </AField>
+      <CodeBranchField c={c} saver={saver} />
       <ARead label="Can FocusTime read it?" help="Read with the company DevOps token for this client. It needs Code (read), added to the token in DevOps.">
         <Buttons result={<span data-code-check={check && check !== "checking" ? check.state : "checking"}>{words}</span>}>
           <Button disabled={check === "checking"} onClick={() => void run()}>
@@ -63,6 +64,61 @@ export function CodeAccessField({ c, saver }: { c: ClientRow; saver: Saver }) {
           See who opened its code
         </a>
       </Row>
+    </>
+  );
+}
+
+type Openings = { opening: string | null; repos: { repo: { id: string; name: string; state: "ok" | "empty" | "disabled" }; opens: string | null; names: string[]; cut: boolean; problem: string | null }[]; offer: string[] };
+const EACH_DEFAULT = "Each repo's default";
+/**
+ * RB-7: the branch Code opens this client's repos on (a Rule beside who can read it), chosen from the names its repos
+ * really have, or cleared back to each repo's default; and, per repo, the branch it will open on. Read as this admin
+ * through Code's own checks, so a client set to its team only shows its repos only to its team.
+ */
+export function CodeBranchField({ c, saver }: { c: ClientRow; saver: Saver }) {
+  const scope = `client:${c.key}`;
+  const value = saver.shown(scope, "code_branch", c.codeBranch ?? null);
+  const [o, setO] = useState<Openings | { error: string } | null>(null);
+  useEffect(() => {
+    let live = true;
+    setO(null);
+    call<Openings>("admin.code_branches", { clientKey: c.key }).then(
+      (r) => live && setO(r),
+      (e) => live && setO({ error: e instanceof Error ? plain(e.message) : "Couldn't read its branches" }),
+    );
+    return () => void (live = false);
+  }, [c.key, value]);
+  const save = (v: string | null) => void saver.save(scope, "code_branch", v, `${c.key}: Code opens on`);
+  const offer = o && "offer" in o ? o.offer : [];
+  // A set branch no repo has any more still shows, so it can be seen and cleared.
+  const options = [{ value: "", label: EACH_DEFAULT }, ...[...(value && !offer.includes(value) ? [value] : []), ...offer].map((n) => ({ value: n, label: n }))];
+  return (
+    <>
+      <AField label="Code opens on" kind="Rule" s={saver.status(scope, "code_branch")} retry={() => save(value)} hint="The branch Code opens this client's repos on, where a repo has it. A repo without it opens on its own default. Anyone can still choose another branch in Code.">
+        <Select label={`${c.key}: Code opens on`} value={value ?? ""} disabled={!o || "error" in o} options={options} onChange={(v) => save(v || null)} />
+      </AField>
+      <ARead label="Each repo opens on" help={o && "error" in o ? o.error : "Read with the company DevOps token for this client: branch names only."}>
+        {o === null ? (
+          <span data-code-branch-repos="loading">Reading…</span>
+        ) : "error" in o ? null : !o.repos.length ? (
+          <span data-code-branch-repos="">No repos</span>
+        ) : (
+          <ul className="sp-list" data-code-branch-repos="">
+            {o.repos.map((r) => (
+              <li key={r.repo.id} data-code-branch-repo={r.repo.name}>
+                <strong>{r.repo.name}</strong>
+                {": "}
+                {r.repo.state === "empty" ? "empty" : r.repo.state === "disabled" ? "disabled" : r.problem ? r.problem : (
+                  <>
+                    <span data-code-opens={r.opens ?? ""}>{r.opens}</span>
+                    {value && r.opens !== value ? ` (it has no ${value})` : ""}
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </ARead>
     </>
   );
 }

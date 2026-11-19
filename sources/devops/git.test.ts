@@ -28,7 +28,7 @@ const json = (v: unknown, status = 200) => new Response(JSON.stringify(v), { sta
 
 describe("the allow list", () => {
   it("builds only GETs under dev.azure.com/<org>/<project>/_apis/git", () => {
-    expect(Object.keys(ALLOWED).sort()).toEqual(["file_bytes", "file_meta", "files", "folder", "repos"]);
+    expect(Object.keys(ALLOWED).sort()).toEqual(["branches", "file_bytes", "file_meta", "files", "folder", "repos"]);
     const u = new URL(buildUrl(T, "folder", REPO.id, { scopePath: "/a b", recursionLevel: "OneLevel", "versionDescriptor.version": "main", "versionDescriptor.versionType": "branch" }));
     expect(u.origin).toBe("https://dev.azure.com");
     expect(u.pathname).toBe(`/contoso/Data%20Platform/_apis/git/repositories/${REPO.id}/items`);
@@ -72,7 +72,7 @@ describe("the reads", () => {
   });
   it("reads one folder level on the default branch, folders first, without submodules", async () => {
     const { reader, calls } = fake(() => json({ value: [{ path: "/sql", isFolder: true, commitId: COMMIT }, { path: "/sql/b.sql", gitObjectType: "blob", commitId: COMMIT }, { path: "/sql/Views", gitObjectType: "tree", isFolder: true, commitId: COMMIT }, { path: "/sql/A.sql", gitObjectType: "blob", commitId: COMMIT }, { path: "/sql/sub", gitObjectType: "commit" }] }));
-    const f = await reader.folder(T, REPO, "/sql");
+    const f = await reader.folder(T, REPO, "/sql", "main");
     expect(f.entries.map((e) => e.name)).toEqual(["Views", "A.sql", "b.sql"]);
     expect(f.commit).toBe(COMMIT);
     const u = new URL(calls[0]!.url);
@@ -82,12 +82,12 @@ describe("the reads", () => {
   });
   it("an empty repo is read as empty, without a request", async () => {
     const { reader, calls } = fake(() => json({}));
-    expect(await reader.folder(T, { ...REPO, defaultBranch: null }, "/")).toEqual({ commit: null, entries: [], cut: false });
+    expect(await reader.folder(T, { ...REPO, defaultBranch: null }, "/", "main")).toEqual({ commit: null, entries: [], cut: false });
     expect(calls).toHaveLength(0);
   });
   it("lists every file name for Find, and a file's bytes pinned to the commit", async () => {
     const { reader, calls } = fake((u) => (u.searchParams.get("recursionLevel") === "Full" ? json({ value: [{ path: "/", isFolder: true, commitId: COMMIT }, { path: "/a/x.json", gitObjectType: "blob" }, { path: "/a", isFolder: true }] }) : new Response("SELECT 1;", { headers: { "content-length": "9" } })));
-    expect((await reader.files(T, REPO)).paths).toEqual(["/a/x.json"]);
+    expect((await reader.files(T, REPO, "main")).paths).toEqual(["/a/x.json"]);
     const b = await reader.fileBytes(T, REPO, "/a/x.sql", COMMIT);
     expect(new TextDecoder().decode(b.bytes!)).toBe("SELECT 1;");
     const u = new URL(calls[1]!.url);
@@ -126,7 +126,7 @@ describe("refusals", () => {
   });
   it("429 is busy, 404 is not found, a network error is unreachable", async () => {
     await expect(fake(() => new Response("", { status: 429 })).reader.repos(T)).rejects.toMatchObject({ reason: "busy" });
-    await expect(fake(() => new Response("", { status: 404 })).reader.fileMeta(T, REPO, "/x")).rejects.toMatchObject({ reason: "not_found" });
+    await expect(fake(() => new Response("", { status: 404 })).reader.fileMeta(T, REPO, "/x", "main")).rejects.toMatchObject({ reason: "not_found" });
     await expect(fake(() => Promise.reject(new TypeError(`fetch failed for ${SECRET_PATH}`))).reader.repos(T)).rejects.toMatchObject({ reason: "unreachable" });
   });
   it("a client DevOps asked to wait gets no request", async () => {
@@ -137,8 +137,8 @@ describe("refusals", () => {
   });
   it("no path, repo name, client, token or content reaches a log line or an error", async () => {
     const { reader, logs } = fake((u) => (u.searchParams.get("path") ? new Response("", { status: 500 }) : json({ value: [{ path: `${SECRET_PATH}`, gitObjectType: "blob", commitId: COMMIT }] })));
-    await reader.folder(T, REPO, "/secret-folder");
-    const e = await reader.fileMeta(T, REPO, SECRET_PATH).catch((x: unknown) => x);
+    await reader.folder(T, REPO, "/secret-folder", "main");
+    const e = await reader.fileMeta(T, REPO, SECRET_PATH, "main").catch((x: unknown) => x);
     expect(e).toBeInstanceOf(GitFailure);
     const all = JSON.stringify(logs) + String((e as Error).message) + String((e as Error).stack);
     for (const s of ["secret-folder", "payroll", "warehouse", "Contoso", "contoso", "secret-token-value", "Data Platform"]) expect(all).not.toContain(s);
@@ -229,3 +229,74 @@ describe("the code search request (RB-4)", () => {
     expect(new URL(buildSearch(T, "x", 1).url).pathname.includes("/_apis/git/")).toBe(false);
   });
 });
+
+describe("RB-7: a repo's branches, the one new read", () => {
+  const ok = { filter: "heads/", $top: "1000" };
+  it("passes only as written: a GET of the repo's branch heads in the client's own project, one page", () => {
+    const u = new URL(buildUrl(T, "branches", REPO.id, ok));
+    expect(u.origin).toBe("https://dev.azure.com");
+    expect(u.pathname).toBe(`/contoso/Data%20Platform/_apis/git/repositories/${REPO.id}/refs`);
+    expect([...u.searchParams.keys()].sort()).toEqual(["$top", "api-version", "filter"]);
+    expect(u.searchParams.get("filter")).toBe("heads/");
+    expect(u.searchParams.get("$top")).toBe("1000");
+    expect(ALLOWED.branches).toEqual({ path: "repositories/{repo}/refs", query: ["filter", "$top"], accept: "application/json", required: ["filter", "$top"] });
+  });
+  it("refuses a tag list, any other ref filter, no filter, another key, another project and no repo, before a request", () => {
+    for (const filter of ["tags/", "", "heads", "heads/feature", "remotes/", "pull/", "notes/", "heads/../tags/"]) expect(() => buildUrl(T, "branches", REPO.id, { ...ok, filter }), filter).toThrow();
+    expect(() => buildUrl(T, "branches", REPO.id, { $top: "1000" })).toThrow();
+    expect(() => buildUrl(T, "branches", REPO.id, { filter: "heads/" })).toThrow();
+    expect(() => buildUrl(T, "branches", REPO.id, { ...ok, $top: "1001" })).toThrow();
+    for (const k of ["filterContains", "peelTags", "includeStatuses", "includeMyBranches", "includeLinks", "latestStatusesOnly", "continuationToken"]) expect(() => buildUrl(T, "branches", REPO.id, { ...ok, [k]: "true" }), k).toThrow();
+    expect(() => buildUrl(T, "branches", null, ok)).toThrow();
+    expect(() => buildUrl(T, "branches", "../../other", ok)).toThrow();
+    expect(() => buildUrl({ ...T, project: "a/../../other" }, "branches", REPO.id, ok)).toThrow();
+    expect(() => buildUrl({ ...T, org: "evil.example.com/x" }, "branches", REPO.id, ok)).toThrow();
+  });
+  it("no read can ask for a tag, and a branch's name never becomes a path", () => {
+    const tag = { scopePath: "/", recursionLevel: "OneLevel", "versionDescriptor.version": "v1", "versionDescriptor.versionType": "tag" };
+    expect(() => buildUrl(T, "folder", REPO.id, tag)).toThrow();
+    const u = new URL(buildUrl(T, "folder", REPO.id, { scopePath: "/", recursionLevel: "OneLevel", "versionDescriptor.version": "feature/returns", "versionDescriptor.versionType": "branch" }));
+    expect(u.pathname.endsWith("/items")).toBe(true);
+    expect(u.searchParams.get("versionDescriptor.version")).toBe("feature/returns");
+  });
+  it("every existing read is as on main", () => {
+    expect(ALLOWED.repos).toEqual({ path: "repositories", query: [], accept: "application/json" });
+    expect(ALLOWED.folder).toEqual({ path: "repositories/{repo}/items", query: ["scopePath", "recursionLevel", "versionDescriptor.version", "versionDescriptor.versionType"], accept: "application/json" });
+    expect(ALLOWED.files).toEqual(ALLOWED.folder);
+    expect(ALLOWED.file_meta).toEqual({ path: "repositories/{repo}/items", query: ["path", "includeContentMetadata", "versionDescriptor.version", "versionDescriptor.versionType"], accept: "application/json" });
+    expect(ALLOWED.file_bytes).toEqual({ path: "repositories/{repo}/items", query: ["path", "download", "versionDescriptor.version", "versionDescriptor.versionType"], accept: "application/octet-stream" });
+  });
+  it("sends one GET through the limiter, keeps only branch heads' names, and logs no name", async () => {
+    const f = fake(() =>
+      json({
+        value: [
+          { name: "refs/heads/main", objectId: "a".repeat(40), creator: { displayName: "Pat Example", uniqueName: "pat@example.com" } },
+          { name: "refs/heads/feature/returns", objectId: "b".repeat(40) },
+          { name: "refs/heads/dev" },
+          { name: "refs/tags/v1.0" },
+          { name: "refs/remotes/origin/main" },
+          { name: "refs/heads/bad name" },
+          { name: 7 },
+        ],
+        count: 7,
+      }),
+    );
+    const r = await f.reader.branches(T, REPO);
+    expect(r).toEqual({ names: ["dev", "feature/returns", "main"], cut: false });
+    expect(f.calls).toHaveLength(1);
+    expect(f.calls[0]!.init.method).toBe("GET");
+    expect(f.limiter.before).toEqual(["Contoso"]);
+    expect(f.logs).toHaveLength(1);
+    expect(Object.keys(f.logs[0]!).sort()).toEqual(["durationMs", "op", "source", "status"]);
+    expect(f.logs[0]).toMatchObject({ source: "devops", op: "git_branches", status: 200 });
+  });
+  it("says when a repo has more branches than one page", async () => {
+    const f = fake(() => json({ value: Array.from({ length: 1000 }, (_, n) => ({ name: `refs/heads/b${n}` })) }));
+    expect((await f.reader.branches(T, REPO)).cut).toBe(true);
+  });
+  it("a token without Code (read) is refused as for every other read", async () => {
+    const f = fake(() => new Response("", { status: 401 }));
+    await expect(f.reader.branches(T, REPO)).rejects.toEqual(new GitFailure("needs_code_read"));
+  });
+});
+

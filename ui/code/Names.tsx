@@ -11,6 +11,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, 
 import { Icon, type IconName } from "../icons.tsx";
 import { groupThings, KIND_GROUPS, KINDS, listedThings, markMatches, searchThings, searchWords, shareCap, sqlTypePasses, type SqlGrouping, type SqlType, type InsideAnswer, type InsideFile, type Kind, type NameHit, type RepoThings, type Thing, type ThingInside } from "../../plan/code-kinds.ts";
 import { INSIDE_MAX, SEARCH_MAX } from "../../plan/code.ts";
+import { BRANCH_TEXT } from "../../plan/code-branch.ts";
 import { SqlBar, sqlFolderKeys, sqlOpened, sqlPathTo, sqlPlace, sqlRestore, SqlTree, SQL_TEXT, SqlTypeSelect, type SqlRow, type SqlTreeMemo } from "./SqlTree.tsx";
 
 export type NamesFailure = { message: string; code: string | null };
@@ -37,7 +38,7 @@ export const NAMES_TEXT = {
   insideNarrowedOther: "This search was narrowed to one kind. Press Search again to look for this one.",
   insideNotListed: (n: number) => `${n} more file${n === 1 ? " isn't" : "s aren't"} listed: DevOps found ${n === 1 ? "it" : "them"} on another branch.`,
   insideIndexing: "DevOps is still indexing this client's code, so some files may be missing.",
-  insideScope: "Only each repo's default branch is searched. Forks aren't searched.",
+  insideScope: "DevOps searches each repo's default branch, and any others its admins chose. Forks aren't searched.",
   matches: (n: number | null) => (n === null || n === 0 ? "" : `${n} match${n === 1 ? "" : "es"}`),
   searchStart: "Type a name, then press Enter or Search. Folder names count too.",
   backToResults: "Back to results",
@@ -367,7 +368,12 @@ export type SearchRun = {
 type Hit = NameHit & { repoId: string; repoName: string };
 
 /** Results by client, then by kind. Up, Down and Enter move through them; at most SEARCH_MAX show. */
-export function SearchResults({ run, kind, sqlType = null, onOpen }: { run: SearchRun; kind: Kind | null; /** UC-2: with Databases as the kind, one object type only. */ sqlType?: SqlType | null; onOpen: (clientKey: string, repoId: string, file: string) => void }) {
+export function SearchResults({ run, kind, sqlType = null, onOpen }: { run: SearchRun; kind: Kind | null; /** UC-2: with Databases as the kind, one object type only. */ sqlType?: SqlType | null; /** RB-7: `branch` is the one its names were read on, when it isn't the repo's opening branch. */ onOpen: (clientKey: string, repoId: string, file: string, branch?: string) => void }) {
+  /** RB-7: the branch a repo's names were read on (the branch on screen for the repo on screen), if not the usual one. */
+  const branchOf = (clientKey: string, repoId: string) => {
+    const r = run.results.get(clientKey);
+    return Array.isArray(r) ? r.find((x) => x.repo.id === repoId)?.branch : undefined;
+  };
   const done = run.targets.filter((c) => run.results.get(c.clientKey) !== "waiting").length;
   const byClient = useMemo(() => {
     const found = run.targets.map((c) => {
@@ -427,7 +433,7 @@ export function SearchResults({ run, kind, sqlType = null, onOpen }: { run: Sear
                 <ul className="cv-things">
                   {k.things.map((h) => (
                     <li key={`${h.repoId}\u0000${h.file}`}>
-                      <button type="button" className="cv-hit" data-code-hit={h.name} onClick={() => onOpen(g.client.clientKey, h.repoId, h.file)}>
+                      <button type="button" className="cv-hit" data-code-hit={h.name} onClick={() => onOpen(g.client.clientKey, h.repoId, h.file, branchOf(g.client.clientKey, h.repoId))}>
                         <Icon name={h.asFile ? "file" : h.table || h.detail.startsWith("Table") ? "table" : KIND_ICON[h.kind]} className="cv-kind" />
                         <span className="cv-thing-name">{h.name}</span>
                         <span className="cv-thing-detail">
@@ -464,7 +470,7 @@ export type InsideRun = {
 };
 
 /** Files by client, then repo. Each row is a file: its name, what it is, how many matches, its path. Never a line of it. */
-export function InsideResults({ run, kind, onOpen }: { run: InsideRun; kind: Kind | null; onOpen: (clientKey: string, repoId: string, file: string) => void }) {
+export function InsideResults({ run, kind, onOpen }: { run: InsideRun; kind: Kind | null; /** RB-7: `branch` is the one it was found on, when it isn't the repo's opening branch. */ onOpen: (clientKey: string, repoId: string, file: string, branch?: string) => void }) {
   const done = run.targets.filter((c) => run.results.get(c.clientKey) !== "waiting").length;
   const asking = done < run.targets.length;
   const groups = run.targets.map((c) => {
@@ -538,13 +544,24 @@ export function InsideResults({ run, kind, onOpen }: { run: InsideRun; kind: Kin
             {g.state === "ok" &&
               g.repos.map(([repoId, repo]) => (
                 <div key={repoId} className="cv-result-kind" data-code-result-repo={repo.name}>
-                  <div className="cv-group-head">{repo.name}</div>
+                  {/* RB-7: the branch these were found on, when it isn't the repo's usual one. */}
+                  <div className="cv-group-head" data-code-result-branch={repo.files[0]?.branch ?? ""}>
+                    {repo.files[0]?.branch ? BRANCH_TEXT.repoOn(repo.name, repo.files[0].branch) : repo.name}
+                  </div>
+                  {/* RB-7: DevOps doesn't search the branch on screen for this repo: these are its default's. */}
+                  {g.answer.notSearched
+                    ?.filter((n) => n.repoId === repoId)
+                    .map((n) => (
+                      <p key={n.branch} className="cv-note" data-code-not-searched={n.branch}>
+                        {BRANCH_TEXT.notSearched(n.shown)}
+                      </p>
+                    ))}
                   <ul className="cv-things">
                     {repo.files.map((f) => {
                       const name = f.path.slice(f.path.lastIndexOf("/") + 1);
                       return (
                         <li key={f.path}>
-                          <button type="button" className="cv-hit cv-inside-hit" data-code-hit={name} onClick={() => onOpen(g.client.clientKey, f.repoId, f.path)}>
+                          <button type="button" className="cv-hit cv-inside-hit" data-code-hit={name} onClick={() => onOpen(g.client.clientKey, f.repoId, f.path, f.branch)}>
                             <Icon name={f.detail.startsWith("Table") ? "table" : f.detail.startsWith("File") ? "file" : KIND_ICON[f.kind]} className="cv-kind" />
                             <span className="cv-thing-name">{name}</span>
                             <span className="cv-thing-detail">{f.detail}</span>

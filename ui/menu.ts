@@ -1357,6 +1357,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     case "code.search":
     case "code.inside":
     case "code.inner":
+    case "code.branches":
       return { disabled: "Open Code to read a client's code" };
     case "setup.load":
     case "setup.prefill":
@@ -1479,6 +1480,7 @@ function runnerFor(env: MenuEnv, name: ActionName): Runner {
     // RB-1: Code views sit in Admin › Audit; a client's code status in Admin › Clients.
     case "admin.code_views": return env.admin ? { run: () => env.openSettings("admin", "audit/code") } : { disabled: "Only for FocusTime admins" };
     case "admin.code_check": return env.admin ? { run: () => env.openSettings("admin", "clients") } : { disabled: "Only for FocusTime admins" };
+    case "admin.code_branches": return env.admin ? { run: () => env.openSettings("admin", "clients") } : { disabled: "Only for FocusTime admins" };
     case "admin.status_action": return env.admin ? { run: () => env.openSettings("admin", "health") } : { disabled: "Only for FocusTime admins" };
     // BD-1: Break down opens its panel on any item whose type needs breaking down (the process model); the rest
     // happens in the panel.

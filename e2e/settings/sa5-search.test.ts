@@ -43,7 +43,10 @@ describe.skipIf(!CHROMIUM)("SA-5: Settings search (browser, demo)", () => {
       await box(page).fill(d.label);
       const id = `${d.section === "client" ? "client" : "setting"}:${d.id}`;
       const hit = results(page).locator(`[data-result="${id}"]`);
-      if (!(await hit.count())) {
+      // Wait for the hit rather than read once: the page before (a client's Code tab, RB-7) may still be loading.
+      try {
+        await hit.first().waitFor({ state: "attached", timeout: 5_000 });
+      } catch {
         missed.push(`${d.id}: not in the results`);
         continue;
       }

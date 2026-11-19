@@ -6,6 +6,10 @@
 //   files   GET {org}/{project}/_apis/git/repositories/{repo}/items?scopePath=/&recursionLevel=Full&<branch>   (Find)
 //   file    GET {org}/{project}/_apis/git/repositories/{repo}/items?path=<path>&includeContentMetadata=true&<branch>
 //           then the same path pinned to the commit that answered, as bytes (Accept: application/octet-stream)
+// RB-7 adds one more Git read, a repo's branches, so Code can open a branch someone chooses:
+//   branches GET {org}/{project}/_apis/git/repositories/{repo}/refs?filter=heads/&$top=1000
+//           branch heads only (never tags or any other kind of ref), one page of at most 1000; only each ref's name is
+//           read from the answer (never who made it or anything else).
 // RB-4 adds one more, for Search inside files, on DevOps's own search address:
 //   search  POST https://almsearch.dev.azure.com/{org}/{project}/_apis/search/codesearchresults?api-version=7.1
 //           with a body of exactly searchText, $skip 0, $top, includeFacets false and includeSnippet false
@@ -21,7 +25,7 @@
 import { API_VERSION, type Limiter } from "./source.ts";
 import type { Pat } from "./pat.ts";
 import type { Logger } from "../../log/logger.ts";
-import { branchName, cleanPath, FIND_MAX, FOLDER_MAX, INSIDE_MAX, INSIDE_WORDS_MAX, nameOf, REPO_ID, sortEntries, TEXT_MAX_BYTES, type CodeEntry } from "../../plan/code.ts";
+import { branchName, cleanPath, isBranchName, FIND_MAX, FOLDER_MAX, INSIDE_MAX, INSIDE_WORDS_MAX, nameOf, REPO_ID, sortEntries, TEXT_MAX_BYTES, type CodeEntry } from "../../plan/code.ts";
 
 /** One client's DevOps as the reader needs it: from Dataverse at fetch time; nothing from the browser. */
 export type GitTarget = { clientKey: string; org: string; project: string; pat: Pat };
@@ -36,6 +40,8 @@ export type GitBytes = { size: number | null; /** At most TEXT_MAX_BYTES + 1 byt
 export type GitSearchHit = { repoId: string; path: string; branches: string[]; /** Null when DevOps didn't say. */ matches: number | null };
 /** RB-4: a code search's answer: the total DevOps counted, the files it returned and its info code (0 is fine). */
 export type GitSearchAnswer = { count: number; hits: GitSearchHit[]; info: number };
+/** RB-7: a repo's branch names ("main", "feature/x"), A to Z, and whether there were more than one page holds. */
+export type GitBranchList = { names: string[]; cut: boolean };
 
 export type GitFailureReason = "needs_code_read" | "not_found" | "busy" | "unreachable" | "error" | /** RB-4 */ "no_code_search" | "bad_query";
 /** A failed read. The message is a fixed phrase: never a path, a repo name, an organization or a body. */
@@ -49,8 +55,8 @@ export class GitFailure extends Error {
 
 // ---------- the allow list ----------
 
-export type GitOp = "repos" | "folder" | "files" | "file_meta" | "file_bytes";
-type Spec = { /** Under {org}/{project}/_apis/git/. */ path: "repositories" | "repositories/{repo}/items"; query: readonly string[]; accept: string };
+export type GitOp = "repos" | "folder" | "files" | "file_meta" | "file_bytes" | "branches";
+type Spec = { /** Under {org}/{project}/_apis/git/. */ path: "repositories" | "repositories/{repo}/items" | "repositories/{repo}/refs"; query: readonly string[]; accept: string; /** RB-7: keys that must be sent, each with its one fixed value. */ required?: readonly string[] };
 /** The only requests the reader can build. Every one is a GET; any other key, op or value throws before fetch. */
 export const ALLOWED: Readonly<Record<GitOp, Spec>> = {
   repos: { path: "repositories", query: [], accept: "application/json" },
@@ -58,8 +64,12 @@ export const ALLOWED: Readonly<Record<GitOp, Spec>> = {
   files: { path: "repositories/{repo}/items", query: ["scopePath", "recursionLevel", "versionDescriptor.version", "versionDescriptor.versionType"], accept: "application/json" },
   file_meta: { path: "repositories/{repo}/items", query: ["path", "includeContentMetadata", "versionDescriptor.version", "versionDescriptor.versionType"], accept: "application/json" },
   file_bytes: { path: "repositories/{repo}/items", query: ["path", "download", "versionDescriptor.version", "versionDescriptor.versionType"], accept: "application/octet-stream" },
+  // RB-7: a repo's branch heads, and nothing else: the filter is required and is only "heads/".
+  branches: { path: "repositories/{repo}/refs", query: ["filter", "$top"], accept: "application/json", required: ["filter", "$top"] },
 };
-const FIXED: Readonly<Record<string, readonly string[]>> = { recursionLevel: ["OneLevel", "Full"], "versionDescriptor.versionType": ["branch", "commit"], includeContentMetadata: ["true"], download: ["false"] };
+/** RB-7: at most this many branches of a repo are listed (one page; Microsoft's own limit for $top). */
+export const BRANCHES_MAX = 1000;
+const FIXED: Readonly<Record<string, readonly string[]>> = { recursionLevel: ["OneLevel", "Full"], "versionDescriptor.versionType": ["branch", "commit"], includeContentMetadata: ["true"], download: ["false"], filter: ["heads/"], $top: [String(BRANCHES_MAX)] };
 const ORG = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 const BRANCH = /^[^\u0000-\u001f\u007f\s~^:?*[\\]{1,250}$/;
 const COMMIT = /^[0-9a-f]{40}$/i;
@@ -76,6 +86,7 @@ export function buildUrl(t: Pick<GitTarget, "org" | "project">, op: GitOp, repo:
     if (!repo || !REPO_ID.test(repo)) throw new Error("not a repo id");
     path = path.replace("{repo}", repo.toLowerCase());
   } else if (repo !== null) throw new Error("this read takes no repo");
+  for (const k of spec.required ?? []) if (!(k in query)) throw new Error("a required query key is missing");
   const q = new URLSearchParams();
   for (const [k, v] of Object.entries(query)) {
     if (!spec.query.includes(k)) throw new Error("not an allowed query key");
@@ -221,6 +232,20 @@ export function createGitReader(d: GitReaderDeps) {
 
   return {
     search,
+    /** RB-7: a repo's branch heads, A to Z: names only. */
+    async branches(t: GitTarget, repo: GitRepo): Promise<GitBranchList> {
+      const r = await json<{ value?: { name?: unknown }[] }>(t, "branches", repo.id, { filter: "heads/", $top: String(BRANCHES_MAX) });
+      const names = new Set<string>();
+      let listed = 0;
+      for (const x of Array.isArray(r.value) ? r.value : []) {
+        listed++;
+        // Only a branch head counts, whatever else an answer might hold; its name is the one thing kept.
+        if (typeof x?.name !== "string" || !x.name.startsWith("refs/heads/")) continue;
+        const n = x.name.slice("refs/heads/".length);
+        if (n && isBranchName(n)) names.add(n);
+      }
+      return { names: [...names].sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }) || (a < b ? -1 : 1)), cut: listed >= BRANCHES_MAX };
+    },
     /** The repos in the client's registered project, A to Z. */
     async repos(t: GitTarget): Promise<GitRepo[]> {
       const r = await json<{ value?: { id?: unknown; name?: unknown; defaultBranch?: unknown; isDisabled?: unknown; webUrl?: unknown }[] }>(t, "repos", null, {});
@@ -232,10 +257,10 @@ export function createGitReader(d: GitReaderDeps) {
       }
       return list.sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }));
     },
-    /** One folder's entries on the default branch, folders first then files, A to Z. */
-    async folder(t: GitTarget, repo: GitRepo, path: string): Promise<GitFolder> {
+    /** One folder's entries on a branch (RB-7; the default branch before), folders first then files, A to Z. */
+    async folder(t: GitTarget, repo: GitRepo, path: string, branch: string): Promise<GitFolder> {
       if (!repo.defaultBranch) return { commit: null, entries: [], cut: false };
-      const r = await json<{ value?: RawItem[] }>(t, "folder", repo.id, { scopePath: path, recursionLevel: "OneLevel", ...branchQuery(repo.defaultBranch) });
+      const r = await json<{ value?: RawItem[] }>(t, "folder", repo.id, { scopePath: path, recursionLevel: "OneLevel", ...branchQuery(branch) });
       let commit: string | null = null;
       const entries: CodeEntry[] = [];
       for (const it of items(r)) {
@@ -255,9 +280,9 @@ export function createGitReader(d: GitReaderDeps) {
       return { commit, entries: sorted.slice(0, FOLDER_MAX), cut: sorted.length > FOLDER_MAX };
     },
     /** Every file name in the repo (Find), at most FIND_MAX, kept only in memory. */
-    async files(t: GitTarget, repo: GitRepo): Promise<GitFileList> {
+    async files(t: GitTarget, repo: GitRepo, branch: string): Promise<GitFileList> {
       if (!repo.defaultBranch) return { commit: null, paths: [], cut: false };
-      const r = await json<{ value?: RawItem[] }>(t, "files", repo.id, { scopePath: "/", recursionLevel: "Full", ...branchQuery(repo.defaultBranch) });
+      const r = await json<{ value?: RawItem[] }>(t, "files", repo.id, { scopePath: "/", recursionLevel: "Full", ...branchQuery(branch) });
       let commit: string | null = null;
       const paths: string[] = [];
       let total = 0;
@@ -272,10 +297,10 @@ export function createGitReader(d: GitReaderDeps) {
       paths.sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }));
       return { commit, paths, cut: total > FIND_MAX };
     },
-    /** A file's commit on the default branch and DevOps's content flags; not found for a folder. */
-    async fileMeta(t: GitTarget, repo: GitRepo, path: string): Promise<GitFileMeta> {
+    /** A file's commit on a branch (RB-7; the default branch before) and DevOps's content flags; not found for a folder. */
+    async fileMeta(t: GitTarget, repo: GitRepo, path: string, branch: string): Promise<GitFileMeta> {
       if (!repo.defaultBranch) throw new GitFailure("not_found");
-      const it = await json<RawItem>(t, "file_meta", repo.id, { path, includeContentMetadata: "true", ...branchQuery(repo.defaultBranch) });
+      const it = await json<RawItem>(t, "file_meta", repo.id, { path, includeContentMetadata: "true", ...branchQuery(branch) });
       if (it.isFolder === true || it.gitObjectType === "tree" || typeof it.commitId !== "string" || !COMMIT.test(it.commitId)) throw new GitFailure("not_found");
       return { commit: it.commitId.toLowerCase(), isBinary: it.contentMetadata?.isBinary === true, isImage: it.contentMetadata?.isImage === true };
     },

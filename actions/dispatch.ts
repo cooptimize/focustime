@@ -61,7 +61,7 @@ import { followedKeys } from "../week/follow.ts";
 import { followOptions } from "./follow.ts";
 import { guideAction } from "./guide-actions.ts";
 import { docsAccessAction } from "./docs-actions.ts";
-import { codeAction, type CodeAction, type CodeContext } from "./code-actions.ts";
+import { codeAction, codeOpenings, type CodeAction, type CodeContext } from "./code-actions.ts";
 import type { CodeGit } from "./code-git.ts";
 import type { CodeViewsStore } from "../store/code-views-store.ts";
 import { defaultWeekStart, localToday, minutesOn, mondayOf, todayTarget, weekDates7 } from "../week/dates.ts";
@@ -2196,6 +2196,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "code.search":
     case "code.inside":
     case "code.inner":
+    case "code.branches":
       return codeAction(codeCtx(ctx), action as CodeAction, req.input);
     case "docs.access":
       // DOC-1: whether this account may open the Technical docs (not an automation account; actions/docs-actions.ts).
@@ -2433,6 +2434,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "admin.standards_sync":
     case "admin.code_views":
     case "admin.code_check":
+    case "admin.code_branches":
     case "admin.invite_access":
     case "admin.invite_preview":
     case "admin.invite_send":
@@ -2461,6 +2463,8 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
           send: { sender: async () => (await accountOf(ctx))?.sender ?? null, access: sendProbe(ctx), canAsk: !ctx.demo?.on },
           // SA-4: the clients chats.add would let this admin register a chat under (the same check, read only).
           chatTargets: async () => (await chatContext(ctx)).clientKeys(),
+          // RB-7: each repo's opening branch, through Code's own checks as this admin.
+          codeBranches: (k) => codeOpenings(codeCtx(ctx), k),
         },
         action as AdminAction,
         req.input,
@@ -2834,6 +2838,8 @@ function codeCtx(ctx: ActionContext): CodeContext {
       return ca.keys.filter((k) => ca.isClient(k)).map((k) => ({ clientKey: k, name: k, color: colors[k] ?? null }));
     },
     rule: async (k) => (ctx.org ? clientRules(await ctx.org.rules(), k).codeAccess : "team"),
+    // RB-7: the client's opening branch; without the team's rules, each repo's default.
+    opening: async (k) => (ctx.org ? clientRules(await ctx.org.rules(), k).codeBranch : null),
     team: async () => {
       const t = await reportTeam(teamCtx(ctx));
       return { myClients: t.myClients, onClient: t.onClient };

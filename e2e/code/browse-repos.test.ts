@@ -311,7 +311,7 @@ describe.skipIf(!CHROMIUM)("Code (RB-1)", () => {
     const views = page.locator("[data-setting=code-views]");
     await views.locator("tbody tr").first().waitFor();
     const first = await views.locator("tbody tr").first().locator("td").allTextContents();
-    expect(first.slice(2)).toEqual(["Northwind", "sales-analytics", "Opened a file", "/README.md"]);
+    expect(first.slice(2)).toEqual(["Northwind", "sales-analytics on main", "Opened a file", "/README.md"]);
     expect(await views.locator("[data-code-counts]").textContent()).toMatch(/Northwind \d+/);
     await shotThemes(page, "15-admin-code-views");
 

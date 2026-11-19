@@ -154,3 +154,4 @@ Earlier decisions (D01–D20) live in Discovery Brief v0.3 in the claude.ai Proj
 - [MC-6: Calls polish after the redesign, and a chat call keeps its chat's client (Nov 18)](decisions/mc-6.md)
 - [ST-1: Status: what is on the report and what isn't yet (Nov 19)](decisions/st-1-status.md)
 - [MC-7: Paste a transcript or your notes into a call (Nov 19)](decisions/mc-7.md)
+- [RB-7: Code on a branch you choose (Nov 19)](decisions/rb-7.md)

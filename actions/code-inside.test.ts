@@ -62,6 +62,7 @@ function ctx(git: CodeGit | null, o: { why?: "guest" | "domain" | "automation"; 
     notCooptimizer: async () => o.why ?? null,
     clients: async () => CLIENTS.map((k) => ({ clientKey: k, name: k, color: null })),
     rule: async (k) => o.rules?.[k] ?? "company",
+    opening: async () => null,
     team: async () => ({ myClients: o.onTeam ?? [], onClient: (k) => (o.onTeam ?? []).includes(k) }),
     git,
     views: { add: async (v) => (o.views === "fail" ? Promise.reject(new Error("db down")) : (o.order?.push("row"), void views.push(v))) },
@@ -185,7 +186,7 @@ describe("access", () => {
 });
 
 describe("the view log", () => {
-  it("one row per client asked, written before DevOps is asked, with no repo, no path and none of the words", async () => {
+  it("one row per client asked, written before DevOps is asked, with no repo id, no path and none of the words (RB-7: the branches where the repo goes)", async () => {
     const order: string[] = [];
     const d = devops(() => (order.push("search"), {}));
     const c = ctx(d.git, { order });
@@ -199,8 +200,8 @@ describe("the view log", () => {
     await inside(ctx(git2, { order: first }).c, "Contoso");
     expect(first.slice(0, 2)).toEqual(["row", "repos"]);
     expect(c.views).toEqual([
-      { actorId: ME.id, actorName: ME.name, clientKey: "Contoso", repoId: "", repoName: "", path: "", event: "inside_searched" },
-      { actorId: ME.id, actorName: ME.name, clientKey: "Adatum", repoId: "", repoName: "", path: "", event: "inside_searched" },
+      { actorId: ME.id, actorName: ME.name, clientKey: "Contoso", repoId: "", repoName: "All its repos on their default branches", path: "", event: "inside_searched" },
+      { actorId: ME.id, actorName: ME.name, clientKey: "Adatum", repoId: "", repoName: "All its repos on their default branches", path: "", event: "inside_searched" },
     ]);
   });
   it("no row, no search: when the row can't be written DevOps isn't asked", async () => {

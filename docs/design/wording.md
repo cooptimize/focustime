@@ -756,3 +756,23 @@ From `ui/status-states.ts` (`STATE_NAME`, `STATE_KEY`, `ST_WORDS`, `LINE_NOTE`).
 | A call's source | Transcript pasted by a reviewer · Notes pasted by a reviewer |
 | The Transcript view, notes | Your notes (the tab and the heading) · Words (the filter's hint) · Notes pasted by a reviewer, not what was said word for word. Kept 30 days, for this call's reviewers and attendees only. |
 | A note's quote | Open your notes at this line |
+
+## RB-7 words (Nov 19)
+
+| Where | Words |
+|---|---|
+| The picker's button (read aloud) | Branch: dev. Change branch |
+| The picker's marks | opens here (the client's opening branch, or the repo's default when none is set) · default (the repo's default, when it differs) |
+| The picker's box (over 20 branches) | Find a branch |
+| Nothing found | No branch by that name. |
+| Over 1000 branches | Showing the first 1,000 branches. |
+| The header's line | On feature/returns, not the usual dev · Back to dev |
+| A branch that is gone | feature/old isn't there any more, so this is dev. |
+| A file not on the branch chosen | /lake/rpt/Views/vReturns.sql isn't on main, so this is /lake/rpt/Views. (the top folder: "so this is the top of the repo.") |
+| Search inside files, a branch DevOps doesn't search | DevOps doesn't search this branch. These are from main. |
+| Search inside files, a repo's results on a chosen branch | sales-analytics on dev |
+| Search inside files' footer | DevOps searches each repo's default branch, and any others its admins chose. Forks aren't searched. (was: Only each repo's default branch is searched.) |
+| Admin › Clients › Code, the Rule | Code opens on · Each repo's default · The branch Code opens this client's repos on, where a repo has it. A repo without it opens on its own default. Anyone can still choose another branch in Code. |
+| Admin, each repo | Each repo opens on · sales-analytics: dev · store-portal: main (it has no dev) · Read with the company DevOps token for this client: branch names only. |
+| Code views, the repo column | sales-analytics on dev · All its repos on main · All its repos: sales-analytics on dev, store-portal on main · All its repos on dev where they have it, the one on screen on feature/returns |
+| A refused branch | That isn't a branch's name. · A branch goes with the repo it is for. · Where is it? reads each repo's usual branch, so it takes no branch. |

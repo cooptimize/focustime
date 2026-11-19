@@ -50,24 +50,44 @@
 .cv-state { margin: 24px 0; padding: 16px; max-width: 70ch; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text-muted); }
 
 /* The client picker */
-.cv-picker { position: relative; }
-.cv-picker-btn { width: 100%; display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
-.cv-picker-btn > span:nth-child(2) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cv-picker-caret { color: var(--text-muted); }
-.cv-picker-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.cv-picker-pop { position: absolute; z-index: 5; left: 0; right: 0; top: calc(100% + 4px); max-height: min(60vh, 480px); overflow: auto; padding: 6px; border: 1px solid var(--border); border-radius: 10px; background: var(--raised); box-shadow: var(--shadow-menu); }
-.cv-clients { display: flex; flex-direction: column; gap: 8px; }
+.cv-picker, .cv-branch { position: relative; }
+.cv-picker-btn, .cv-branch-btn { width: 100%; display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+.cv-picker-btn > span:nth-child(2), .cv-branch-btn > span:nth-child(2) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cv-picker-caret, .cv-branch-caret { color: var(--text-muted); }
+.cv-picker-btn:focus-visible, .cv-branch-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.cv-picker-pop, .cv-branch-pop { position: absolute; z-index: 5; left: 0; right: 0; top: calc(100% + 4px); max-height: min(60vh, 480px); overflow: auto; padding: 6px; border: 1px solid var(--border); border-radius: 10px; background: var(--raised); box-shadow: var(--shadow-menu); }
+.cv-clients, .cv-branch-list { display: flex; flex-direction: column; gap: 8px; }
 .cv-start .cv-clients { max-width: 520px; }
 .cv-group-head { padding: 4px 8px; font-size: var(--fs-1); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); }
-.cv-client-opt { width: 100%; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; padding: 6px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
-.cv-client-opt:hover { background: var(--sunken); }
-.cv-client-opt[aria-selected="true"] { background: color-mix(in srgb, var(--accent) 16%, transparent); font-weight: 600; border-radius: 0 6px 6px 0; box-shadow: inset 3px 0 0 var(--accent); }
-.cv-client-opt:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
-.cv-client-name { flex: 1; min-width: 0; }
+.cv-client-opt, .cv-branch-opt { width: 100%; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; padding: 6px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.cv-client-opt:hover, .cv-branch-opt:hover { background: var(--sunken); }
+.cv-client-opt[aria-selected="true"], .cv-branch-opt[aria-selected="true"] { background: color-mix(in srgb, var(--accent) 16%, transparent); font-weight: 600; border-radius: 0 6px 6px 0; box-shadow: inset 3px 0 0 var(--accent); }
+.cv-client-opt:focus-visible, .cv-branch-opt:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.cv-client-name, .cv-branch-name { flex: 1; min-width: 0; }
 .cv-client-opt.locked { color: var(--text-faint); cursor: default; }
 .cv-client-opt.locked:hover { background: transparent; }
 .cv-locked { flex-basis: 100%; padding-left: 18px; font-size: var(--fs-1); color: var(--text-faint); }
 
+/* RB-7: the repo and its branch on one row; the branch picker is the client picker's button and list. */
+.cv-repo-row { position: relative; display: flex; align-items: center; gap: 8px; min-width: 0; }
+/* The list opens under the whole row (the side is narrower than a long branch name). */
+.cv-repo-row > .cv-branch { position: static; }
+.cv-repo-row .cv-branch-pop { left: 0; right: 0; min-width: 0; }
+.cv-repo-row > .cv-repo { flex: 1 1 55%; min-width: 0; }
+.cv-repo-row > .cv-repo-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.cv-repo-row > .cv-branch { flex: 0 1 auto; min-width: 0; max-width: 45%; }
+.cv-branch-btn { padding-block: 5px; font-weight: 500; }
+.cv-branch-btn .cv-kind { flex: none; }
+.cv-branch-pop { left: auto; right: 0; min-width: min(320px, 86vw); }
+.cv-lives .cv-branch .cv-branch-pop { left: 0; right: auto; }
+.cv-branch-find { margin-bottom: 6px; }
+.cv-branch-opt { flex-wrap: nowrap; }
+.cv-branch-opt .cv-branch-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cv-branch-mark { flex: none; font-size: var(--fs-1); color: var(--text-muted); border: 1px solid var(--border); border-radius: 999px; padding: 0 6px; }
+.cv-branch-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 8px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text-muted); font-size: var(--fs-2); overflow-wrap: anywhere; }
+.cv-branch-line.off { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); color: var(--text); }
+.code-page.narrow .cv-branch-btn, .code-page.narrow .cv-branch-opt, .code-page.narrow .cv-branch-find, .code-page.narrow .cv-branch-line .mini, .code-page.narrow .cv-repo select { min-height: 44px; }
+.code-page.narrow .cv-branch-pop { position: fixed; left: 16px; right: 16px; top: auto; min-width: 0; }
 .cv-repo select { width: 100%; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; }
 
 /* Find a file */

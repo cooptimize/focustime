@@ -21,6 +21,12 @@
 // and are never stored, logged, put in an error or the view log, or returned. One row ("Searched inside files", no
 // repo, no path, no words) is written before DevOps is asked; no row, no search. No text of a file is returned: a
 // file is shown only when a person opens it (code.file), logged as a file open.
+// RB-7: every read is on a branch: the one a person chose (the `branch` field, from the address) while the repo has it,
+// else the client's opening branch (its Rule code_branch) when the repo has a branch of that name, else the repo's
+// default (plan/code-branch.ts). The branch is checked against the repo's own branch list (code.branches, branch heads
+// only), read with the same token after the same checks; a branch that is gone falls back and says so. Search names
+// and By kind take a branch only for the one repo on screen; Where is it? takes none. Search inside files keeps a hit
+// only when DevOps says it is on that repo's branch, or shows the default's with a line when DevOps doesn't search it.
 // RB-3: code.kinds also serves the New form's and the draft editor's "Where is it?" (`from`: new_form or
 // draft_editor). The same checks and the same read; its row says where it was used ("Listed for Where is it? on the
 // New form"), never the words typed, and only the things the box offers are returned (plan/where-lookup.ts).
@@ -34,13 +40,14 @@ import type { ActionResponse } from "./types.ts";
 import { CodeFailure, type CodeFailureReason, type CodeGit } from "./code-git.ts";
 import type { GitRepo } from "../sources/devops/git.ts";
 import type { CodeViewInput } from "../store/code-views-store.ts";
-import { cleanPath, FIND_MAX, INSIDE_MAX, INSIDE_WORDS_MAX, NAMES_REPOS_AT_ONCE, REPO_ID, sizeWords, TEXT_MAX_BYTES, type CodeAccess, type CodeFileView, type CodeRepoView } from "../plan/code.ts";
+import { cleanPath, FIND_MAX, INSIDE_MAX, INSIDE_WORDS_MAX, isBranchName, NAMES_REPOS_AT_ONCE, REPO_ID, sizeWords, TEXT_MAX_BYTES, type CodeAccess, type CodeFileView, type CodeRepoView } from "../plan/code.ts";
+import { branchOrder, logAll, logAllBefore, logRepo, needsBranchList, openingOf, openingRule, pickBranch, type BranchPick } from "../plan/code-branch.ts";
 import { whereOnly, WHERE_FROM, type WhereFrom } from "../plan/where-lookup.ts";
 import { bimFile, bimTables, legacyPages, partFiles, pbirPages, reportFiles, tmdlTableFields, tmdlTableName, WHERE_INNER_AT_ONCE, WHERE_LISTS, WHERE_PAGES_MAX, WHERE_PARTS_MAX, type InnerAnswer, type InnerField, type WhereList } from "../plan/where-inner.ts";
-import { fileLabels, KIND_EXT, KINDS, sortRepo, type InsideAnswer, type InsideFile, type Kind, type RepoThings } from "../plan/code-kinds.ts";
+import { fileLabels, KIND_EXT, KINDS, sortRepo, type InsideAnswer, type InsideFile, type InsideNotSearched, type Kind, type RepoThings } from "../plan/code-kinds.ts";
 export type { CodeFileView, CodeRepoView } from "../plan/code.ts";
 
-export const CODE_ACTIONS = ["code.clients", "code.repos", "code.folder", "code.find", "code.file", "code.kinds", "code.search", "code.inside", "code.inner"] as const;
+export const CODE_ACTIONS = ["code.clients", "code.repos", "code.folder", "code.find", "code.file", "code.kinds", "code.search", "code.inside", "code.inner", "code.branches"] as const;
 export type CodeAction = (typeof CODE_ACTIONS)[number];
 
 /** Why someone isn't let in at all (step 1). */
@@ -64,6 +71,8 @@ export type CodeContext = {
   clients: () => Promise<CodeClientRef[]>;
   /** A client's Rule (Whole company by default). */
   rule: (clientKey: string) => Promise<CodeAccess>;
+  /** RB-7: a client's opening branch (its Rule "Code opens on"), or null for each repo's default. */
+  opening: (clientKey: string) => Promise<string | null>;
   /** The clients I'm on, and the client report's team check. */
   team: () => Promise<{ myClients: readonly string[]; onClient: (clientKey: string) => boolean }>;
   /** Null: code can't be read here (no Dataverse, so no DevOps). */
@@ -100,6 +109,9 @@ export const CODE_TEXT = {
   badQuery: "DevOps couldn't run that search as written. Check the quotes and brackets, and put a * only at the end of a word.",
   badWords: "Type what to look for, up to 200 characters.",
   insideNotLogged: "The search wasn't run because FocusTime couldn't record that you searched. Try again in a moment.",
+  badBranch: "That isn't a branch's name.",
+  branchWithRepo: "A branch goes with the repo it is for.",
+  noBranchHere: "Where is it? reads each repo's usual branch, so it takes no branch.",
 } as const;
 
 const bad = (error: string, status = 400, code?: string): ActionResponse => ({ ok: false, status, error, ...(code ? { code } : {}) });
@@ -147,20 +159,47 @@ function balanced(q: string): boolean {
 const repoView = (r: GitRepo): CodeRepoView => ({ id: r.id, name: r.name, defaultBranch: r.defaultBranch, state: r.disabled ? "disabled" : r.defaultBranch ? "ok" : "empty" });
 
 
-/** The file's page in DevOps on the default branch (Copy DevOps link). */
-export function devopsLink(repo: GitRepo, path: string): string | null {
+/** The file's page in DevOps on the branch it was read on (Copy DevOps link; RB-7: the branch on screen). */
+export function devopsLink(repo: GitRepo, path: string, branch: string): string | null {
   if (!repo.webUrl || !repo.defaultBranch) return null;
   const u = new URL(repo.webUrl);
-  u.search = new URLSearchParams({ path, version: `GB${repo.defaultBranch}` }).toString();
+  u.search = new URLSearchParams({ path, version: `GB${branch}` }).toString();
   return u.toString();
+}
+
+/** RB-7: the branch a read of this repo is on (reads the repo's branch list only when a branch other than its default is asked for). */
+async function branchOf(git: CodeGit, clientKey: string, repo: GitRepo, opening: string | null, chosen: string | null, fresh = false): Promise<BranchPick> {
+  const def = repo.defaultBranch!;
+  const names = needsBranchList({ defaultBranch: def, opening, chosen }) ? (await git.branches(clientKey, repo, fresh ? { fresh } : undefined)).names : null;
+  return pickBranch({ defaultBranch: def, opening, chosen, names });
+}
+
+/**
+ * RB-7: one read on the branch picked; when a chosen branch's read isn't found, the branch list is asked for afresh,
+ * and if the branch is gone the read is made again on the opening branch, saying which was asked for.
+ */
+async function onBranch<T>(git: CodeGit, clientKey: string, repo: GitRepo, opening: string | null, chosen: string | null, read: (branch: string) => Promise<T>): Promise<{ pick: BranchPick; value: T }> {
+  const pick = await branchOf(git, clientKey, repo, opening, chosen);
+  try {
+    return { pick, value: await read(pick.name) };
+  } catch (e) {
+    if (pick.why !== "chosen" || !(e instanceof CodeFailure) || e.reason !== "not_found") throw e;
+    const again = await branchOf(git, clientKey, repo, opening, chosen, true);
+    if (!again.gone) throw e;
+    return { pick: again, value: await read(again.name) };
+  }
 }
 
 export async function codeAction(ctx: CodeContext, action: CodeAction, input: unknown): Promise<ActionResponse> {
   const i = obj(input ?? {});
   if (!i) return bad("input must be an object");
-  const allowedKeys: Record<CodeAction, readonly string[]> = { "code.clients": [], "code.repos": ["clientKey"], "code.folder": ["clientKey", "repoId", "path"], "code.find": ["clientKey", "repoId"], "code.file": ["clientKey", "repoId", "path"], "code.kinds": ["clientKey", "from"], "code.search": ["clientKey"], "code.inside": ["clientKey", "words", "kind"], "code.inner": ["clientKey", "repoId", "path", "list"] };
+  // RB-7: `branch` is the branch on screen for the one repo named; By kind, Search names and Search inside files take it
+  // with that repo's id (the repo on screen), and every other repo is read on its opening branch.
+  const allowedKeys: Record<CodeAction, readonly string[]> = { "code.clients": [], "code.repos": ["clientKey"], "code.folder": ["clientKey", "repoId", "path", "branch"], "code.find": ["clientKey", "repoId", "branch"], "code.file": ["clientKey", "repoId", "path", "branch"], "code.kinds": ["clientKey", "from", "repoId", "branch"], "code.search": ["clientKey", "repoId", "branch"], "code.inside": ["clientKey", "words", "kind", "repoId", "branch"], "code.inner": ["clientKey", "repoId", "path", "list"], "code.branches": ["clientKey", "repoId"] };
   const extra = extraKey(i, allowedKeys[action]);
   if (extra) return bad(`unknown input field ${extra}`);
+  if (i.branch !== undefined && i.branch !== null && !isBranchName(i.branch)) return bad(CODE_TEXT.badBranch, 400, "bad_branch");
+  const chosen = typeof i.branch === "string" ? i.branch : null;
 
   // Where code can't be read at all (no code source wired in), the list is empty before anything else is asked.
   if (action === "code.clients" && !ctx.git) return { ok: true, data: { clients: [], available: false, logLine: CODE_TEXT.logLine } };
@@ -196,6 +235,15 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
   // RB-3: where a names read is used, checked before anything is read.
   if (i.from !== undefined && (action !== "code.kinds" || !(WHERE_FROM as readonly unknown[]).includes(i.from))) return bad("from is new_form or draft_editor", 400, "bad_from");
   const from = i.from as WhereFrom | undefined;
+  // RB-7: Where is it? uses each repo's opening branch and takes no branch from a person.
+  if (from && (i.branch !== undefined || i.repoId !== undefined)) return bad(CODE_TEXT.noBranchHere, 400, "bad_branch");
+  // The repo a client-wide read takes a branch for: one id, checked against the client's own list below.
+  if (action === "code.kinds" || action === "code.search" || action === "code.inside") {
+    // Both or neither: a branch goes with the repo on screen it is for, and a repo is named only for its branch.
+    if ((i.repoId !== undefined) !== (i.branch !== undefined)) return bad(CODE_TEXT.branchWithRepo, 400, "bad_branch");
+    if (i.repoId !== undefined && (typeof i.repoId !== "string" || !REPO_ID.test(i.repoId))) return bad(CODE_TEXT.noRepo, 400, "no_repo");
+  }
+  const onScreen = (action === "code.kinds" || action === "code.search" || action === "code.inside") && chosen && typeof i.repoId === "string" ? i.repoId.toLowerCase() : null;
 
   // 2. The client is listed (never hidden), by its key; 3. its Rule.
   if (typeof i.clientKey !== "string" || !i.clientKey || i.clientKey.length > 100) return bad("clientKey names the client");
@@ -203,6 +251,10 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
   if (!client) return bad(CODE_TEXT.noClient, 404, "no_client");
   if (!(await open(client.clientKey))) return bad(CODE_TEXT.teamOnly(client.name), 403, "team_only");
   if (!ctx.git) return bad(CODE_TEXT.notHere, 404, "not_here");
+  // RB-7: the client's opening branch; a Rule that can't be read counts as not set (each repo's default, as before).
+  const opening = openingRule(await ctx.opening(client.clientKey).catch(() => null));
+  /** The branch asked for a repo in a client-wide read: the chosen one for the repo on screen, none for the rest. */
+  const chosenFor = (r: GitRepo) => (onScreen && r.id === onScreen ? chosen : null);
 
   // RB-4: Search inside files. What was typed is checked, then the row is written, before anything is asked of this
   // client's DevOps (its repo list included). Never the words.
@@ -212,7 +264,8 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
     if (i.kind !== undefined && i.kind !== null && !(KINDS as readonly unknown[]).includes(i.kind)) return bad("kind is one of the kinds", 400, "bad_kind");
     try {
       if (!ctx.views) throw new Error("no view log");
-      await ctx.views.add({ actorId: me.id, actorName: me.name, clientKey: client.clientKey, repoId: "", repoName: "", path: "", event: "inside_searched" });
+      // RB-7: the branches it reads, as known before anything is asked (the repo on screen isn't named: its list isn't read yet).
+      await ctx.views.add({ actorId: me.id, actorName: me.name, clientKey: client.clientKey, repoId: "", repoName: logAllBefore(opening, onScreen ? chosen : null), path: "", event: "inside_searched" });
     } catch {
       return bad(CODE_TEXT.insideNotLogged, 503, "not_logged");
     }
@@ -232,6 +285,8 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
   if (action === "code.kinds" || action === "code.search") {
     const git = ctx.git;
     const out: CodeRepoThings[] = new Array(repos.length);
+    /** RB-7: the branch each repo's names were read on, for the log. */
+    const readOn: { repo: string; branch: string }[] = new Array(repos.length);
     let read = false;
     let next = 0;
     const worker = async () => {
@@ -243,11 +298,12 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
           continue;
         }
         try {
-          const f = await git.files(client.clientKey, r);
+          const { pick, value: f } = await onBranch(git, client.clientKey, r, opening, chosenFor(r), (b) => git.files(client.clientKey, r, b));
           read = true;
+          readOn[n] = { repo: r.name, branch: pick.name };
           const sorted = sortRepo(f.paths);
           // RB-3: for Where is it?, only what the box offers, and no file inside an item.
-          out[n] = { repo: v, ...(from ? whereOnly(sorted) : sorted), cut: f.cut, problem: null };
+          out[n] = { repo: v, ...(from ? whereOnly(sorted) : sorted), cut: f.cut, problem: null, ...(pick.why === "chosen" ? { branch: pick.name } : {}) };
         } catch (e) {
           const f = failure(e instanceof CodeFailure ? e.reason : "error", client.name);
           out[n] = { repo: v, things: [], files: [], cut: false, problem: f.ok ? null : f.error };
@@ -259,7 +315,7 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
     if (read) {
       try {
         if (!ctx.views) throw new Error("no view log");
-        await ctx.views.add({ actorId: me.id, actorName: me.name, clientKey: client.clientKey, repoId: "", repoName: "", path: "", event: from ? `where_${from}` : action === "code.kinds" ? "kinds_listed" : "names_searched" });
+        await ctx.views.add({ actorId: me.id, actorName: me.name, clientKey: client.clientKey, repoId: "", repoName: logAll(readOn.filter(Boolean)), path: "", event: from ? `where_${from}` : action === "code.kinds" ? "kinds_listed" : "names_searched" });
       } catch {
         return bad(CODE_TEXT.namesNotLogged, 503, "not_logged");
       }
@@ -289,11 +345,27 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
         if (again && (again.info === 0 || again.info === 8)) (answer = again), (narrowed = true);
       }
       const byId = new Map(repos.filter((r) => !r.disabled && r.defaultBranch).map((r) => [r.id, r]));
-      // Only this client's own repos, and only a file DevOps says is on its repo's default branch. The rest are
-      // counted, so the screen can say some files aren't listed, never named.
+      // RB-7: only this client's own repos, and only a file DevOps says is on its repo's branch: the branch on screen
+      // for the repo on screen, the opening branch for the rest. When DevOps found the words on a repo's default and
+      // never on that branch, it doesn't search that branch: that repo's results are the default's, with a line. The
+      // rest are counted, so the screen can say some files aren't listed, never named.
+      const branchFor = new Map<string, { name: string; why: BranchPick["why"] }>();
+      const notSearched: InsideNotSearched[] = [];
+      for (const id of new Set(answer.hits.map((h) => h.repoId))) {
+        const r = byId.get(id);
+        if (!r) continue;
+        const pick = await branchOf(git, client.clientKey, r, opening, chosenFor(r)).catch(() => null);
+        if (!pick) continue;
+        const own = answer.hits.filter((h) => h.repoId === id);
+        if (pick.name !== r.defaultBranch && !own.some((h) => h.branches.includes(pick.name)) && own.some((h) => h.branches.includes(r.defaultBranch!))) {
+          notSearched.push({ repoId: id, repoName: r.name, branch: pick.name, shown: r.defaultBranch! });
+          // A result opens on the default it was found on: a choice of its own when the repo usually opens elsewhere.
+          branchFor.set(id, { name: r.defaultBranch!, why: pick.opening === r.defaultBranch ? "default" : "chosen" });
+        } else branchFor.set(id, { name: pick.name, why: pick.why });
+      }
       const kept = answer.hits.filter((h) => {
-        const r = byId.get(h.repoId);
-        return !!r && h.branches.includes(r.defaultBranch!);
+        const b = branchFor.get(h.repoId);
+        return !!b && h.branches.includes(b.name);
       });
       // What each file is, from its repo's file names (the read By kind uses, from memory when it is there). A repo
       // whose names can't be read still lists its files, each sorted by its own path alone.
@@ -305,7 +377,7 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
           const id = wanted[n]!;
           const own = kept.filter((h) => h.repoId === id).map((h) => h.path);
           try {
-            labels.set(id, fileLabels([...new Set([...(await git.files(client.clientKey, byId.get(id)!)).paths, ...own])]));
+            labels.set(id, fileLabels([...new Set([...(await git.files(client.clientKey, byId.get(id)!, branchFor.get(id)!.name)).paths, ...own])]));
           } catch {
             labels.set(id, fileLabels(own));
           }
@@ -314,9 +386,10 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
       await Promise.all(Array.from({ length: Math.min(NAMES_REPOS_AT_ONCE, wanted.length) }, worker));
       const files: CodeInsideFile[] = kept.map((h) => {
         const l: { kind: Kind; detail: string; itemKind?: Kind } = labels.get(h.repoId)?.get(h.path) ?? { kind: "other", detail: "File" };
-        return { repoId: h.repoId, repoName: byId.get(h.repoId)!.name, path: h.path, kind: l.kind, detail: l.detail, matches: h.matches, ...(l.itemKind ? { itemKind: l.itemKind } : {}) };
+        const b = branchFor.get(h.repoId)!;
+        return { repoId: h.repoId, repoName: byId.get(h.repoId)!.name, path: h.path, kind: l.kind, detail: l.detail, matches: h.matches, ...(l.itemKind ? { itemKind: l.itemKind } : {}), ...(b.why === "chosen" ? { branch: b.name } : {}) };
       });
-      const data: CodeInsideAnswer = { client, files, total: answer.count, more: answer.count > answer.hits.length || answer.info === 8, indexing, narrowed, notListed: answer.hits.length - kept.length };
+      const data: CodeInsideAnswer = { client, files, total: answer.count, more: answer.count > answer.hits.length || answer.info === 8, indexing, narrowed, notListed: answer.hits.length - kept.length, ...(notSearched.length ? { notSearched } : {}) };
       return { ok: true, data };
     } catch (e) {
       // A fixed phrase by reason: an error's own message is never passed on (it could hold the words).
@@ -328,51 +401,76 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
   const repo = repos.find((r) => r.id === (i.repoId as string).toLowerCase());
   if (!repo) return bad(CODE_TEXT.noRepo, 404, "no_repo");
   const view = repoView(repo);
-  const log = async (event: CodeViewInput["event"], path: string) => {
+  /** RB-7: the row names the repo with the branch it was read on ("sales-analytics on dev"). */
+  const log = async (event: CodeViewInput["event"], path: string, branch: string) => {
     if (!ctx.views) throw new Error("no view log");
-    await ctx.views.add({ actorId: me.id, actorName: me.name, clientKey: client.clientKey, repoId: repo.id, repoName: repo.name, path, event });
+    await ctx.views.add({ actorId: me.id, actorName: me.name, clientKey: client.clientKey, repoId: repo.id, repoName: logRepo(repo.name, branch), path, event });
   };
 
+  const git = ctx.git;
+  // RB-7: the repo's branch list for the picker: branch heads only, in the picker's order, with the opening branch
+  // and the default named. Read only; not a read of the code, so it writes no row.
+  if (action === "code.branches") {
+    if (view.state !== "ok") return { ok: true, data: { repo: view, names: [], opening: null, default: null, cut: false } };
+    try {
+      const list = await git.branches(client.clientKey, repo);
+      const def = repo.defaultBranch!;
+      const at = openingOf(def, opening, list.names);
+      return { ok: true, data: { repo: view, names: branchOrder(list.names.includes(def) ? list.names : [...list.names, def], at, def), opening: at, default: def, cut: list.cut } };
+    } catch (e) {
+      return failure(e instanceof CodeFailure ? e.reason : "error", client.name);
+    }
+  }
+
   // RB-3b: the second level of Where is it?, read here from only the files the listing needs and returned as names.
-  if (action === "code.inner") return inner(ctx.git, client, repo, view, i, log);
+  // RB-7: on the repo's opening branch; Where is it? takes no branch from a person.
+  if (action === "code.inner") {
+    if (view.state !== "ok") return inner(git, client, repo, view, i, log, repo.defaultBranch ?? "");
+    try {
+      const pick = await branchOf(git, client.clientKey, repo, opening, chosen);
+      return inner(git, client, repo, view, i, log, pick.name);
+    } catch (e) {
+      return failure(e instanceof CodeFailure ? e.reason : "error", client.name);
+    }
+  }
 
   try {
     if (action === "code.find") {
       if (view.state !== "ok") return { ok: true, data: { repo: view, paths: [], cut: false, max: FIND_MAX } };
-      const f = await ctx.git.files(client.clientKey, repo);
+      const { pick, value: f } = await onBranch(git, client.clientKey, repo, opening, chosen, (b) => git.files(client.clientKey, repo, b));
       try {
-        await log("find_used", "/");
+        await log("find_used", "/", pick.name);
       } catch {
         return bad(CODE_TEXT.notLogged, 503, "not_logged");
       }
-      return { ok: true, data: { repo: view, paths: f.paths, cut: f.cut, max: FIND_MAX } };
+      return { ok: true, data: { repo: view, paths: f.paths, cut: f.cut, max: FIND_MAX, branch: pick } };
     }
     const path = cleanPath(i.path);
     if (!path) return bad(CODE_TEXT.badPath, 400, "bad_path");
     if (action === "code.folder") {
       if (view.state !== "ok") return { ok: true, data: { repo: view, path, entries: [], cut: false } };
-      const f = await ctx.git.folder(client.clientKey, repo, path);
+      const { pick, value: f } = await onBranch(git, client.clientKey, repo, opening, chosen, (b) => git.folder(client.clientKey, repo, path, b));
       // The repo's top folder is "Repo opened"; other folders aren't logged.
       if (path === "/") {
         try {
-          await log("repo_opened", "/");
+          await log("repo_opened", "/", pick.name);
         } catch {
           return bad(CODE_TEXT.notLogged, 503, "not_logged");
         }
       }
-      return { ok: true, data: { repo: view, path, entries: f.entries, cut: f.cut } };
+      return { ok: true, data: { repo: view, path, entries: f.entries, cut: f.cut, branch: pick } };
     }
     // code.file
     if (view.state !== "ok" || path === "/") return failure("not_found", client.name);
-    const f = await ctx.git.file(client.clientKey, repo, path);
+    const { pick, value: f } = await onBranch(git, client.clientKey, repo, opening, chosen, (b) => git.file(client.clientKey, repo, path, b));
     // C2: the row first; without it, no text.
     try {
-      await log("file_opened", path);
+      await log("file_opened", path, pick.name);
     } catch {
       return bad(CODE_TEXT.notLogged, 503, "not_logged");
     }
-    const out: CodeFileView = { path, size: f.size, sizeText: f.kind === "too_large" && f.size === null ? `over ${sizeWords(TEXT_MAX_BYTES)}` : sizeWords(f.size), kind: f.kind, text: f.kind === "text" || f.kind === "lfs" ? f.text : null, devopsUrl: devopsLink(repo, path) };
-    return { ok: true, data: { repo: view, file: out } };
+    const out: CodeFileView = { path, size: f.size, sizeText: f.kind === "too_large" && f.size === null ? `over ${sizeWords(TEXT_MAX_BYTES)}` : sizeWords(f.size), kind: f.kind, text: f.kind === "text" || f.kind === "lfs" ? f.text : null, devopsUrl: devopsLink(repo, path, pick.name) };
+    return { ok: true, data: { repo: view, file: out, branch: pick } };
   } catch (e) {
     return failure(e instanceof CodeFailure ? e.reason : "error", client.name);
   }
@@ -387,14 +485,15 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
  * is written once anything was read, with the repo and that file, and without it nothing is returned. Only names go
  * back; the files' text stays here (and in the 5-minute memory every read uses).
  */
-async function inner(git: CodeGit, client: CodeClientRef, repo: GitRepo, view: CodeRepoView, i: Record<string, unknown>, log: (event: CodeViewInput["event"], path: string) => Promise<void>): Promise<ActionResponse> {
+async function inner(git: CodeGit, client: CodeClientRef, repo: GitRepo, view: CodeRepoView, i: Record<string, unknown>, logOn: (event: CodeViewInput["event"], path: string, branch: string) => Promise<void>, branch: string): Promise<ActionResponse> {
+  const log = (event: CodeViewInput["event"], path: string) => logOn(event, path, branch);
   const list = i.list as WhereList;
   if (!(WHERE_LISTS as readonly unknown[]).includes(list)) return bad("list is pages, fields or tables", 400, "bad_list");
   const path = cleanPath(i.path);
   if (!path || path === "/") return bad(CODE_TEXT.badPath, 400, "bad_path");
   if (view.state !== "ok") return failure("not_found", client.name);
   try {
-    const paths = (await git.files(client.clientKey, repo)).paths;
+    const paths = (await git.files(client.clientKey, repo, branch)).paths;
     const { things } = sortRepo(paths);
     const same = (a: string, b: string) => a === b;
     /** Opens files a few at a time; the text of each, or null when it isn't text or couldn't be read. */
@@ -404,7 +503,7 @@ async function inner(git: CodeGit, client: CodeClientRef, repo: GitRepo, view: C
       const worker = async () => {
         for (let n = next++; n < files.length; n = next++) {
           try {
-            const f = await git.file(client.clientKey, repo, files[n]!);
+            const f = await git.file(client.clientKey, repo, files[n]!, branch);
             out[n] = f.kind === "text" ? f.text : null;
           } catch (e) {
             // DevOps busy or the token refused: the listing stops (said as a failure); one missing file doesn't.
@@ -424,7 +523,7 @@ async function inner(git: CodeGit, client: CodeClientRef, repo: GitRepo, view: C
       if (!files) return bad(CODE_TEXT.notListable, 404, "not_listable");
       event = "pages_listed";
       if ("legacy" in files) {
-        const f = await git.file(client.clientKey, repo, files.legacy);
+        const f = await git.file(client.clientKey, repo, files.legacy, branch);
         if (f.kind === "too_large") return bad(CODE_TEXT.tooLarge, 413, "too_large");
         const text = f.kind === "text" ? f.text : null;
         const pages = text === null ? null : legacyPages(text);
@@ -463,7 +562,7 @@ async function inner(git: CodeGit, client: CodeClientRef, repo: GitRepo, view: C
       const model = things.find((t) => t.kind === "model" && same(t.file, path) && bimFile(t) === path);
       if (!model) return bad(CODE_TEXT.notListable, 404, "not_listable");
       event = "tables_listed";
-      const f = await git.file(client.clientKey, repo, path);
+      const f = await git.file(client.clientKey, repo, path, branch);
       if (f.kind === "too_large") return bad(CODE_TEXT.tooLarge, 413, "too_large");
       if (f.kind !== "text" || f.text === null) return failure("error", client.name);
       const tables = bimTables(f.text);
@@ -492,6 +591,39 @@ async function logged(log: (event: CodeViewInput["event"], path: string) => Prom
 
 /** E1: Admin › Clients' status line for one client's code, from its repo list (checked on open or Check, never on a schedule). */
 export type CodeStatus = { state: "readable"; repos: number } | { state: "needs_code_read" | "no_token" | "no_devops" | "error"; text: string };
+/** RB-7: one repo on Admin's Code tab: the branch it opens on, and its branch names. */
+export type CodeOpeningRepo = { repo: CodeRepoView; opens: string | null; names: string[]; cut: boolean; problem: string | null };
+export type CodeOpenings = { opening: string | null; repos: CodeOpeningRepo[]; /** Every branch name the client's repos have, to offer for the Rule (A to Z). */ offer: string[] };
+
+/**
+ * RB-7: for Admin's Code tab (admin.code_branches, after the admin check): each of a client's repos with the branch it
+ * opens on, and the branch names its repos have, so the opening branch is offered from real names. Through the same
+ * checks as every Code read (code.repos: a Cooptimizer, a listed client, its Rule), so an admin not on a client that
+ * is its team only gets the refusal, as in Code. Branch names only; no row in the log, nothing kept.
+ */
+export async function codeOpenings(ctx: CodeContext, clientKey: string): Promise<ActionResponse> {
+  const r = await codeAction(ctx, "code.repos", { clientKey });
+  if (!r.ok) return r;
+  const git = ctx.git!;
+  const opening = openingRule(await ctx.opening(clientKey).catch(() => null));
+  const all = await git.repos(clientKey);
+  const repos = await Promise.all(
+    all.map(async (repo): Promise<CodeOpeningRepo> => {
+      const view = repoView(repo);
+      if (view.state !== "ok") return { repo: view, opens: null, names: [], cut: false, problem: null };
+      try {
+        const list = await git.branches(clientKey, repo);
+        return { repo: view, opens: openingOf(repo.defaultBranch!, opening, list.names), names: list.names, cut: list.cut, problem: null };
+      } catch (e) {
+        const f = failure(e instanceof CodeFailure ? e.reason : "error", clientKey);
+        return { repo: view, opens: repo.defaultBranch, names: [], cut: false, problem: f.ok ? null : f.error };
+      }
+    }),
+  );
+  const offer = [...new Set(repos.flatMap((x) => x.names))].sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }) || (a < b ? -1 : 1));
+  return { ok: true, data: { opening, repos, offer } satisfies CodeOpenings };
+}
+
 export async function codeStatus(git: CodeGit | null, clientKey: string, name: string): Promise<CodeStatus> {
   if (!git) return { state: "error", text: CODE_TEXT.notHere };
   try {

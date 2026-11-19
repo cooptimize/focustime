@@ -34,7 +34,7 @@ import { INVITE_VIA, type InviteVia } from "../store/admin-store.ts";
 import { INVITE_SEND_ACTIONS, inviteSendAction, type InviteSendAction, type InviteSendPort } from "./invite-send.ts";
 export type { ClientScopeFacts };
 
-export const ADMIN_ACTIONS = ["admin.status", "admin.load", "admin.set", "admin.override", "admin.refresh_people", "admin.remove_person", "admin.audit", "admin.status_action", "admin.identity", "admin.invited", "admin.standards_sync", "admin.code_views", "admin.code_check", ...INVITE_SEND_ACTIONS] as const;
+export const ADMIN_ACTIONS = ["admin.status", "admin.load", "admin.set", "admin.override", "admin.refresh_people", "admin.remove_person", "admin.audit", "admin.status_action", "admin.identity", "admin.invited", "admin.standards_sync", "admin.code_views", "admin.code_check", "admin.code_branches", ...INVITE_SEND_ACTIONS] as const;
 export type AdminAction = (typeof ADMIN_ACTIONS)[number];
 export const ADMIN_SECTIONS = ["clients", "ai", "conversations", "people", "setup", "organization", "standards", "status", "audit"] as const;
 export type AdminSection = (typeof ADMIN_SECTIONS)[number];
@@ -159,6 +159,8 @@ export type AdminContext = {
   me: () => Promise<Actor & { id: string } | null>;
   /** WT-1: the clients' DevOps process models (with their Rules applied); null when DevOps can't be read here. */
   process?: (clientKeys: string[], refresh: boolean) => Promise<ProcessModelResult[] | null>;
+  /** RB-7: a client's repos with the branch each opens on and the names to offer, through Code's own checks (codeOpenings). */
+  codeBranches?: (clientKey: string) => Promise<ActionResponse>;
   /** The admin's own today (their time zone), for Status's AI calls per chat today. */
   today?: () => Promise<string>;
   /** IN-1: the admin's time zone, for Who's set up's days. */
@@ -270,6 +272,7 @@ async function clientsSection(ops: AdminOps, rules: OrgRules, process: AdminCont
         houseStyle: c?.houseStyle ?? null,
         fixGaps: c?.fixGaps ?? [...GAP_KINDS],
         codeAccess: c?.codeAccess ?? "company",
+        codeBranch: c?.codeBranch ?? null,
         sourceSystems: c?.sourceSystems ?? null,
         process: isClient ? processOf(k) : { ok: false, message: "Not a client" },
         scope: isClient ? { rule: c?.devopsScope ?? null, words: scopeWords(c?.devopsScope ?? null), facts: facts?.[k] ?? null, polled: !!ops.scope } : null,
@@ -595,6 +598,14 @@ export async function adminAction(ctx: AdminContext, action: AdminAction, input:
       // Review 2: only a listed client's repos are checked, never a hidden or non-customer account's.
       if (!(await ops.org.clientAccounts()).isClient(i.clientKey)) return bad("That isn't a client in FocusTime", 404);
       return { ok: true, data: await ops.code.status(i.clientKey) };
+    }
+    case "admin.code_branches": {
+      // RB-7: each repo's branch and the names to offer for "Code opens on", through Code's own checks as this admin.
+      const extra = only(i, ["clientKey"]);
+      if (extra) return bad(`unknown input field ${extra}`);
+      if (typeof i.clientKey !== "string" || !i.clientKey || i.clientKey.length > 100) return bad("clientKey names the client");
+      if (!ctx.codeBranches) return bad("Code isn't available here", 404);
+      return ctx.codeBranches(i.clientKey);
     }
     case "admin.audit": {
       const extra = only(i, ["area", "text"]);

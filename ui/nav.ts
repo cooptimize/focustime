@@ -10,6 +10,7 @@ import type { ScreenName } from "./screen-names.ts";
 import { DOC_ANCHOR, DOC_CONTENTS, DOC_PAGES, docPageLabel } from "./docs/pages.ts";
 import { adminHref, oldAdminAt, parseAdminPath, adminPath, PART_NAME } from "./settings/admin/paths.ts";
 import { LIST_FILTERS, OLD_FILTERS, type ListFilter } from "../plan/call-filters.ts";
+import { isBranchName } from "../plan/branch-name.ts";
 
 export const TABS = ["today", "week", "ahead", "status", "inbox", "calls", "code"] as const;
 export type Tab = (typeof TABS)[number];
@@ -101,7 +102,7 @@ export type Nav =
  */
 export type CallsAt = { occurrence: number | null; view?: "transcript" | "upload"; line?: number; filter?: "gap" | "commitment" | "comment"; proposal?: number; show?: ListFilter; client?: string };
 /** RB-6: where Code is: a client, a repo, a path, and the view (Files when absent). */
-export type CodeAt = { clientKey: string | null; repoId: string | null; path: string | null; view?: "kinds" | "search" | "inside" };
+export type CodeAt = { clientKey: string | null; repoId: string | null; path: string | null; view?: "kinds" | "search" | "inside"; /** RB-7: a branch the person chose, when it isn't the one the repo opens on. */ branch?: string };
 
 /** UI-9: Promises narrowed to late ones (from a Week card's "N late" chip), for one client (null: any), not saved. */
 export type LateFilter = { client: string | null };
@@ -150,7 +151,7 @@ export const navOf = {
   /** One promise found in a chat, open in Promises (the old #/inbox/promise/<id> lands here). */
   promise: (id: number): Nav => ({ tab: "inbox", view: "promises", item: `c${id}` }),
   /** RB-6: the Code tab, on a client (null: its front page), a repo and a file, in a view. */
-  code: (clientKey: string | null = null, repoId: string | null = null, path: string | null = null, view?: CodeAt["view"]): Nav => ({ tab: "code", clientKey, repoId, path, ...(view ? { view } : {}) }),
+  code: (clientKey: string | null = null, repoId: string | null = null, path: string | null = null, view?: CodeAt["view"], branch?: string): Nav => ({ tab: "code", clientKey, repoId, path, ...(view ? { view } : {}), ...(branch ? { branch } : {}) }),
   /** MC-3: the Calls tab, with a call open beside the list (null: none named), at its view, line, filter or proposal. */
   calls: (occurrence: number | null = null, at: Omit<CallsAt, "occurrence"> = {}): Nav => ({ tab: "calls", occurrence, ...Object.fromEntries(Object.entries(at).filter(([, v]) => v !== undefined && v !== null)) }),
 };
@@ -397,7 +398,9 @@ export function codeHash(o: CodeAt): string {
   if (!o.clientKey) return "#/code";
   const c = `#/code/${encodeURIComponent(o.clientKey)}${o.view === "kinds" ? "/kinds" : ""}`;
   if (!o.repoId) return c;
-  return o.path && o.path !== "/" ? `${c}/${o.repoId}/${encodeURIComponent(o.path)}` : `${c}/${o.repoId}`;
+  // RB-7: a chosen branch rides on the repo's part, encoded whole (a "/" in its name is %2F): <repo id>@<branch>.
+  const repo = o.branch ? `${o.repoId}@${encodeURIComponent(o.branch)}` : o.repoId;
+  return o.path && o.path !== "/" ? `${c}/${repo}/${encodeURIComponent(o.path)}` : `${c}/${repo}`;
 }
 const REPO_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** RB-1: #/code, #/code/<client>, #/code/<client>/<repo> and #/code/<client>/<repo>/<path>; RB-2's views. RB-6: the Code tab. */
@@ -405,7 +408,7 @@ function parseCode(hash: string): Loc | null {
   if (hash.length > 1400) return null;
   const all = hash.replace(/^#\/?code\/?/, "").split("/").filter((p) => p !== "");
   if (all.length > 4) return null;
-  const at = (clientKey: string | null, repoId: string | null, path: string | null, view?: CodeAt["view"]): Loc => ({ nav: navOf.code(clientKey, repoId, path, view), overlay: null });
+  const at = (clientKey: string | null, repoId: string | null, path: string | null, view?: CodeAt["view"], branch?: string): Loc => ({ nav: navOf.code(clientKey, repoId, path, view, branch), overlay: null });
   if (!all.length) return at(null, null, null);
   // "~search" and "~inside" are never a client's key (CLIENT_KEY has no "~"): the search across clients.
   if (all[0] === "~search" || all[0] === "~inside") return all.length === 1 ? at(null, null, null, all[0] === "~search" ? "search" : "inside") : null;
@@ -419,13 +422,17 @@ function parseCode(hash: string): Loc | null {
     const parts = view ? [all[0]!, ...all.slice(2)] : all;
     if (parts.length > 3) return null;
     if (parts.length === 1) return at(clientKey, null, null, view);
-    if (!REPO_ID.test(parts[1]!)) return null;
-    const repoId = parts[1]!.toLowerCase();
-    if (parts.length === 2) return at(clientKey, repoId, null, view);
+    // RB-7: <repo id>@<branch>, the branch a name a branch can have.
+    const [repoPart, branchPart, ...more] = parts[1]!.split("@");
+    if (more.length || !REPO_ID.test(repoPart!)) return null;
+    const branch = branchPart === undefined ? undefined : decodeURIComponent(branchPart);
+    if (branch !== undefined && !isBranchName(branch)) return null;
+    const repoId = repoPart!.toLowerCase();
+    if (parts.length === 2) return at(clientKey, repoId, null, view, branch);
     const path = decodeURIComponent(parts[2]!);
     // eslint-disable-next-line no-control-regex
     if (!path.startsWith("/") || path.length > 1024 || /[\u0000-\u001f\\]/.test(path) || path.split("/").some((s, i) => i > 0 && (s === "" || s === "." || s === ".."))) return null;
-    return at(clientKey, repoId, path, view);
+    return at(clientKey, repoId, path, view, branch);
   } catch {
     return null;
   }

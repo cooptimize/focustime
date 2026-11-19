@@ -2346,7 +2346,7 @@ export function App() {
             sqlGroup={codeSqlGroup}
             onSqlGroup={(g) => void saveCodeSqlGroup(g)}
             onGo={(next, opts) => {
-              const to = { nav: navOf.code(next.clientKey, next.repoId, next.path, next.view), overlay: null };
+              const to = { nav: navOf.code(next.clientKey, next.repoId, next.path, next.view, next.branch), overlay: null };
               if (opts?.replace) history.replaceState(null, "", hashOf(to));
               go(to);
             }}

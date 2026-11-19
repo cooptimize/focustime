@@ -37,6 +37,7 @@ export const COMPRESSED_READS: ReadonlySet<string> = new Set([
   "code.search",
   "code.inside",
   "code.inner",
+  "code.branches",
   "code.file",
 ]);
 
