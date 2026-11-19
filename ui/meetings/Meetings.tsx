@@ -1089,8 +1089,7 @@ function AddCall({ clients, today, nowMs, zone, pocketOn, recs, onCancel, onAdde
             <label key={r.id} className={fits ? "fits" : undefined} {...(own ? { "data-in-list": "" } : {})}>
               <input type="radio" name="mtg-add-rec" checked={r.id === recId} onChange={() => (own ? onOwn(own) : setRecId(r.id))} />
               <span>
-                <strong>{r.title || PW.rowKind}</strong>
-                {own && <span className="mtg-in-list">{PAGE_TEXT.inYourList}</span>}
+                <strong><span data-rec-name="">{r.title || PW.rowKind}</span>{own && <span className="mtg-in-list">{PAGE_TEXT.inYourList}</span>}</strong>
                 <span className="muted">{recordingLine(whenShort(r.startAt, zone), lengthLabel(r.minutes))}</span>
                 {fits && (
                   <span className="mtg-rec-fits">

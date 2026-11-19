@@ -318,14 +318,14 @@ describe.skipIf(!CHROMIUM)("MC-6: Calls polish (browser, demo mode)", () => {
     const add = page.locator("[data-add-call]");
     const recs = add.locator("[data-rec-pick] label");
     await expect.poll(() => recs.count(), { timeout: W }).toBeGreaterThan(0);
-    const all = await recs.evaluateAll((ls) => ls.map((l) => ({ text: l.querySelector("strong")?.textContent, inList: l.hasAttribute("data-in-list"), mark: l.querySelector(".mtg-in-list")?.textContent ?? null })));
+    const all = await recs.evaluateAll((ls) => ls.map((l) => ({ text: l.querySelector("[data-rec-name]")?.textContent, inList: l.hasAttribute("data-in-list"), mark: l.querySelector(".mtg-in-list")?.textContent ?? null })));
     const listed = all.filter((x) => x.inList);
     expect(listed.length).toBeGreaterThan(0);
     for (const x of listed) expect(x.mark).toBe("In your list");
     for (const x of all.filter((y) => !y.inList)) expect(x.mark).toBeNull();
     // Choosing it opens its own row (its review or its setup), and Add a call closes.
     const one = recs.filter({ has: page.locator(".mtg-in-list") }).first();
-    const name = (await one.locator("strong").textContent())!;
+    const name = (await one.locator("[data-rec-name]").textContent())!;
     await one.click();
     await expect.poll(() => add.count(), { timeout: W }).toBe(0);
     await expect.poll(() => page.locator("[data-calls-list] li.open .calls-name").first().textContent(), { timeout: W }).toBe(name);

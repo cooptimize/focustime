@@ -224,6 +224,6 @@
 .app.phone .mtg-recs label, .app.phone .mtg-rec-fits .link-btn, .app.phone .mtg-add.mc5 :is(input, select, .mini) { min-height: var(--tap, 44px); }
 
 /* MC-6: a recording in Add a call that already has its own row in the list. */
-.mtg-in-list { margin-left: 8px; padding: 0 6px; border: 1px solid var(--border); border-radius: 999px; font-size: var(--fs-1); font-weight: 500; color: var(--muted); }
+.mtg-in-list { display: inline-block; vertical-align: baseline; margin-left: 8px; padding: 0 6px; border: 1px solid var(--border); border-radius: 999px; font-size: var(--fs-1); font-weight: 500; color: var(--muted); }
 @media (hover: none) { .need-row .calls-dismiss { display: inline-flex; } }
 .app.phone .need-row .calls-dismiss { min-height: 44px; padding: 0 8px; }

@@ -269,7 +269,7 @@ describe.skipIf(!CHROMIUM)("MC-5: Calls made scannable (browser, demo mode)", ()
     await expect(recs.filter({ hasText: "Sprint planning" }).locator(".mtg-rec-fits").textContent()).resolves.toBe("Goes with Harbor sprint planning Review that call");
     // MC-6: that one already has its own row ("In your list"); a recording with none is a new call.
     await expect(recs.first().locator(".mtg-in-list").textContent()).resolves.toBe("In your list");
-    const fresh = recs.filter({ has: page.locator("strong", { hasText: /^Proposal review$/ }) }).first();
+    const fresh = recs.filter({ has: page.locator("[data-rec-name]", { hasText: /^Proposal review$/ }) }).first();
     // Choosing one fills the name and takes its time (not typed); the client is mine to choose and marked until chosen.
     await fresh.click();
     await expect.poll(() => add.getByLabel("Name", { exact: true }).inputValue(), { timeout: W }).toBe("Proposal review");
