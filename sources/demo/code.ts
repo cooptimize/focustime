@@ -451,7 +451,7 @@ const branchNamesOf = (r: DemoRepo): string[] => (Object.keys(r.files).length ? 
 /** RB-7: a demo repo's files on one branch; not found for a branch it doesn't have. */
 function filesOn(r: DemoRepo, branch: string): Record<string, Content> {
   if (branch === MAIN) return r.files;
-  const over = r.branches?.[branch];
+  const over = r.branches && Object.hasOwn(r.branches, branch) ? r.branches[branch] : undefined;
   if (!over) throw new CodeFailure("not_found");
   const out: Record<string, Content> = { ...r.files };
   for (const [p, c] of Object.entries(over)) {

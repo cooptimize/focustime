@@ -77,7 +77,7 @@ describe("the words of a search inside files reach nothing FocusTime keeps (RB-4
     expect(views.status).toBe(200);
     {
       const rows = (JSON.parse(views.body) as { data: { views: { clientKey: string; event: string; path: string; repoName: string }[] } }).data.views.filter((v) => v.event === "inside_searched");
-      expect(rows.map((r) => [r.clientKey, r.repoName, r.path]).sort()).toEqual([["Atlas", "", ""], ["Atlas", "", ""], ["Cooptimize", "", ""]]);
+      expect(rows.map((r) => [r.clientKey, r.repoName, r.path]).sort()).toEqual([["Atlas", "All its repos on their default branches", ""], ["Atlas", "All its repos on their default branches", ""], ["Cooptimize", "All its repos on their default branches", ""]]);
     }
     // Nothing went to the network: the demo's session asked only the demo's fake.
     expect(globalThis.fetch).not.toHaveBeenCalled();
