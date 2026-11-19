@@ -203,6 +203,33 @@ describe.skipIf(!CHROMIUM)("RB-3b: a client change takes out names picked from t
     await page.close();
   }, T);
 
+  // UC-3 review: a name picked under the new client ends the change's Undo, so Undo can never put the old client back
+  // over the new client's names.
+  it("the New form: a pick under the new client takes the Undo away", async () => {
+    const { page, errors } = await freshPage(h, VIEW);
+    const f = await openNew(page, "Northwind");
+    await f.getByRole("radio", { name: "User Story" }).click();
+    const box = whereBox(f);
+    await box.focus();
+    await page.keyboard.type("The fact.sal");
+    await list(page).waitFor({ timeout: 30_000 });
+    await downTo(page, "fact.SalesLine");
+    await choose(page, f, "Client", "Atlas");
+    await pickStory(f);
+    const line = f.locator("[data-where-picks]");
+    await expect(line.getByRole("button", { name: /^Undo/ }).count()).resolves.toBe(1);
+    await box.focus();
+    await box.evaluate((t: HTMLTextAreaElement) => t.setSelectionRange(t.value.length, t.value.length));
+    await page.keyboard.type(" and pl_copy");
+    await list(page).waitFor({ timeout: 30_000 });
+    await downTo(page, "pl_copy_shipments");
+    await expect.poll(() => box.inputValue()).toContain("pl_copy_shipments");
+    await expect.poll(() => line.getByRole("button").count()).toBe(0);
+    await expect(f.getByRole("heading", { level: 2 }).textContent()).resolves.toBe("New in Atlas's DevOps");
+    expect(errors).toEqual([]);
+    await page.close();
+  }, T);
+
   it("the draft editor: the same on a client change, and the saved draft keeps only the text", async () => {
     const { page, errors } = await freshPage(h, VIEW);
     const f = await openNew(page, "Northwind");

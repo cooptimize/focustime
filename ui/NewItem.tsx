@@ -133,7 +133,8 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
   };
   const putClientBack = (was: string) => {
     const b = beforeChange.current;
-    filled.current = was;
+    // With no level yet (the client's options hadn't loaded), its defaults fill in again as on opening.
+    filled.current = b?.type ? was : null;
     setClientKey(was);
     if (!b) return;
     setType(b.type);

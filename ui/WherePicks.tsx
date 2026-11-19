@@ -62,6 +62,9 @@ export function useWherePicks(where: string, setWhere: (v: string) => void, clie
 
   const onPicked = useCallback((p: Picked) => {
     if (client.current) pending.current.push({ ...p, client: client.current, clientName });
+    // UC-3 review: a pick under the new client ends the change's Undo, which would otherwise put the old client back
+    // over this client's names.
+    if (lineRef.current?.kind === "taken") show(null);
   }, [clientName]);
 
   // UC-3: with `restore`, Undo puts the client back first (so the names never sit under another client), then the names.
