@@ -93,6 +93,11 @@ export const CALL_ROW = {
   commentAboveStory: (type: string) => `This comment is on a ${type}, above story level. Status is reported on features, so a call's comment never goes there: it won't be sent. Skip it.`,
   noParent: "No parent yet. Choose one, or leave it without",
   keptPromise: (who: string) => `Added to ${who.split(/\s+/)[0]}'s Promises`,
+  /** MC-6: one Undo message at a time, each saying what it undoes. */
+  undoKept: (title: string) => `Kept: ${title}`,
+  undoKeptMany: (n: number) => `Kept: ${n} promises`,
+  undoSkipped: (title: string) => `Skipped: ${title}`,
+  undoSkippedMany: (n: number) => `Skipped: ${n} proposals`,
   keptNote: (who: string) => `Noted with this call: ${who}`,
   /** PK-1: a promise from a Pocket export whose words don't say whose it is. */
   noOwner: "Pocket didn't say who",

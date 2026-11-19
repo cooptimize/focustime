@@ -164,7 +164,7 @@ describe.skipIf(!CHROMIUM)("MC-6: Calls polish (browser, demo mode)", () => {
   it("9: in Select calls the bar shows only once something is ticked; the menu says Done selecting", async () => {
     const { page } = await open();
     await calls(page);
-    await page.getByRole("button", { name: "More for Calls" }).click();
+    await expect.poll(async () => (await page.getByRole("menuitem").count()) > 0 || (await page.getByRole("button", { name: "More for Calls" }).click(), false), { timeout: W }).toBe(true);
     await page.getByRole("menuitem", { name: /^Select calls/ }).click();
     await expect(page.locator("[data-calls-tickbar]").count()).resolves.toBe(0);
     await page.getByRole("button", { name: "More for Calls" }).click();
@@ -184,5 +184,20 @@ describe.skipIf(!CHROMIUM)("MC-6: Calls polish (browser, demo mode)", () => {
     await rec.click();
     const when = (await rec.textContent())!.match(/[A-Z][a-z]{2}, [A-Z][a-z]{2} \d+ · \d+:\d\d [AP]M/)![0];
     await expect(onScreen(page, "[data-add-call]", new RegExp(when.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))).resolves.toBe(1);
+  }, T);
+
+  it("10: one Undo message at a time, each saying what it undoes", async () => {
+    const { page } = await open();
+    await weeklyCall(page);
+    const toast = page.locator(".undo-toast");
+    const promise = page.locator("[data-group='commitment'] [data-prop]").first();
+    const what = (await promise.getAttribute("aria-label"))!;
+    await promise.getByRole("button", { name: "Keep" }).click();
+    await expect.poll(() => toast.textContent(), { timeout: W }).toContain(`Kept: ${what}`);
+    const gap = page.locator("[data-group='gap'] [data-prop]").first();
+    const title = (await gap.getAttribute("aria-label"))!;
+    await gap.getByRole("button", { name: "Skip" }).click();
+    await expect.poll(() => toast.textContent(), { timeout: W }).toContain(`Skipped: ${title}`);
+    await expect(toast.count()).resolves.toBe(1);
   }, T);
 });

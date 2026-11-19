@@ -1230,7 +1230,8 @@ function ReviewScreen(props: ReviewProps) {
     let last = "";
     for (const p of ps) {
       try {
-        last = (await call<{ message: string }>("meeting.keep", { proposalId: p.id })).message;
+        await call<{ message: string }>("meeting.keep", { proposalId: p.id });
+        last = proposalWords(p.body);
         kept.push(p.id);
       } catch (e) {
         setRowErr((x) => ({ ...x, [p.id]: errText(e) }));
@@ -1238,7 +1239,7 @@ function ReviewScreen(props: ReviewProps) {
     }
     setBusy(false);
     await load();
-    if (kept.length) undoable?.(kept.length === 1 ? last : `${kept.length} promises kept`, async () => {
+    if (kept.length) undoable?.(kept.length === 1 ? CALL_ROW.undoKept(last) : CALL_ROW.undoKeptMany(kept.length), async () => {
       for (const k of kept) await call("meeting.unkeep", { proposalId: k });
       await load();
     });
@@ -1249,8 +1250,9 @@ function ReviewScreen(props: ReviewProps) {
     for (const p of ps) await call("meeting.edit", { proposalId: p.id, skip: on }).then(() => done.push(p.id), (e: unknown) => setNote(errText(e)));
     setBusy(false);
     await load();
-    // Several skipped at once can be taken back together.
-    if (on && done.length > 1) undoable?.(CALL_ROW.skipped(done.length), async () => {
+    // MC-6: one Undo message at a time: a Skip says what it skipped, one or several, and replaces the last message.
+    const one = ps.find((p) => p.id === done[0]);
+    if (on && done.length > 0) undoable?.(done.length === 1 && one ? CALL_ROW.undoSkipped(proposalWords(one.body)) : CALL_ROW.undoSkippedMany(done.length), async () => {
       for (const k of done) await call("meeting.edit", { proposalId: k, skip: false });
       await load();
     });
