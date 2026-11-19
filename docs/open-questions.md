@@ -1939,3 +1939,10 @@ Readings taken where the brief left room (the one that changes less), for the pr
 - **The refused auto-shutdown read was never seen on production.** It waits on the state read, which was the one refused. The line for it is built from the brief, not from an event.
 - **Words for a refusal with no code.** The brief keeps VM-4's sentence, which points at checking access in the portal; production's refusals weren't access. Left as the brief has it.
 - **The 403 with a challenge as a sign-in for the automatic start.** It now claims the day as VM-2's sign_in, as a 401 does, rather than being read again until the late limit. Taken as the reading that matches the existing rule for a sign-in.
+
+## VM-7: a refused Azure answer's three facts (Nov 18)
+
+- **Admin › Health's line for Azure answers.** Left out: Health keeps nothing it could count them from. If admins want it, a small in-memory count of today's answers by the three words (per copy of the app, lost on a restart) is the least that would do; it isn't built here.
+- **A Bearer challenge with no error word.** Logged as `challenge=none`, the same as no header at all: the list has no word for "a challenge without an error", and adding one would widen it. Taken as the reading that changes less. A scheme other than Bearer is "other".
+- **What the words will show.** Nothing here was seen on production: the next stretch of refusals is the test. `cause` is set by Azure Resource Manager on some refusals only; when it's absent it reads none, which says the header wasn't there, not that nothing failed.
+- **Two edges from the review (nothing leaks, nothing changes).** VM-6's `challengeNamesToken` has no word boundary after the error word, so `error="invalid_tokenX"` is still read as a sign-in while VM-7 logs it `other`; and both read an `error=` written inside another parameter's value. Tightening VM-6's reading would change what a refusal does, so it's left for its own step.

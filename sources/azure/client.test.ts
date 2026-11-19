@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LogRecord } from "../../log/logger.ts";
-import { ALLOWED, allowedCall, API, ARM, AzureError, createAzureClient, ownerQuery, parseVmId, sameVm } from "./client.ts";
+import { ALLOWED, allowedCall, API, ARM, AzureError, bodyShape, causeWord, challengeWord, createAzureClient, ownerQuery, parseVmId, sameVm } from "./client.ts";
 
 const SUB = "00000000-0000-4000-8000-0000000000aa";
 const ID = `/subscriptions/${SUB}/resourceGroups/rg-dev/providers/Microsoft.Compute/virtualMachines/vm-pat-01`;
@@ -246,5 +246,99 @@ describe("the allowlist (D475, VM-2): reads, start and deallocate, nothing else,
     expect(calls[0]).toMatchObject({ method: "POST" });
     expect(calls[0]!.url).toBe(`${ARM}${ID}/deallocate${c}`);
     expect(p).toEqual({ url: OP, style: "location", retryAfterMs: 10_000 });
+  });
+});
+
+// VM-7: a refused answer's line says its challenge, its failure cause and its body's shape, each one closed word, so
+// the next stretch of refusals (VM-6's 403 with no code) can be explained from the logs. Nothing else of it is logged.
+describe("VM-7: a refused answer's three closed words", () => {
+  const no = (status: number, body: string | null, headers: Record<string, string> = {}) => () => new Response(body, { status, headers });
+  const lineOf = async (answer: () => Response) => {
+    const { client, logs } = fake(answer);
+    await client.power(ref).catch(() => undefined);
+    return logs.at(-1)!;
+  };
+
+  it("each challenge word from a Bearer WWW-Authenticate's error word; any other word or scheme is other; none without", () => {
+    const bearer = (e: string) => `Bearer authorization_uri="https://login.example/x", error="${e}", error_description="made up"`;
+    expect(challengeWord(bearer("invalid_token"))).toBe("invalid_token");
+    expect(challengeWord(bearer("insufficient_claims"))).toBe("insufficient_claims");
+    expect(challengeWord(bearer("insufficient_scope"))).toBe("insufficient_scope");
+    expect(challengeWord('Bearer error=INVALID_TOKEN')).toBe("invalid_token");
+    expect(challengeWord(bearer("something_new"))).toBe("other");
+    expect(challengeWord('Basic realm="x", error="invalid_token"')).toBe("other");
+    expect(challengeWord(null)).toBe("none");
+    expect(challengeWord("")).toBe("none");
+    expect(challengeWord('Bearer authorization_uri="https://login.example/x"')).toBe("none");
+  });
+
+  it("each cause word from x-ms-failure-cause; any other value is other; none without", () => {
+    expect(causeWord("gateway")).toBe("gateway");
+    expect(causeWord(" Service ")).toBe("service");
+    expect(causeWord("network")).toBe("other");
+    expect(causeWord(null)).toBe("none");
+    expect(causeWord("")).toBe("none");
+  });
+
+  it("each body shape: JSON with Azure's code, JSON without one, not JSON, empty", () => {
+    expect(bodyShape('{"error":{"code":"AuthorizationFailed","message":"x"}}')).toEqual({ body: "json_with_code", code: "AuthorizationFailed" });
+    expect(bodyShape('{"error":{"message":"x"}}').body).toBe("json_no_code");
+    expect(bodyShape('{"error":{"code":""}}').body).toBe("json_no_code");
+    expect(bodyShape("[1,2]").body).toBe("json_no_code");
+    expect(bodyShape("null").body).toBe("json_no_code");
+    expect(bodyShape("<html>Forbidden</html>").body).toBe("not_json");
+    expect(bodyShape("").body).toBe("empty");
+    expect(bodyShape("  \n").body).toBe("empty");
+  });
+
+  it("a refused answer's line carries all three, from a made-up answer", async () => {
+    expect(await lineOf(no(403, null))).toMatchObject({ op: "instanceView", status: 403, kind: "none", challenge: "none", cause: "none", body: "empty" });
+    expect(await lineOf(no(403, '{"error":{"code":"AuthorizationFailed"}}', { "x-ms-failure-cause": "service" }))).toMatchObject({ kind: "AuthorizationFailed", challenge: "none", cause: "service", body: "json_with_code" });
+    expect(await lineOf(no(401, "", { "www-authenticate": 'Bearer error="invalid_token"', "x-ms-failure-cause": "gateway" }))).toMatchObject({ status: 401, challenge: "invalid_token", cause: "gateway", body: "empty" });
+    expect(await lineOf(no(403, "<html>no</html>", { "www-authenticate": 'Bearer error="insufficient_scope"', "x-ms-failure-cause": "elsewhere" }))).toMatchObject({ challenge: "insufficient_scope", cause: "other", body: "not_json" });
+    expect(await lineOf(no(500, '{"error":{}}'))).toMatchObject({ status: 500, body: "json_no_code" });
+  });
+
+  it("a made-up token, id and address in a header or the body reach the line in no field", async () => {
+    const TOK = "eyJmYWtlLXRva2Vu.made-up.sig";
+    const OID = "00000000-0000-4000-8000-00000000beef";
+    const ADDR = "203.0.113.7";
+    const headers = {
+      "www-authenticate": `Bearer authorization_uri="https://login.example/${OID}", error="${TOK}", error_description="principal ${OID} from ${ADDR}"`,
+      "x-ms-failure-cause": `${ADDR} ${OID}`,
+      "x-ms-request-id": OID,
+      "x-ms-correlation-request-id": OID,
+    };
+    const body = JSON.stringify({ error: { code: `Bad ${TOK}`, message: `The client ${OID} at ${ADDR} with token ${TOK}`, target: OID } });
+    const line = await lineOf(no(403, body, headers));
+    expect(Object.keys(line).sort()).toEqual(["body", "cause", "challenge", "durationMs", "kind", "op", "source", "status"]);
+    for (const [k, v] of Object.entries(line)) for (const bad of [TOK, OID, ADDR, "made-up", "principal", "login.example"]) expect(String(v), k).not.toContain(bad);
+    expect(line).toMatchObject({ kind: "other", challenge: "other", cause: "other", body: "json_with_code" });
+  });
+
+  it("a yes logs none of the three", async () => {
+    const { client, logs } = fake(() => json(200, { statuses: [{ code: "PowerState/running" }] }, { "x-ms-failure-cause": "service", "www-authenticate": 'Bearer error="invalid_token"' }));
+    await client.power(ref);
+    const line = logs.at(-1)!;
+    expect(line).toMatchObject({ op: "instanceView", status: 200 });
+    for (const k of ["challenge", "cause", "body", "kind"]) expect(line, k).not.toHaveProperty(k);
+  });
+
+  it("what each failure returns to the page is what it was on main", async () => {
+    const errOf = async (answer: () => Response) => {
+      const e = (await fake(answer).client.start(ref).catch((x: unknown) => x)) as AzureError;
+      return { kind: e.kind, status: e.status, message: e.message, permission: e.permission ?? null, code: e.code ?? "" };
+    };
+    expect(await errOf(no(401, null))).toEqual({ kind: "not_signed_in", status: 401, message: "Azure didn't accept the sign-in. Sign in again", permission: null, code: "" });
+    expect(await errOf(no(403, null))).toEqual({ kind: "forbidden", status: 403, message: "Azure says you don't have permission: Microsoft.Compute/virtualMachines/start/action", permission: "Microsoft.Compute/virtualMachines/start/action", code: "" });
+    expect(await errOf(no(403, "<html>no</html>", { "x-ms-failure-cause": "gateway" }))).toMatchObject({ kind: "forbidden", code: "" });
+    expect(await errOf(no(403, null, { "www-authenticate": 'Bearer error="insufficient_claims"' }))).toMatchObject({ kind: "not_signed_in", status: 403 });
+    expect(await errOf(no(403, null, { "www-authenticate": 'Bearer error="insufficient_scope"' }))).toMatchObject({ kind: "forbidden" });
+    expect(await errOf(no(403, '{"error":{"code":"ExpiredAuthenticationToken"}}'))).toMatchObject({ kind: "not_signed_in", code: "ExpiredAuthenticationToken" });
+    expect(await errOf(no(404, '{"error":{"code":"ResourceNotFound"}}'))).toMatchObject({ kind: "not_found", message: "VM not found. It may have been deleted or moved" });
+    expect(await errOf(no(429, ""))).toMatchObject({ kind: "throttled", message: "Azure is busy (throttled). Try again in a minute" });
+    expect(await errOf(no(409, '{"error":{"code":"OperationNotAllowed"}}'))).toMatchObject({ kind: "failed", message: "Azure refused that right now (OperationNotAllowed). Another operation may be running" });
+    expect(await errOf(no(500, "oops"))).toMatchObject({ kind: "failed", message: "Azure error (HTTP 500)" });
+    expect(await errOf(no(502, '{"error":{"code":"BadGateway"}}', { "x-ms-failure-cause": "gateway" }))).toMatchObject({ kind: "failed", message: "Azure error (HTTP 502, BadGateway)" });
   });
 });

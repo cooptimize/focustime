@@ -7,7 +7,7 @@
 // The two writes take no query parameter but api-version (no hibernate, no forceDeallocate).
 // Only https://management.azure.com is called. Errors carry a kind, the HTTP status and Azure's error code, never
 // bodies, tokens or Azure's messages (they can name principals and scopes).
-import type { Logger } from "../../log/logger.ts";
+import type { BodyWord, CauseWord, ChallengeWord, Logger } from "../../log/logger.ts";
 import { powerFrom, type PowerState } from "../../plan/vm.ts";
 
 export const ARM = "https://management.azure.com";
@@ -136,6 +136,38 @@ const TOKEN_CODES = /^(InvalidAuthenticationToken\w*|ExpiredAuthenticationToken|
  */
 export const challengeNamesToken = (header: string | null): boolean => !!header && /^\s*Bearer\b/i.test(header) && /\berror\s*=\s*"?(invalid_token|insufficient_claims)"?/i.test(header);
 
+/**
+ * VM-7: a refused answer's challenge as one closed word: the error word of a Bearer WWW-Authenticate (invalid_token,
+ * insufficient_claims, insufficient_scope), any other word or scheme "other", no header or no error word "none".
+ * Nothing else of the header is read.
+ */
+export function challengeWord(header: string | null): ChallengeWord {
+  if (!header || !header.trim()) return "none";
+  if (!/^\s*Bearer\b/i.test(header)) return "other";
+  const m = /\berror\s*=\s*"?([^",\s]*)/i.exec(header);
+  if (!m) return "none";
+  const w = m[1]!.toLowerCase();
+  return w === "invalid_token" || w === "insufficient_claims" || w === "insufficient_scope" ? w : "other";
+}
+/** VM-7: x-ms-failure-cause as one closed word: gateway or service, any other value "other", no header "none". */
+export function causeWord(header: string | null): CauseWord {
+  if (header === null || !header.trim()) return "none";
+  const w = header.trim().toLowerCase();
+  return w === "gateway" || w === "service" ? w : "other";
+}
+/** VM-7: a refused answer's body as its shape only, with Azure's code when it has one (for the kind and the error). */
+export function bodyShape(text: string): { body: BodyWord; code: string } {
+  if (!text.trim()) return { body: "empty", code: "" };
+  let j: unknown;
+  try {
+    j = JSON.parse(text);
+  } catch {
+    return { body: "not_json", code: "" };
+  }
+  const code = (j as { error?: { code?: unknown } } | null)?.error?.code;
+  return typeof code === "string" && code ? { body: "json_with_code", code } : { body: "json_no_code", code: "" };
+}
+
 export type VmCandidate = { id: string; name: string; resourceGroup: string; subscriptionId: string; location: string; power: PowerState };
 export type VmInfo = { id: string; name: string; location: string };
 /** Where to poll a start or stop: Azure-AsyncOperation (status in the body) or Location (202 until done). */
@@ -178,11 +210,15 @@ export function createAzureClient(d: AzureDeps) {
       return res;
     }
     // Only Azure's error code is read (AuthorizationFailed, ResourceNotFound, ...); its message is never kept.
-    const code = await res.json().then((j: { error?: { code?: unknown } }) => (typeof j?.error?.code === "string" ? j.error.code : ""), () => "");
+    const shape = bodyShape(await res.text().catch(() => ""));
+    const code = shape.code;
+    const challenge = res.headers.get("www-authenticate");
     // VM-4: the code goes in the log as the failure's kind (a word Azure defines, never its message), so a refusal
     // like Nov 17's 403s says which kind of no it was. Anything that isn't one plain code word is "other".
-    d.log({ source: "azure", op: call, status: res.status, durationMs: performance.now() - started, kind: azureCodeWord(code) });
-    throw failure(call, res.status, code, challengeNamesToken(res.headers.get("www-authenticate")));
+    // VM-7: and three closed words, so the next stretch of refusals can be explained from the logs: the challenge's
+    // error word, x-ms-failure-cause and the body's shape. Never a header's value beyond them, nor any of the body.
+    d.log({ source: "azure", op: call, status: res.status, durationMs: performance.now() - started, kind: azureCodeWord(code), challenge: challengeWord(challenge), cause: causeWord(res.headers.get("x-ms-failure-cause")), body: shape.body });
+    throw failure(call, res.status, code, challengeNamesToken(challenge));
   }
 
   function failure(call: AzureCall, status: number, raw: string, tokenChallenge = false): AzureError {
