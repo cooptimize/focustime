@@ -367,8 +367,11 @@ describe.skipIf(!CHROMIUM)("Calls is a tab (MC-3, browser, demo mode)", () => {
       expect(await hash(page)).toMatch(/^#\/calls(\?|$)/);
       if (label === "phone") {
         // MC-5: a row is pressed anywhere on it (its button stretches over it), so the row is what is measured.
-        for (const b of await page.locator("[data-calls-list] li[data-row], [data-calls-list] .calls-row-acts button, [data-calls-list] .calls-row-acts select, [data-calls-list] .calls-tick, [data-calls-list] .calls-filters .seg-btn, [data-calls-list] .calls-chips .ib4-chip, [data-calls-list] .calls-head button").all())
-          expect((await b.boundingBox())!.height, (await b.textContent()) ?? "").toBeGreaterThanOrEqual(44);
+        // Measured in one pass once the marks are in, so a row that re-renders between finding and measuring can't drop out (MC-6).
+        await expect.poll(() => page.locator("[data-calls-list]").textContent(), { timeout: 30_000 }).not.toMatch(/Checking…/);
+        const small = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>("[data-calls-list] li[data-row], [data-calls-list] .calls-row-acts button, [data-calls-list] .calls-row-acts select, [data-calls-list] .calls-tick, [data-calls-list] .calls-filters .seg-btn, [data-calls-list] .calls-chips .ib4-chip, [data-calls-list] .calls-head button")]
+          .filter((e) => e.offsetParent).map((e) => ({ text: (e.textContent ?? "").trim().slice(0, 40), h: e.getBoundingClientRect().height })).filter((x) => x.h < 44));
+        expect(small).toEqual([]);
         await expect(page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).resolves.toBe(true);
       }
       await page.locator("[data-calls-list] [data-section='needs'] [data-call-row]").first().click();
