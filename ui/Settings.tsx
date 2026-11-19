@@ -129,6 +129,20 @@ function SettingsPanel(props: Props & { admin: boolean | null }) {
       el.classList.add("ps-flash");
       el.querySelector<HTMLElement>("input:not([disabled]), select:not([disabled]), textarea, button:not([disabled]), a[href]")?.focus({ preventScroll: true });
       setTimeout(() => el.classList.remove("ps-flash"), 2200);
+      // SA-5: parts that load their own data (My VM, the logs) can grow above it after the jump; for two seconds it is
+      // kept in view as the page grows, unless the person moves first.
+      const body = el.closest<HTMLElement>(".ps-body");
+      if (body && typeof ResizeObserver !== "undefined") {
+        let still = true;
+        const stop = () => void (still = false);
+        for (const e of ["pointerdown", "keydown", "wheel", "touchstart"]) document.addEventListener(e, stop, { capture: true, once: true });
+        const ro = new ResizeObserver(() => still && el.isConnected && el.scrollIntoView?.({ block: "start" }));
+        for (const c of body.children) ro.observe(c);
+        setTimeout(() => {
+          ro.disconnect();
+          for (const e of ["pointerdown", "keydown", "wheel", "touchstart"]) document.removeEventListener(e, stop, { capture: true });
+        }, 2000);
+      }
     }, 60);
     return () => clearTimeout(t);
   }, [data, current, target]);
