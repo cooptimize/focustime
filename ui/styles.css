@@ -7745,7 +7745,7 @@ body.ah-dragging * { cursor: grabbing !important; }
 
 /* ---- TB-1: the tabs in three groups (Day Week Backlog | Inbox Calls | Status Code) -------------------------------- */
 /* A divider is a small space with a thin upright line in its middle, about as tall as a tab's word, in the dividers'
-   color (--border-strong, the control outlines' line: --border all but vanished on the light bar), so the gap between groups is plainly wider than between two tabs. It is decoration: aria-hidden,
+   color (--border-strong, the control outlines' line: --border all but vanished in the light theme), so the gap between groups is plainly wider than between two tabs. It is decoration: aria-hidden,
    never focused. When the bar is tight it gives way first, by the bar's own room rather than the screen's width: the
    tabs and the right side never shrink for it (it adds nothing to the bar's smallest width), so it is the first thing
    to shrink, and once it has shrunk at all its line goes and only plain spacing is left
