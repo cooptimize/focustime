@@ -12,9 +12,9 @@
 // never kept (the lines are what's stored).
 import { inflateRawSync } from "node:zlib";
 import { NoTextError, parsePocket, type Recorded } from "../plan/pocket.ts";
-import { parseDocxXml, parseVtt, TranscriptError, type TranscriptLine } from "../plan/transcript.ts";
+import { MAX_TRANSCRIPT_BYTES, parseDocxXml, parseVtt, TranscriptError, type TranscriptLine } from "../plan/transcript.ts";
 
-export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+export const MAX_UPLOAD_BYTES = MAX_TRANSCRIPT_BYTES;
 const MAX_XML_BYTES = 20 * 1024 * 1024;
 /** PK-1: a zip that isn't a .docx (Pocket's download): its entries and its unpacked size in all. */
 export const ZIP_ENTRIES = 20;
