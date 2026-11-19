@@ -3,6 +3,7 @@
 import { describe, expect, it } from "vitest";
 import { OLD_SECTIONS, SECTIONS, SETTINGS, SETTINGS_GROUPS, resolveSettings, sectionOf, settingOf, settingsHref } from "./registry.ts";
 import { search, type SearchOpts } from "./search.ts";
+import { settingLabel } from "./admin/settings-list.ts";
 
 /** SA-5: these tests read results the way ST-1's search returned them; the search is ui/settings/search.ts now. */
 const searchSettings = (q: string, o: SearchOpts = {}) => search(q, o).map((r) => ({ kind: r.kind, section: r.section, setting: r.kind === "section" ? null : (r.setting ?? null), label: r.label, where: r.where, matched: r.matched }));
@@ -123,5 +124,36 @@ describe("PH-2: a phone-only setting", () => {
   it("is found on a phone only", () => {
     expect(searchSettings("timeline", { phone: true }).some((h) => h.setting === "day-timeline")).toBe(true);
     expect(searchSettings("timeline").some((h) => h.setting === "day-timeline")).toBe(false);
+  });
+});
+
+// SA-5: a team value has one name, Admin's, read from Admin's one list; the name Settings had stays for search.
+describe("SA-5: one name for each team value", () => {
+  const PAIRS: Record<string, string> = {
+    "ai-team": "org/ai.on",
+    "ai-allowed": "client/allow_ai",
+    "client-ai": "client/allow_ai",
+    "ai-limit": "org/ai.person_cap_usd",
+    "team-request-phrases": "org/conv.request_phrases",
+    "team-ack-phrases": "org/conv.ack_phrases",
+    "team-promise-phrases": "org/conv.promise_phrases",
+    "invite-domains": "org/org.invite_domains",
+    "never-suggested": "org/org.never_suggest",
+    "client-open-states": "client/open_states",
+    "client-house-style": "client/house_style",
+    "client-platform": "client/data_platform",
+    "client-deploy": "client/deploy_items",
+  };
+  it("every team value shown in Settings says Admin's name", () => {
+    for (const [id, team] of Object.entries(PAIRS)) {
+      const d = settingOf(id)!;
+      expect(d.team && `${d.team.scope}/${d.team.key}`, id).toBe(team);
+      expect(d.label, id).toBe(settingLabel(d.team!.scope, d.team!.key));
+    }
+    for (const d of SETTINGS.filter((x) => x.team)) expect(PAIRS[d.id], d.id).toBeDefined();
+  });
+  it("the old names still find them", () => {
+    for (const [q, id] of [["team acknowledgements", "team-ack-phrases"], ["your monthly limit", "ai-limit"], ["invites go only to", "invite-domains"], ["ai for this client", "client-ai"]] as const)
+      expect(searchSettings(q).some((h) => h.setting === id), q).toBe(true);
   });
 });

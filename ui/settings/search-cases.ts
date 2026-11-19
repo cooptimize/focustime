@@ -117,7 +117,8 @@ export const SEARCH_CASES: readonly SearchCase[] = [
   { q: "version", expect: "setting:version" },
   // As an admin: Admin's parts, tabs and settings, under the person's own when both fit as well.
   { q: "model", expect: "admin:setting:org/ai.model", admin: true },
-  { q: "allow ai", expect: "admin:setting:client/allow_ai", admin: true },
+  // SA-5 D: the person's own line is called Allow AI too now (one name); it comes first, Admin's right after it.
+  { q: "allow ai", expect: "admin:setting:client/allow_ai", also: ["setting:ai-allowed", "client:client-ai"], admin: true },
   { q: "who's set up", expect: "admin:tab:people/setup", admin: true },
   { q: "standards", expect: "admin:tab:defaults/standards", admin: true },
   { q: "positions to levels", expect: "admin:setting:org/org.position_levels", admin: true },

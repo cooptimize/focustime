@@ -6,6 +6,7 @@
 
 import { DAYS_OFF_WORDS, KIND_LABEL, type NotifyKind } from "../../plan/notify.ts";
 import { TEAMS_KIND_LABEL, type TeamsKind } from "../../plan/teams-rhythm.ts";
+import { settingLabel, type SettingScope } from "./admin/settings-list.ts";
 
 const WEEKDAYS = [["mon", "Monday"], ["tue", "Tuesday"], ["wed", "Wednesday"], ["thu", "Thursday"], ["fri", "Friday"], ["sat", "Saturday"], ["sun", "Sunday"]] as const;
 /**
@@ -106,6 +107,11 @@ export type SettingDef = {
   phoneOnly?: boolean;
   /** SA-3: the fold it sits in, closed until opened ("Fine tuning"); a link or a search result opens it. */
   fold?: string;
+  /**
+   * SA-5: a team value shown here read-only, set in Admin: its name is Admin's (settingLabel), read from Admin's one
+   * list, so both sides say the same. The name it had here stays among `old`, for search.
+   */
+  team?: { scope: SettingScope; key: string };
 };
 /** SA-2: the kinds of choice; each has one control. */
 export type SettingKind = "switch" | "choice" | "select" | "number" | "time" | "text" | "list" | "action" | "status";
@@ -117,7 +123,7 @@ export const FOLDS = { tuning: "Fine tuning", kinds: "Each kind of notice" } as 
 // SA-2: the label here is the one name: the page, search, links and the Undo message all read it. `part` rows are a
 // setting's own rows (a weekday, one notice kind): on the page, found by search with their group beside them.
 // SA-3: ids, stored keys and defaults are main's (ui/settings/stored-keys.test.ts); sections, groups and folds moved.
-export const SETTINGS: readonly SettingDef[] = [
+const ROWS: readonly SettingDef[] = [
   // Profile
   { id: "signed-in", section: "you", label: "Signed in", kind: "action", keywords: ["sign out", "sign in", "account", "microsoft", "log out", "logout", "log in", "switch account"] },
   { id: "photos", section: "you", label: "Profile photos", old: ["Photos"], kind: "status", keywords: ["profile photo"] },
@@ -194,8 +200,8 @@ export const SETTINGS: readonly SettingDef[] = [
   { id: "help-teams", section: "planning", label: "Add a Teams meeting to help sessions", old: ["Teams meeting", "Teams meeting for help sessions"], group: "Help sessions", fold: FOLDS.tuning, kind: "switch" },
   { id: "help-days", section: "planning", label: "Days to search for help", old: ["Days to search"], group: "Help sessions", fold: FOLDS.tuning, kind: "number", unit: "days" },
   { id: "exclude", section: "planning", label: "People I exclude", old: ["People to exclude"], group: "Help sessions", fold: FOLDS.tuning, kind: "list", keywords: ["helpers", "who"] },
-  { id: "never-suggested", section: "planning", label: "Never suggested, for everyone", group: "Help sessions", fold: FOLDS.tuning, kind: "status" },
-  { id: "invite-domains", section: "planning", label: "Invites go only to", group: "Help sessions", fold: FOLDS.tuning, kind: "status", keywords: ["domains"] },
+  { id: "never-suggested", section: "planning", label: "Never suggested, for everyone", group: "Help sessions", fold: FOLDS.tuning, kind: "status", team: { scope: "org", key: "org.never_suggest" } },
+  { id: "invite-domains", section: "planning", label: "Invites go only to", group: "Help sessions", fold: FOLDS.tuning, kind: "status", keywords: ["domains"], team: { scope: "org", key: "org.invite_domains" } },
   { id: "stale-weeks", section: "planning", label: "Stale after", old: ["Stale after (weeks)"], group: "Backlog", fold: FOLDS.tuning, kind: "number", unit: "weeks", keywords: ["backlog"] },
   { id: "stalled-days", section: "planning", label: "Stalled after", old: ["Stalled after (days)"], group: "Backlog", fold: FOLDS.tuning, kind: "number", unit: "days" },
   { id: "watch-weeks", section: "planning", label: "Watch within", old: ["Watch within (weeks)"], group: "Backlog", fold: FOLDS.tuning, kind: "number", unit: "weeks", keywords: ["forecast"] },
@@ -220,19 +226,19 @@ export const SETTINGS: readonly SettingDef[] = [
   { id: "client-shown-as", section: "client", label: "Shown as", kind: "text", part: true, keywords: ["rename client", "rename", "client name", "display name"] },
   { id: "client-color", section: "client", label: "Color", kind: "choice", part: true, keywords: ["colour", "client color"] },
   { id: "client-followed", section: "client", label: "Keep following", old: ["Followed"], kind: "switch", part: true, keywords: ["unfollow", "stop following", "follow"] },
-  { id: "client-open-states", section: "client", label: "States treated as open", kind: "status", part: true },
+  { id: "client-open-states", section: "client", label: "States treated as open", kind: "status", part: true, team: { scope: "client", key: "open_states" } },
   { id: "client-writes", section: "client", label: "DevOps writes", kind: "status", part: true, keywords: ["write access"] },
   { id: "client-chats", section: "client", label: "Client chats", kind: "list", part: true, keywords: ["teams chat", "delivery chat"] },
-  { id: "client-ai", section: "client", label: "AI for this client", kind: "status", part: true },
-  { id: "client-platform", section: "client", label: "Data platform", kind: "choice", part: true, keywords: ["fabric", "deployments"] },
-  { id: "client-deploy", section: "client", label: "Deployment items", kind: "list", part: true, keywords: ["deployment", "deploy", "release"] },
-  { id: "client-house-style", section: "client", label: "House style for Break down", kind: "status", part: true, keywords: ["how stories are split"] },
+  { id: "client-ai", section: "client", label: "AI for this client", kind: "status", part: true, team: { scope: "client", key: "allow_ai" } },
+  { id: "client-platform", section: "client", label: "Data platform", kind: "choice", part: true, keywords: ["fabric", "deployments"], team: { scope: "client", key: "data_platform" } },
+  { id: "client-deploy", section: "client", label: "Deployment items", kind: "list", part: true, keywords: ["deployment", "deploy", "release"], team: { scope: "client", key: "deploy_items" } },
+  { id: "client-house-style", section: "client", label: "House style for Break down", kind: "status", part: true, keywords: ["how stories are split"], team: { scope: "client", key: "house_style" } },
   { id: "team-phrases", section: "clients", label: "Team phrases", group: "What FocusTime looks for in chats", kind: "status" },
-  { id: "team-request-phrases", section: "clients", label: "Team asking phrases", group: "What FocusTime looks for in chats", kind: "status", part: true },
-  { id: "team-ack-phrases", section: "clients", label: "Team acknowledgements", group: "What FocusTime looks for in chats", kind: "status", part: true },
-  { id: "team-promise-phrases", section: "clients", label: "Team promise phrases", group: "What FocusTime looks for in chats", kind: "status", part: true },
+  { id: "team-request-phrases", section: "clients", label: "Team asking phrases", group: "What FocusTime looks for in chats", kind: "status", part: true, team: { scope: "org", key: "conv.request_phrases" } },
+  { id: "team-ack-phrases", section: "clients", label: "Team acknowledgements", group: "What FocusTime looks for in chats", kind: "status", part: true, team: { scope: "org", key: "conv.ack_phrases" } },
+  { id: "team-promise-phrases", section: "clients", label: "Team promise phrases", group: "What FocusTime looks for in chats", kind: "status", part: true, team: { scope: "org", key: "conv.promise_phrases" } },
   { id: "request-phrases", section: "clients", label: "My asking phrases", old: ["My request phrases", "Requests"], group: "What FocusTime looks for in chats", kind: "text" },
-  { id: "ack-phrases", section: "clients", label: "My acknowledgements", old: ["Acknowledgements"], group: "What FocusTime looks for in chats", kind: "text" },
+  { id: "ack-phrases", section: "clients", label: "My thanks and short replies", old: ["Acknowledgements", "My acknowledgements"], group: "What FocusTime looks for in chats", kind: "text" },
   { id: "promise-phrases", section: "clients", label: "My promise phrases", old: ["Promise phrases"], group: "What FocusTime looks for in chats", kind: "text" },
   { id: "chats-read", section: "clients", label: "Client chats FocusTime reads", old: ["Client chats read for requests"], group: "Chats FocusTime reads", kind: "status", keywords: ["polling", "reconnect"] },
   // Connections (SA-3: was Accounts and calendars, with DevOps)
@@ -250,9 +256,9 @@ export const SETTINGS: readonly SettingDef[] = [
   { id: "vm-start", section: "connections", label: "Start without a preview", old: ["Start my VM without asking", "Start right away"], group: "My VM", kind: "switch" },
   { id: "vm-autostart", section: "connections", label: "Start my VM before my day", group: "My VM", kind: "switch", keywords: ["auto-start", "auto start", "automatically", "before work"] },
   // AI and assistant
-  { id: "ai-team", section: "ai", label: "AI for FocusTime", kind: "status", keywords: ["allowed for", "monthly limit", "admin"] },
-  { id: "ai-allowed", section: "ai", label: "Allowed for", group: "AI for FocusTime", kind: "status", part: true },
-  { id: "ai-limit", section: "ai", label: "Your monthly limit", group: "AI for FocusTime", kind: "status", part: true },
+  { id: "ai-team", section: "ai", label: "AI for FocusTime", kind: "status", keywords: ["allowed for", "monthly limit", "admin"], team: { scope: "org", key: "ai.on" } },
+  { id: "ai-allowed", section: "ai", label: "Allowed for", group: "AI for FocusTime", kind: "status", part: true, team: { scope: "client", key: "allow_ai" } },
+  { id: "ai-limit", section: "ai", label: "Your monthly limit", group: "AI for FocusTime", kind: "status", part: true, team: { scope: "org", key: "ai.person_cap_usd" } },
   { id: "ai-month", section: "ai", label: "This month's AI spend", old: ["This month"], kind: "status", keywords: ["cost", "budget", "cap"] },
   { id: "draft-months", section: "ai", label: "Break down looks back", old: ["Break down looks back (months)"], kind: "number", unit: "months" },
   { id: "ai-test", section: "ai", label: "Test AI", kind: "action" },
@@ -279,6 +285,13 @@ export const SETTINGS: readonly SettingDef[] = [
   { id: "feedback", section: "about", label: "Send feedback", kind: "status" },
   { id: "style-guide", section: "about", label: "Style guide", old: ["Open the style guide"], kind: "action", keywords: ["tokens"], devOnly: true },
 ];
+
+/** The rows, with each team value named as Admin names it (SA-5: one name, both sides). */
+export const SETTINGS: readonly SettingDef[] = ROWS.map((d) => {
+  if (!d.team) return d;
+  const label = settingLabel(d.team.scope, d.team.key);
+  return label === d.label ? d : { ...d, label, old: [...(d.old ?? []), d.label] };
+});
 
 /** Section ids before ST-1 that moved: where they open now. */
 export const OLD_SECTIONS: Readonly<Record<string, { section: string; setting?: string }>> = {
