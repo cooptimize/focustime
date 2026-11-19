@@ -234,6 +234,8 @@ describe("MC-5: a row's one button, its short note, its when and its mark", () =
   });
   it("the mark, short, with its full words", () => {
     expect(markShort("both")).toEqual({ short: "Teams · Pocket", full: "Transcript in Teams and your Pocket recording" });
+    // MC-6: a chat call's transcript is in its chat.
+    expect(markShort("teams", true)).toEqual({ short: "Teams", full: "Transcript in the chat" });
     expect(markShort("teams")?.short).toBe("Teams");
     expect(markShort(null)).toBeNull();
   });
@@ -256,5 +258,14 @@ describe("MC-6: Open's number", () => {
     const row = (key: string, place: "needs" | "week" | "fold") => ({ key, bucket: "open", place, seriesKey: null, clientKey: null, suggested: null }) as unknown as Parameters<typeof filterCounts>[0][number];
     const rows = [row("a", "needs"), row("b", "week"), row("c", "fold"), row("d", "fold")];
     expect(filterCounts(rows, null).open).toBe(2);
+  });
+});
+
+describe("MC-6: words for chat calls and Pocket recordings", () => {
+  it("a hidden row is a call, not a meeting", async () => {
+    const { CLOSE_TEXT } = await import("./call-words.ts");
+    expect(CLOSE_TEXT.hidden(1)).toBe("1 call hidden");
+    expect(CLOSE_TEXT.hidden(3)).toBe("3 calls hidden");
+    expect(CLOSE_TEXT.hiddenGone(2)).toBe("2 you hid aren't in the last 14 days.");
   });
 });

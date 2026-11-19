@@ -373,7 +373,7 @@ export function shortWhen(iso: string, day: string, today: string, zone: string)
 }
 
 /** MC-5: a week row's mark, short ("Teams", "Pocket", "Teams · Pocket"), and its full words for its label and hover. */
-export const markShort = (m: CallMarkKind): { short: string; full: string } | null => (m ? { short: LIST_TEXT.mark[m], full: LIST_TEXT.markFull[m] } : null);
+export const markShort = (m: CallMarkKind, chat = false): { short: string; full: string } | null => (m ? { short: LIST_TEXT.mark[m], full: (chat ? LIST_TEXT.markChat : LIST_TEXT.markFull)[m] } : null);
 
 /**
  * MC-6: the clients a call may be filed under. A call started in a client's chat: that chat's client and Internal, in

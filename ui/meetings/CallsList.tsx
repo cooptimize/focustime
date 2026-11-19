@@ -113,8 +113,8 @@ export function NeedsRow({ r, open, zone, today, colors, selecting, ticked, onTi
 export type RowStatus = { busy: string | null; error: string | null; occurrenceId: number | null };
 
 /** MC-5: a week row's mark, short, with its full words as its label and on hover. */
-export function MarkShort({ mark, check, from }: { mark: CallMarkKind; check?: CallRow["check"]; /** MC-2c: where the call came from ("From a chat"), said in the mark's label and hover. */ from?: string | undefined }) {
-  const m = markShort(mark);
+export function MarkShort({ mark, check, from, chat = false }: { mark: CallMarkKind; check?: CallRow["check"]; /** MC-6: a chat call: its transcript is in the chat. */ chat?: boolean; /** MC-2c: where the call came from ("From a chat"), said in the mark's label and hover. */ from?: string | undefined }) {
+  const m = markShort(mark, chat);
   // No mark yet: while Teams is asked, "Checking…"; past the cap, "Not checked" (MC-4's words, kept).
   if (!m) {
     const w = check === "checking" ? MARK_TEXT.checking : check === "unchecked" ? MARK_TEXT.unchecked : null;
@@ -169,7 +169,7 @@ export function WeekRow({ r, open, zone, today, colors, selecting, ticked, onTic
           <span className="calls-state" data-call-state="">{r.state.label}</span>
         ) : null}
         {/* MC-2c: a chat call says where it came from in its mark's label and hover, so its name keeps the room. */}
-        <MarkShort mark={r.mark} check={r.check} from={r.other?.chat && r.occurrenceId === null ? CALL_LIST.fromChat : undefined} />
+        <MarkShort mark={r.mark} check={r.check} chat={!!r.other?.chat} from={r.other?.chat && r.occurrenceId === null ? CALL_LIST.fromChat : undefined} />
         {canHide && <button type="button" className="mini quiet calls-hide" onClick={onHide} data-call-act="hide">{CLOSE_TEXT.hide}</button>}
       </span>
       {status?.busy && <p className="calls-row-status muted" role="status">{status.busy}</p>}
@@ -251,7 +251,7 @@ export function ClosedRow({ r, open, zone, today, colors, onOpen }: { r: CallRow
       </button>
       <span className="calls-row-end">
         <span className="calls-state" data-closed-line="">{r.closed ? closedLine(r.closed) : ""}</span>
-        <MarkShort mark={r.mark} check={r.check} />
+        <MarkShort mark={r.mark} check={r.check} chat={!!r.other?.chat} />
       </span>
     </li>
   );

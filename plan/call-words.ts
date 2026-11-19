@@ -432,11 +432,12 @@ export const CLOSE_TEXT = {
   showEach: "Show each one",
   showEachHint: "Its calls as rows of their own",
   hideSeveral: (n: number) => `Hide ${n}`,
-  hidden: (n: number) => `${n} ${n === 1 ? "meeting" : "meetings"} hidden`,
+  /** MC-6: a hidden row is a call (a chat call, a Pocket recording or a calendar call), so the count says calls. */
+  hidden: (n: number) => `${n} ${n === 1 ? "call" : "calls"} hidden`,
   hiddenEvery: (name: string) => `Every ${name} hidden`,
   putBack: "Put back",
   putBackAll: "Put back all",
-  hiddenGone: (n: number) => `${n} hidden ${n === 1 ? "meeting has" : "meetings have"} no call in the last 14 days.`,
+  hiddenGone: (n: number) => `${n} you hid ${n === 1 ? "isn't" : "aren't"} in the last 14 days.`,
   hiddenWhy: "Only you see what you hid. Hiding never changes the meeting in Outlook or what anyone else sees.",
   hiddenEveryLine: "Every one, from now on",
   /** Closing a call. */
@@ -518,6 +519,8 @@ export const LIST_TEXT = {
   /** A week row's mark, short, with its full words as its label. */
   mark: { teams: "Teams", pocket: "Pocket", both: "Teams · Pocket" },
   markFull: { teams: "Transcript in Teams", pocket: "Your Pocket recording", both: "Transcript in Teams and your Pocket recording" },
+  /** MC-6: a chat call's transcript is found in its chat. */
+  markChat: { teams: "Transcript in the chat", pocket: "Your Pocket recording", both: "Transcript in the chat and your Pocket recording" },
   whichClient: CLOSE_TEXT.whichClient,
   clientFor: (name: string) => `Client for ${name}`,
   /** Said on the fold's hover (it was the line under it). */

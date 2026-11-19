@@ -29,7 +29,7 @@ describe.skipIf(!CHROMIUM)("MC-2c: calls started in a client's chat (browser, de
     // MC-5: one line: its times, the client picker on the chat's client, the Teams mark, From a chat.
     await expect.poll(() => first.textContent(), { timeout: 30_000 }).toMatch(/ to [\s\S]*Northwind[\s\S]*Teams/);
     await expect(first.locator("[data-call-about]").inputValue()).resolves.toBe("Northwind");
-    await expect(first.locator("[data-call-mark='teams']").getAttribute("aria-label")).resolves.toBe("Transcript in Teams · From a chat");
+    await expect(first.locator("[data-call-mark='teams']").getAttribute("aria-label")).resolves.toBe("Transcript in the chat · From a chat");
     // No people count on a chat call.
     await expect(first.textContent()).resolves.not.toMatch(/\d+ (people|person)\b/);
 
