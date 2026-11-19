@@ -13,7 +13,7 @@
 // Nothing is sent when nothing happened (an idle server makes no calls). A failed send is dropped, never retried in a
 // loop; a 206 with refused items counts those as refused. Both show in Admin › Health (status()).
 import { randomUUID } from "node:crypto";
-import type { LogRecord, Logger } from "./logger.ts";
+import { closedWords, type LogRecord, type Logger } from "./logger.ts";
 import { clientRef, currentOperation, type Operation } from "./operation.ts";
 import { ownFrames, redact, typeNameOf } from "./redact.ts";
 
@@ -69,6 +69,7 @@ const props = (r: LogRecord): Record<string, string> => {
   if (r.client !== undefined) out.client = clientRef(r.client);
   if (r.action !== undefined) out.action = r.action;
   if (r.ref !== undefined) out.ref = r.ref;
+  Object.assign(out, closedWords(r));
   return out;
 };
 

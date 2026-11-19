@@ -108,14 +108,14 @@ describe("VM-4: one failed read", () => {
     expect(await s.status()).toMatchObject({ chip: "unknown", label: "Unknown", checking: null, problem: null });
   });
 
-  it("the log keeps Azure's error code as the failure's kind, and nothing else new", async () => {
+  it("the log keeps Azure's error code as the failure's kind, and (VM-7) the three closed words, nothing else", async () => {
     const s = await setup();
     s.readFails.kind = "refused";
     s.clock.advance(60_000);
     await s.status();
     const line = s.logs.find((l) => l.op === "instanceView" && l.status === 403)!;
-    expect(line).toMatchObject({ source: "azure", op: "instanceView", status: 403, kind: "AuthorizationFailed" });
-    expect(Object.keys(line).sort()).toEqual(["durationMs", "kind", "op", "source", "status"]);
+    expect(line).toMatchObject({ source: "azure", op: "instanceView", status: 403, kind: "AuthorizationFailed", challenge: "none", cause: "none", body: "json_with_code" });
+    expect(Object.keys(line).sort()).toEqual(["body", "cause", "challenge", "durationMs", "kind", "op", "source", "status"]);
   });
 });
 
