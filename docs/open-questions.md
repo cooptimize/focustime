@@ -1866,3 +1866,12 @@ Readings taken where the brief left room (the one that changes less), each open 
   - "2 people" counts the invite; a Pocket transcript names "Speaker 2" with no way to name a speaker.
   - The Undo toast from Keep stays through a later Skip, so its Undo can look like it undoes the Skip.
   - "Open 24" counts the calls in the folds too.
+- **From the pictures review, left for a later step:**
+  - Week row titles are cut at 1440 ("Northwind data model ...") where they showed whole before: the time, the picker and the mark take a fixed share of the row. Section 11 says nothing is cut to make a row one line; letting the title wrap to a second line would answer it.
+  - On the phone the line under a call's title wraps with its separator at the start of the next line ("· Reviewers see it").
+  - On the phone the Show row scrolls, so "0 of 11 decided" is past its right edge until scrolled.
+  - Group heads ("NEW IN DEVOPS 3") are a size above the page's other section labels, and each group card keeps its colored left stripe (MC-1's look).
+  - Add a call's Day and Starts are the browser's own date and time fields ("11/05/2026", "04:30 PM"), as MC-1's form was.
+  - Durations read "2 h 15 min" (MC-2b's Pocket words) where the time words elsewhere are "2h 15m".
+  - The Transcript view's "Kept 30 days, for this call's reviewers and attendees only. Read only." (MC-2) is kept: it says how long, which the header doesn't.
+  - "Done selecting" is drawn as the ticked rows' bar's button before anything is ticked.

@@ -62,9 +62,9 @@
 .calls-row .calls-hide { visibility: hidden; min-height: 24px; padding: 0 6px; }
 .calls-row:is(:hover, :focus-within) .calls-hide { visibility: visible; }
 @media (hover: none) { .calls-row .calls-hide { visibility: visible; } }
-.calls-about select { appearance: none; max-width: 8.5em; min-height: 24px; padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--text); font: inherit; font-size: var(--fs-2); cursor: pointer; }
-.calls-about select:hover, .calls-about select:focus-visible { border-color: var(--border); background: var(--surface); }
-.calls-about.none select { border: 1px dashed color-mix(in oklab, var(--watch) 60%, transparent); color: var(--watch); }
+.calls-row .calls-about select { appearance: none; max-width: 8.5em; min-height: 24px; padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--text); font: inherit; font-size: var(--fs-2); cursor: pointer; }
+.calls-row .calls-about select:hover, .calls-row .calls-about select:focus-visible { border-color: var(--border); background: var(--surface); }
+.calls-row .calls-about.none select { border: 1px dashed color-mix(in oklab, var(--watch) 60%, transparent); color: var(--watch); }
 .calls-mark { padding: 0 6px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-muted); font-size: var(--fs-1); line-height: 1.6; }
 .calls-row.series > .calls-series-days { grid-column: 1 / -1; grid-row: 2; margin: 2px 0 2px 16px; }
 .calls-row.series .calls-row-main { grid-column: time / end; }

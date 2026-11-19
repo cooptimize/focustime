@@ -540,7 +540,7 @@ export const PAGE_TEXT = {
   connect: "Connect Pocket",
   /** A hand-added call taking any of my recordings takes its time from it, said before I confirm. */
   takesTime: (when: string) => `The call takes the recording's time: ${when}.`,
-  fits: (call: string) => `Fits ${call}`,
+  fits: (call: string) => `Goes with ${call}`,
   reviewThat: "Review that call",
 } as const;
 

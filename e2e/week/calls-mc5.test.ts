@@ -262,7 +262,7 @@ describe.skipIf(!CHROMIUM)("MC-5: Calls made scannable (browser, demo mode)", ()
     // Newest first; each line its title, when and length.
     await expect(recs.first().textContent()).resolves.toMatch(/^Call with the carrier.*Nov 3.*25 min/);
     // One that fits a listed call says which.
-    await expect(recs.filter({ hasText: "Sprint planning" }).locator(".mtg-rec-fits").textContent()).resolves.toBe("Fits Harbor sprint planning Review that call");
+    await expect(recs.filter({ hasText: "Sprint planning" }).locator(".mtg-rec-fits").textContent()).resolves.toBe("Goes with Harbor sprint planning Review that call");
     // Choosing one fills the name and the time (not typed); the client is mine to choose and marked until chosen.
     await recs.first().click();
     await expect(add.getByLabel("Name", { exact: true }).inputValue()).resolves.toBe("Call with the carrier");
