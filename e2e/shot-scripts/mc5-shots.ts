@@ -91,7 +91,11 @@ async function listRows(page: Page) {
       }
       return n;
     };
-    return { visible: seen.length, all: rows.length, needsLines: needs.map(lines), weekLines: rows.filter((r) => !r.closest("[data-section='needs']")).slice(0, 6).map(lines), lineHeight: lh };
+    // How many one-line week rows the list's height holds below its head (the demo has fewer calls than fit).
+    const scroll = document.querySelector<HTMLElement>("[data-calls-list] .calls-scroll");
+    const one = rows.find((r) => r.classList.contains("one") && !r.closest("[data-section='needs']"));
+    const fits = scroll && one ? Math.floor((Math.min(vh, scroll.getBoundingClientRect().bottom) - scroll.getBoundingClientRect().top) / (one.getBoundingClientRect().height + 2)) : null;
+    return { visible: seen.length, fits, all: rows.length, needsLines: needs.map(lines), weekLines: rows.filter((r) => !r.closest("[data-section='needs']")).slice(0, 6).map(lines), lineHeight: lh };
   });
 }
 
@@ -108,7 +112,8 @@ async function callPage(page: Page, open: number) {
     const text = (side as HTMLElement).innerText;
     const said = (text.match(new RegExp(`(^|\\D)${n}(\\D|$)`, "g")) ?? []).length;
     const sticky = document.querySelector<HTMLElement>(".mtg-sticky");
-    return { proposals: props.length, proposalsVisible: seen, countSaid: said, stickyHeight: sticky ? Math.round(sticky.getBoundingClientRect().height) : null };
+    const group = document.querySelector<HTMLElement>(".mtg-sec-head");
+    return { groupHead: group ? Math.round(group.getBoundingClientRect().height) : null, proposals: props.length, proposalsVisible: seen, countSaid: said, stickyHeight: sticky ? Math.round(sticky.getBoundingClientRect().height) : null };
   }, open);
 }
 
@@ -117,7 +122,10 @@ async function smallControls(page: Page, sel: string) {
   return page.evaluate((s) => {
     const root = document.querySelector(s) ?? document.body;
     return [...root.querySelectorAll<HTMLElement>("button, a[href], select, input:not([type=hidden]), [role=button]")]
-      .filter((e) => e.offsetParent && e.getBoundingClientRect().height > 0 && e.getBoundingClientRect().height < 43.5 && !e.closest(".sr-only, .topbar, .bottom-bar, nav"))
+      // A control's hit area: its label when it has one (a tick box), its row when it is stretched over the row (a call's name).
+      .map((e) => ({ e, box: (e.closest("label") ?? (e.classList.contains("calls-row-main") && getComputedStyle(e, "::after").content !== "none" ? e.closest("li") : null) ?? e).getBoundingClientRect() }))
+      .filter(({ e, box }) => e.offsetParent && box.height > 0 && box.height < 43.5 && !e.closest(".sr-only, .topbar, .bottom-bar, nav"))
+      .map(({ e }) => e)
       .map((e) => `${e.tagName.toLowerCase()}:${(e.getAttribute("aria-label") ?? e.textContent ?? "").trim().slice(0, 30)}:${Math.round(e.getBoundingClientRect().height)}`);
   }, sel);
 }
@@ -205,21 +213,24 @@ describe.skipIf(!CHROMIUM || !DIR)("MC-5 screenshots and counts", () => {
         }
         for (const [n, choice] of [["11", "Pocket recording"], ["12", "A file"], ["13", "Later"]] as const) {
           await shot(page, `${label}-after-${n}-add-${choice.toLowerCase().replace(/\s+/g, "-")}`, async () => {
+            await page.reload();
             await go(page, "#/calls?show=open");
             await page.getByRole("button", { name: "Add a call" }).first().click({ timeout: 10_000 });
             await page.locator("[data-add-call]").getByRole("button", { name: choice }).click({ timeout: 10_000 });
           });
         }
         await shot(page, `${label}-after-14-hand-recording`, async () => {
+          await page.reload();
           await go(page, "#/calls?show=open");
           await page.locator("[data-call-row]").filter({ hasText: "Northwind data check-in" }).first().click({ timeout: 10_000 });
           await page.locator("[data-transcript-choice]").getByRole("button", { name: "Pocket recording" }).click({ timeout: 10_000 });
           await page.locator("[data-rec-pick] [role=radio], [data-rec-pick] input").first().click({ timeout: 10_000 });
         });
         await shot(page, `${label}-after-15-select`, async () => {
+          await page.reload();
           await go(page, "#/calls?show=open");
           await page.getByRole("button", { name: "More for Calls" }).click();
-          await page.getByRole("menuitem", { name: /Select calls/ }).click();
+          await page.getByText("Select calls", { exact: true }).click();
         });
         if (w > 900) {
           await setTheme(page, "cooptimize-light");

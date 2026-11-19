@@ -86,3 +86,115 @@
 .app.phone .calls-row-main { min-height: 0; }
 .app.phone .calls-filters { display: inline-flex; }
 .app.phone .calls-chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+
+/* ---- A call's page ---- */
+/* The header: the call's own name, the Proposals or Transcript switch, Skip all and close and the menu; one line under it. */
+.mtg-sticky { gap: 4px; padding: 6px 24px 4px; }
+.mtg-head-acts .mini { white-space: nowrap; }
+.mtg-show .ib4-chip, .mtg-head-acts .seg-btn { min-height: 24px; padding-top: 0; padding-bottom: 0; }
+.mtg-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "back title acts" "meta meta meta"; align-items: center; column-gap: 8px; row-gap: 2px; min-width: 0; }
+.mtg-head .mtg-back { grid-area: back; }
+.mtg-head h2 { grid-area: title; margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-4); font-weight: 600; }
+.mtg-head-acts { grid-area: acts; display: inline-flex; align-items: center; gap: 8px; }
+.mtg-meta { grid-area: meta; display: flex; flex-wrap: wrap; align-items: center; gap: 0 6px; margin: 0; color: var(--text-muted); font-size: var(--fs-2); }
+.mtg-meta > span:not(.calls-sq):not(:nth-child(2))::before { content: "·"; margin-right: 6px; color: var(--text-faint, var(--text-muted)); }
+.mtg-meta > span[title] { cursor: help; text-decoration: underline dotted; text-decoration-color: var(--border-strong); text-underline-offset: 3px; }
+/* The Show row: the kinds as chips with their counts (the only place the count is), and how much is decided. */
+.mtg-show { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mtg-show-chips { display: flex; gap: 6px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.mtg-show-chips .ib4-chip { flex: none; display: inline-flex; align-items: center; gap: 6px; }
+.mtg-show .seg-count { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.mtg-decided { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; flex: none; color: var(--text-muted); font-size: var(--fs-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mtg-show .calls-amber { flex: none; white-space: nowrap; }
+.mtg-run-line { margin: 0; font-size: var(--fs-2); }
+.mtg-look { margin: 0; font-size: var(--fs-2); }
+/* A group: its name as a section label, its count and a quiet Select all. */
+.mtg-sec-head { padding: 2px 12px; min-height: 0; font-size: var(--fs-1); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
+.mtg-sec-head .mini { text-transform: none; letter-spacing: 0; font-weight: 500; min-height: 24px; }
+.mtg-sec-count { margin-left: 6px; font-variant-numeric: tabular-nums; }
+
+/* A proposal folded: three lines. */
+.mtg-prop.mc5 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; padding: 6px 0; }
+.mtg-p1 { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto auto; align-items: center; column-gap: 8px; min-width: 0; }
+.mtg-prop.mc5 .mtg-tick { padding-top: 0; min-width: 0; display: inline-flex; }
+.mtg-prop.mc5 .mtg-main { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mtg-prop.mc5 .mtg-prop-actions { flex-wrap: nowrap; align-items: center; }
+.mtg-prop.mc5 .mtg-prop-actions .mini, .mtg-chev { min-height: 26px; }
+.mtg-title-box { width: 100%; box-sizing: border-box; min-width: 0; padding: 4px 8px; font: inherit; font-weight: 500; color: var(--text); background: var(--sunken); border: 1px solid var(--border); border-radius: 6px; }
+.mtg-p1 textarea { width: 100%; box-sizing: border-box; font: inherit; color: var(--text); background: var(--sunken); border: 1px solid var(--border); border-radius: 6px; }
+.mtg-p2, .mtg-p3 { display: block; width: 100%; min-width: 0; margin: 0; padding: 0 0 0 30px; border: 0; background: none; font: inherit; font-size: var(--fs-2); text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mtg-p2 { color: var(--text-muted); cursor: pointer; }
+.mtg-p2:hover { color: var(--text); }
+.mtg-p3 { color: var(--text-muted); cursor: pointer; }
+.mtg-p3:disabled { cursor: default; }
+.mtg-p3:not(:disabled):hover .mtg-said { color: var(--text); }
+.mtg-p3 .mtg-who { color: var(--text); font-weight: 500; }
+.mtg-p3 .mtg-at { margin: 0 6px; font-variant-numeric: tabular-nums; }
+.mtg-p3 .mtg-who + .mtg-said { margin-left: 6px; }
+.mtg-p3.gone { cursor: default; font-style: italic; }
+.mtg-p2:focus-visible, .mtg-p3:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; border-radius: 4px; }
+.mtg-prop.mc5 > .mtg-need, .mtg-prop.mc5 > .mtg-state-line, .mtg-prop.mc5 > .names-removed { margin: 2px 0 0 30px; font-size: var(--fs-2); }
+/* A proposal open: the fields in a grid, four across wide, two narrow, one on the phone. */
+.mtg-open { display: grid; gap: 8px; padding: 8px 0 4px 30px; container-type: inline-size; }
+.mtg-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px 12px; }
+@container (min-width: 420px) { .mtg-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (min-width: 860px) { .mtg-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.mtg-cell { display: grid; gap: 4px; align-content: start; min-width: 0; }
+.mtg-cell .set-label { font-size: var(--fs-1); color: var(--text-muted); }
+.mtg-cell.needed :is(input, select, button, textarea, .sf-btn, .dp-btn) { border-color: var(--watch) !important; }
+.mtg-cell .nf-types { overflow-x: auto; scrollbar-width: none; }
+.mtg-needed { border: 0; padding: 0; margin-left: 6px; font-weight: 600; }
+.mtg-open .nf-more { justify-self: start; }
+.mtg-breakdown { justify-self: start; }
+
+/* The transcript choices: Add a call's, and a call with no transcript. */
+.mtg-choices { display: grid; gap: 10px; }
+.mtg-choices-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.mtg-choice-body { display: grid; gap: 8px; justify-items: start; }
+.mtg-connect { font-size: var(--fs-2); }
+.mtg-dropzone { display: grid; justify-items: center; gap: 4px; padding: 20px 16px; border: 1px dashed var(--border-strong); border-radius: 8px; background: var(--sunken); text-align: center; }
+.mtg-dropzone.dropping { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 8%, var(--sunken)); }
+.mtg-drop-words { cursor: pointer; color: var(--text); font-weight: 500; }
+.mtg-drop-words input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.mtg-drop-words:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+.mtg-drop-kinds { color: var(--text-muted); font-size: var(--fs-1); }
+.mtg-drop-replace { padding: 12px; text-align: center; }
+.mtg-recs label { align-items: baseline; }
+
+.app.phone .mtg-head { grid-template-areas: "back switch acts" "title title title" "meta meta meta"; grid-template-columns: auto auto minmax(0, 1fr); }
+.app.phone .mtg-head-acts { display: contents; }
+.app.phone .mtg-head-acts > .mtg-switch { grid-area: switch; }
+.app.phone .mtg-head-acts > [data-call-act="skip-all"] { grid-area: acts; justify-self: end; margin-right: 48px; }
+.app.phone .mtg-head-acts > [data-call-menu] { grid-area: acts; justify-self: end; }
+.app.phone .mtg-head .mtg-back { min-width: var(--tap, 44px); padding: 0; justify-content: center; }
+.app.phone .mtg-head .mtg-back .mtg-back-word { display: none; }
+.app.phone .mtg-show { overflow-x: auto; scrollbar-width: none; }
+.app.phone .mtg-show-chips { overflow: visible; }
+.app.phone .mtg-head h2 { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.app.phone .mtg-meta { row-gap: 0; }
+.app.phone .mtg-prop.mc5 label.mtg-tick { min-width: 30px; min-height: var(--tap, 44px); align-items: center; }
+.app.phone .mtg-head-acts :is(.mini, .seg-btn, .more-btn), .app.phone .mtg-show .ib4-chip, .app.phone .mtg-prop.mc5 :is(.mini, .mtg-chev), .app.phone .mtg-p2, .app.phone .mtg-p3, .app.phone .mtg-choice .seg-btn, .app.phone .mtg-drop-words { min-height: var(--tap, 44px); }
+.app.phone .mtg-p2, .app.phone .mtg-p3 { display: flex; align-items: center; padding-left: 0; }
+.app.phone .mtg-p3 .mtg-said { overflow: hidden; text-overflow: ellipsis; }
+.app.phone .mtg-p1 { grid-template-columns: 30px minmax(0, 1fr) auto auto; column-gap: 4px; }
+.app.phone .mtg-prop.mc5 .mtg-tick input { width: 22px; height: 22px; }
+.app.phone .mtg-p1 .mtg-main { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.app.phone .mtg-prop.mc5 .mtg-tick { justify-content: center; }
+.app.phone .mtg-open { padding-left: 0; }
+.app.phone .mtg-prop.mc5 > :is(.mtg-need, .mtg-state-line, .names-removed) { margin-left: 0; }
+
+/* Add a call: one panel, one step. */
+.mtg-add.mc5 { display: grid; gap: 12px; max-width: 760px; }
+.mtg-add-head { display: flex; align-items: baseline; gap: 10px; }
+.mtg-add-head h3 { margin: 0; }
+.mtg-add-head .muted { font-size: var(--fs-2); cursor: help; }
+.mtg-add-when { margin: 0; align-self: end; font-size: var(--fs-2); }
+.mtg-add-field.needed select { border-color: var(--watch); }
+.mtg-recs { display: grid; gap: 4px; margin: 0; padding: 0; border: 0; }
+.mtg-recs label { display: flex; gap: 8px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
+.mtg-recs label:has(input:checked) { border-color: var(--border-strong); background: var(--wash-1); }
+.mtg-recs label > span { display: grid; gap: 1px; min-width: 0; }
+.mtg-recs .muted { font-size: var(--fs-2); }
+.mtg-rec-fits { font-size: var(--fs-2); color: var(--text-muted); }
+.mtg-rec-fits .link-btn { min-height: 0; padding: 0; }
+.app.phone .mtg-recs label, .app.phone .mtg-rec-fits .link-btn, .app.phone .mtg-add.mc5 :is(input, select, .mini) { min-height: var(--tap, 44px); }

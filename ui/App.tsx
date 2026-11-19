@@ -2337,6 +2337,7 @@ export function App() {
           phone={phone}
           clients={captureClients(data)}
           blockClientAt={(iso) => blockClientAt(data.week, iso)}
+          nowMs={secondMs}
           colors={data.clients}
           today={data.planDay.date}
           zone={userZone(data)}

@@ -493,3 +493,69 @@ export const LIST_TEXT = {
   foldHint: CLOSE_TEXT.foldSub,
   hiddenHint: CLOSE_TEXT.hiddenWhy,
 } as const;
+
+/**
+ * MC-5: a call's page with less to read: the line under its name, its menu, the Show row and the one count, a proposal
+ * folded to three lines and opened, and the transcript choices (Add a call's, on a call with none).
+ */
+export const PAGE_TEXT = {
+  menu: "More for this call",
+  /** Where a call came from, when not a calendar or a registered call. */
+  origin: { hand: "Added by you", pocket: "Pocket" },
+  /** Who sees it: short on the line, the full sentence on hover. */
+  who: {
+    hand: { short: "Only you see it", full: CALLS_TEXT.whoSeesHand },
+    calendar: { short: "The invite sees it", full: CALLS_TEXT.whoSees },
+    registered: { short: "Reviewers see it", full: "Only this call's reviewers and the Cooptimizers on its invite see it, for 30 days." },
+  },
+  onlyLook: (names: readonly string[]) => `Only ${names.join(", ")} can act on it. You can look.`,
+  show: "Show",
+  decided: (done: number, all: number) => `${done} of ${all} decided`,
+  waiting: CALL_STATE.waiting,
+  waitingHint: "FocusTime looks for the transcript after the call, every 15 minutes for 3 hours, then hourly up to 12 hours.",
+  /** A proposal's three lines. */
+  create: "Create",
+  keep: "Keep",
+  comment: "Add comment",
+  details: "Details",
+  me: "Me",
+  nobody: "Nobody",
+  noDate: "No date",
+  noParent: "No parent",
+  under: (id: number, title: string | null) => `under #${id}${title ? ` ${title}` : ""}`,
+  by: (day: string) => `by ${day}`,
+  on: (id: number, title: string) => `On #${id} ${title}`,
+  quoteGone: "Its words went after 30 days",
+  openQuote: (who: string) => `Open the transcript at ${who}'s words`,
+  describe: "Description and size",
+  needed: "needed",
+  /** The transcript choices: Add a call's, and a call's page with no transcript. */
+  transcript: "Transcript",
+  choice: { teams: "From Teams", pocket: "Pocket recording", file: "A file", later: "Later" },
+  getTeams: "Get it from Teams",
+  drop: "Drop a Teams transcript or a Pocket export, or choose a file",
+  kinds: ".vtt or .docx from Teams, .zip or .pdf exported from Pocket",
+  useRecording: "Use this recording",
+  noRecordings: "No recordings of yours from the last 14 days to choose.",
+  connect: "Connect Pocket",
+  /** A hand-added call taking any of my recordings takes its time from it, said before I confirm. */
+  takesTime: (when: string) => `The call takes the recording's time: ${when}.`,
+  fits: (call: string) => `Fits ${call}`,
+  reviewThat: "Review that call",
+} as const;
+
+/** MC-5: Add a call, one panel, one step. */
+export const ADD_TEXT = {
+  title: CALLS_TEXT.add,
+  onlyYou: PAGE_TEXT.who.hand.short,
+  onlyYouFull: CALLS_TEXT.addSub,
+  name: CALLS_TEXT.addName,
+  day: CALLS_TEXT.addDay,
+  starts: CALLS_TEXT.addStart,
+  length: CALLS_TEXT.addLength,
+  about: CALLS_TEXT.addClient,
+  /** With a recording or a file; for Later. */
+  addReview: "Add and review",
+  add: "Add",
+  adding: "Adding…",
+} as const;

@@ -133,7 +133,8 @@ export function WeekRow({ r, open, zone, today, colors, selecting, ticked, onTic
               {clients.map((c) => <option key={c.clientKey} value={c.clientKey}>{nameOf(c.clientKey)}</option>)}
             </select>
           </label>
-        ) : r.occurrenceId !== null ? (
+        ) : r.occurrenceId !== null && !r.pocket.length ? (
+          // A recording that fits says so by its mark alone.
           <span className="calls-state" data-call-state="">{r.state.label}</span>
         ) : null}
         <MarkShort mark={r.mark} />
