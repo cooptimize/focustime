@@ -227,7 +227,7 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
     const done = (data?.occurrences ?? []).filter((o) => o.hasTranscript);
     return (pocket?.recordings ?? [])
       .filter((x) => !done.some((o) => goesWith(spanOf(x), o)) && !hides?.keys.has(`pocket:${x.id}`))
-      .map((x) => ({ rec: x, fits: rows.find((r) => r.bucket !== "hidden" && r.pocket.some((p) => p.id === x.id)) ?? null }));
+      .map((x) => ({ rec: x, fits: rows.find((r) => r.bucket !== "hidden" && r.pocket.some((p) => p.id === x.id)) ?? null, own: rows.find((r) => r.bucket !== "hidden" && r.recording?.id === x.id) ?? null }));
   }, [pocket, data, rows, hides]);
   const goneCount = gone.keys.length + gone.series.length;
   const counts = useMemo(() => filterCounts(rows, client, goneCount, hides?.series), [rows, client, goneCount, hides]);
@@ -647,7 +647,8 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
         <AddCall clients={clients} today={today} nowMs={nowMs} zone={zone} pocketOn={pocketOn} recs={recChoices}
           onCancel={() => (setAdding(false), requestAnimationFrame(() => document.querySelector<HTMLElement>("[data-calls-add]")?.focus()))}
           onAdded={(id, file) => (setAdding(false), (uploadFor = file ? { occurrenceId: id, file } : null), changed(), go({ occurrence: id }))}
-          onReviewThat={(row, recId) => (setAdding(false), setStartRec({ key: row.key, id: recId }), openRow(row))} />
+          onReviewThat={(row, recId) => (setAdding(false), setStartRec({ key: row.key, id: recId }), openRow(row))}
+          onOwn={(row) => (setAdding(false), openRow(row))} />
       </div>
     );
   else if (at.occurrence)
@@ -942,7 +943,7 @@ function PocketAddSetup({ rec, clients, suggested, zone, onCancel, onAdded }: { 
 }
 
 /** MC-5: one of my recordings Add a call offers: not yet a call's transcript; the listed call it fits, if one does. */
-export type RecChoice = { rec: ListedRecording; fits: CallRow | null };
+export type RecChoice = { rec: ListedRecording; fits: CallRow | null; /** MC-6: its own row in the list, when it has one. */ own?: CallRow | null };
 
 /** MC-5: a file chosen in Add a call, uploaded on the call's page once it is added (so the date question can be asked there). */
 let uploadFor: { occurrenceId: number; file: File } | null = null;
@@ -965,10 +966,10 @@ function lastHalfHour(nowMs: number, zone: string): { date: string; start: strin
  * itself; one that fits a listed call says which, with Review that call. About is always mine to choose. One recording's
  * transcript is read only on Add and review; Add a call asks Pocket nothing more.
  */
-function AddCall({ clients, today, nowMs, zone, pocketOn, recs, onCancel, onAdded, onReviewThat }: { clients: CaptureClient[]; today: string; nowMs: number; zone: string; pocketOn: boolean | null; recs: readonly RecChoice[]; onCancel: () => void; onAdded: (occurrenceId: number, file: File | null) => void; onReviewThat: (row: CallRow, recId: string) => void }) {
+function AddCall({ clients, today, nowMs, zone, pocketOn, recs, onCancel, onAdded, onReviewThat, onOwn }: { clients: CaptureClient[]; today: string; nowMs: number; zone: string; pocketOn: boolean | null; recs: readonly RecChoice[]; onCancel: () => void; onAdded: (occurrenceId: number, file: File | null) => void; onReviewThat: (row: CallRow, recId: string) => void; /** MC-6: a recording with its own row: that row opens. */ onOwn: (row: CallRow) => void }) {
   const at = lastHalfHour(nowMs, zone);
   const [mode, setMode] = useState<Choice>(pocketOn && recs.length ? "pocket" : "file");
-  const [recId, setRecId] = useState<string>(recs.find((x) => !x.fits)?.rec.id ?? recs[0]?.rec.id ?? "");
+  const [recId, setRecId] = useState<string>(recs.find((x) => !x.fits && !x.own)?.rec.id ?? recs.find((x) => !x.own)?.rec.id ?? "");
   const rec = mode === "pocket" ? recs.find((x) => x.rec.id === recId) ?? null : null;
   const [name, setName] = useState(rec?.rec.title ?? "");
   const [named, setNamed] = useState(false);
@@ -1047,11 +1048,12 @@ function AddCall({ clients, today, nowMs, zone, pocketOn, recs, onCancel, onAdde
       {mode === "pocket" && (recs.length ? (
         <fieldset className="mtg-setup-source mtg-recs" data-rec-pick="">
           <legend className="sr-only">{PW.pick}</legend>
-          {recs.map(({ rec: r, fits }) => (
-            <label key={r.id} className={fits ? "fits" : undefined}>
-              <input type="radio" name="mtg-add-rec" checked={r.id === recId} onChange={() => setRecId(r.id)} />
+          {recs.map(({ rec: r, fits, own }) => (
+            <label key={r.id} className={fits ? "fits" : undefined} {...(own ? { "data-in-list": "" } : {})}>
+              <input type="radio" name="mtg-add-rec" checked={r.id === recId} onChange={() => (own ? onOwn(own) : setRecId(r.id))} />
               <span>
                 <strong>{r.title || PW.rowKind}</strong>
+                {own && <span className="mtg-in-list">{PAGE_TEXT.inYourList}</span>}
                 <span className="muted">{recordingLine(whenShort(r.startAt, zone), lengthLabel(r.minutes))}</span>
                 {fits && (
                   <span className="mtg-rec-fits">

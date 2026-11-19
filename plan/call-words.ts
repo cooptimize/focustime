@@ -583,6 +583,8 @@ export const PAGE_TEXT = {
   takesTime: (when: string) => `The call takes the recording's time: ${when}.`,
   fits: (call: string) => `Goes with ${call}`,
   reviewThat: "Review that call",
+  /** MC-6: a recording that already has its own row in Calls (choosing it opens that row). */
+  inYourList: "In your list",
 } as const;
 
 /** MC-5: Add a call, one panel, one step. */

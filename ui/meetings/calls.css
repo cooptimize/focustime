@@ -214,3 +214,6 @@
 .mtg-rec-fits { font-size: var(--fs-2); color: var(--text-muted); }
 .mtg-rec-fits .link-btn { min-height: 0; padding: 0; }
 .app.phone .mtg-recs label, .app.phone .mtg-rec-fits .link-btn, .app.phone .mtg-add.mc5 :is(input, select, .mini) { min-height: var(--tap, 44px); }
+
+/* MC-6: a recording in Add a call that already has its own row in the list. */
+.mtg-in-list { margin-left: 8px; padding: 0 6px; border: 1px solid var(--border); border-radius: 999px; font-size: var(--fs-1); font-weight: 500; color: var(--muted); }

@@ -180,7 +180,7 @@ describe.skipIf(!CHROMIUM)("MC-6: Calls polish (browser, demo mode)", () => {
     await calls(page);
     await page.getByRole("button", { name: "Add a call" }).first().click();
     const add = page.locator("[data-add-call]");
-    const rec = add.locator("[data-rec-pick]").first();
+    const rec = add.locator("[data-rec-pick] label:not([data-in-list])").first();
     await rec.click();
     const when = (await rec.textContent())!.match(/[A-Z][a-z]{2}, [A-Z][a-z]{2} \d+ · \d+:\d\d [AP]M/)![0];
     await expect(onScreen(page, "[data-add-call]", new RegExp(when.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))).resolves.toBe(1);
@@ -221,7 +221,7 @@ describe.skipIf(!CHROMIUM)("MC-6: Calls polish (browser, demo mode)", () => {
     await calls(page);
     await page.getByRole("button", { name: "Add a call" }).first().click();
     const add = page.locator("[data-add-call]");
-    await add.locator("[data-rec-pick]").first().click();
+    await add.locator("[data-rec-pick] label:not([data-in-list])").first().click();
     await add.locator("#mtg-add-client").selectOption({ index: 1 });
     const name = await add.getByLabel("Name", { exact: true }).inputValue();
     await add.getByRole("button", { name: "Add and review" }).click();
@@ -309,5 +309,25 @@ describe.skipIf(!CHROMIUM)("MC-6: Calls polish (browser, demo mode)", () => {
     await expect(add.locator("button.time-field").count()).resolves.toBe(1);
     await expect(add.getByRole("button", { name: /^Day: / }).count()).resolves.toBe(1);
     await expect(add.getByRole("button", { name: /^Starts: / }).count()).resolves.toBe(1);
+  }, T);
+
+  it("19: in Add a call a recording with its own row is marked In your list, and choosing it opens that row", async () => {
+    const { page } = await open();
+    await calls(page);
+    await page.getByRole("button", { name: "Add a call" }).first().click();
+    const add = page.locator("[data-add-call]");
+    const recs = add.locator("[data-rec-pick] label");
+    await expect.poll(() => recs.count(), { timeout: W }).toBeGreaterThan(0);
+    const all = await recs.evaluateAll((ls) => ls.map((l) => ({ text: l.querySelector("strong")?.textContent, inList: l.hasAttribute("data-in-list"), mark: l.querySelector(".mtg-in-list")?.textContent ?? null })));
+    const listed = all.filter((x) => x.inList);
+    expect(listed.length).toBeGreaterThan(0);
+    for (const x of listed) expect(x.mark).toBe("In your list");
+    for (const x of all.filter((y) => !y.inList)) expect(x.mark).toBeNull();
+    // Choosing it opens its own row (its review or its setup), and Add a call closes.
+    const one = recs.filter({ has: page.locator(".mtg-in-list") }).first();
+    const name = (await one.locator("strong").textContent())!;
+    await one.click();
+    await expect.poll(() => add.count(), { timeout: W }).toBe(0);
+    await expect.poll(() => page.locator("[data-calls-list] li.open .calls-name").first().textContent(), { timeout: W }).toBe(name);
   }, T);
 });

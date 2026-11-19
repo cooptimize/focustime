@@ -267,9 +267,12 @@ describe.skipIf(!CHROMIUM)("MC-5: Calls made scannable (browser, demo mode)", ()
     await expect(recs.first().textContent()).resolves.toMatch(/^Call with the carrier.*Nov 3.*25m/);
     // One that fits a listed call says which.
     await expect(recs.filter({ hasText: "Sprint planning" }).locator(".mtg-rec-fits").textContent()).resolves.toBe("Goes with Harbor sprint planning Review that call");
+    // MC-6: that one already has its own row ("In your list"); a recording with none is a new call.
+    await expect(recs.first().locator(".mtg-in-list").textContent()).resolves.toBe("In your list");
+    const fresh = recs.filter({ has: page.locator("strong", { hasText: /^Proposal review$/ }) }).first();
     // Choosing one fills the name and takes its time (not typed); the client is mine to choose and marked until chosen.
-    await recs.first().click();
-    await expect(add.getByLabel("Name", { exact: true }).inputValue()).resolves.toBe("Call with the carrier");
+    await fresh.click();
+    await expect.poll(() => add.getByLabel("Name", { exact: true }).inputValue(), { timeout: W }).toBe("Proposal review");
     // MC-6: its time is said once, on its line above.
     await expect(add.locator("[data-add-when]").count()).resolves.toBe(0);
     await expect(add.locator("input[type=date], input[type=time]").count()).resolves.toBe(0);
@@ -281,7 +284,7 @@ describe.skipIf(!CHROMIUM)("MC-5: Calls made scannable (browser, demo mode)", ()
     expect(lists()).toBe(listedBefore);
     sent.length = 0;
     await press.click();
-    await page.getByRole("heading", { level: 2, name: "Call with the carrier" }).waitFor({ timeout: W });
+    await page.getByRole("heading", { level: 2, name: "Proposal review" }).waitFor({ timeout: W });
     expect(sent.map((s) => s.action).filter((a) => /pocket/.test(a))).toEqual(["meeting.pocket_add", "meeting.pocket_bring"]);
     await expect.poll(() => page.locator("[data-call-origin]").textContent(), { timeout: W }).toBe("Pocket");
 
