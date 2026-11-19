@@ -5237,7 +5237,7 @@ button.ah-chip:hover { background: var(--raised); border-color: var(--text-muted
 .st-foot .st-foot-clients { font-size: var(--fs-2); }
 .st-foot .st-push-btn { margin-left: auto; }
 /* Room under the last line so the bar never sits over a control at the end of the page. */
-.status-view:has(.st-foot) { padding-bottom: 72px; scroll-padding-bottom: 72px; }
+.status-view:has(.st-foot) { padding-bottom: 72px; scroll-padding-bottom: 136px; }
 /* On the phone the document scrolls (the page is no scroll box of its own), and the bar sits above the bottom bar. */
 .app.phone .status-view { overflow: visible; }
 .app.phone .status-view .st-foot { bottom: calc(var(--bb-h, 0px) + 36px); }
