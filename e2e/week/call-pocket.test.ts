@@ -86,9 +86,9 @@ describe.skipIf(!CHROMIUM)("a Pocket export on a call's page (browser, demo mode
     expect(quotes.length).toBeGreaterThan(0);
     expect(quotes.every((q) => /^Speaker \d+$/.test(q.trim()))).toBe(true);
     await expect(page.locator(".mtg-prop").filter({ hasText: "Share three sample statements" }).first().textContent()).resolves.toContain("Pocket didn't say who");
-    // Alex names himself, so it's his; the words don't name who it's for, so no one is guessed.
+    // Alex names themselves, so it's theirs (Alex is me here: MC-6, "your Promises"); the words don't name who it's for, so no one is guessed.
     const alex = (await page.locator(".mtg-prop").filter({ hasText: "date range filter for review" }).first().textContent()) ?? "";
-    expect(alex).toContain("in Alex's Promises");
+    expect(alex).toContain("in your Promises");
     expect(alex).not.toContain("Dana");
     await page.locator(".mtg-switch").getByRole("button", { name: /Transcript/ }).click();
     const lines = page.locator(".mtg-lines li");
