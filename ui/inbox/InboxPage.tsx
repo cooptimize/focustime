@@ -171,7 +171,11 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
   // UC-2: what the tab counts with no client, as its own chip after the clients (so the chips add up to the tab).
   const noClientNeed = phone ? 0 : needNoClient(items);
   // The chosen No client goes only once nothing in any list lacks a client (its rows may no longer need me but still show).
-  const anyNoClient = !phone && items.some((i) => !i.clientKey);
+  const anyNoClient = items.some((i) => !i.clientKey);
+  // UC-3: the phone has the No client chip too, without a number like its other chips, while something in its lists
+  // has no client; the computer's shows while something with no client needs me, as before.
+  const phoneNoClient = phone && items.some((i) => !i.clientKey && !i.done && i.views.length > 0);
+  const showNoClient = noClientNeed > 0 || phoneNoClient || noClient;
   useEffect(() => {
     if (!anyNoClient && noClient) setNoClient(false);
   }, [anyNoClient, noClient]);
@@ -666,7 +670,7 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
           ))}
         </div>
       </header>
-      {chipClients.length + (noClientNeed > 0 || noClient ? 1 : 0) > 1 && (
+      {chipClients.length + (showNoClient ? 1 : 0) > 1 && (
         <div className="ib4-chips" role="group" aria-label="Clients">
           <button type="button" className={`ib4-chip${clients.length || noClient ? "" : " on"}`} aria-pressed={!clients.length && !noClient} aria-label={chipName("All clients", allNeed)} title={chipHint(null, allNeed) ?? undefined} onClick={() => toggleClient(null)}>
             All clients
@@ -679,10 +683,10 @@ export function InboxPage({ nav, data, version, onNav, onChanged }: { nav: Extra
               {(need.get(k) ?? 0) > 0 && <span className="ib4-count">{need.get(k)}</span>}
             </button>
           ))}
-          {(noClientNeed > 0 || noClient) && (
+          {showNoClient && (
             <button type="button" className={`ib4-chip ib4-chip-none${noClient ? " on" : ""}`} data-chip="no-client" aria-pressed={noClient} aria-label={chipName(NO_CLIENT, noClientNeed)} title={chipHint(NO_CLIENT, noClientNeed) ?? undefined} onClick={() => setNoClient((v) => !v)}>
               {NO_CLIENT}
-              <span className="ib4-count">{noClientNeed}</span>
+              {noClientNeed > 0 && <span className="ib4-count">{noClientNeed}</span>}
             </button>
           )}
         </div>

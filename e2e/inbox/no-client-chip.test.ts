@@ -1,6 +1,7 @@
 // UC-2 (browser, demo mode): the Inbox's chips add up to the tab's number in every case. Something the tab counts with
 // no client (a promise I added with none) gets a "No client" chip after the clients, with its number, that filters to
-// those rows; with nothing of that kind there is no such chip. Fictional data only.
+// those rows; with nothing of that kind there is no such chip. UC-3: the phone has it too, without a number.
+// Fictional data only.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Page } from "playwright-core";
 import { CHROMIUM, freshPage, startDemo, type Harness } from "../harness.ts";
@@ -68,13 +69,29 @@ describe.skipIf(!CHROMIUM)("UC-2: the Inbox's chips add up to the tab's number (
     expect(await page.locator('[data-chip="no-client"]').count()).toBe(0);
   }, T);
 
-  it("the phone's chips are unchanged: no No client chip", async () => {
-    const added = await call(page, "followup.add", { what: "Send the cutover checklist", due: "2026-11-01" });
+  // UC-3 item 5: the phone has the No client chip too, without a number like its other chips, only while something
+  // has no client; it filters to those rows.
+  it("the phone: a No client chip, without a number, only while something has no client", async () => {
     const phone = await freshPage(h, { width: 390, height: 844 });
-    await phone.page.evaluate(() => (location.hash = "#/inbox/promises"));
-    await phone.page.locator(".ib4-chips .ib4-chip").first().waitFor({ timeout: 30_000 });
-    expect(await phone.page.locator('[data-chip="no-client"]').count()).toBe(0);
+    const go = async () => {
+      await phone.page.reload();
+      await phone.page.evaluate(() => (location.hash = "#/inbox/promises"));
+      await phone.page.locator(".ib4-chips .ib4-chip").first().waitFor({ timeout: 30_000 });
+      await phone.page.waitForTimeout(300);
+    };
+    await go();
+    expect(await phone.page.locator('[data-chip="no-client"]').count(), "nothing without a client: no chip").toBe(0);
+    // Each page is its own demo session: the promise is added in the phone's.
+    const added = await call(phone.page, "followup.add", { what: "Send the cutover checklist", due: "2026-11-01" });
+    await go();
+    const none = phone.page.locator('[data-chip="no-client"]');
+    await expect(none.textContent()).resolves.toBe("No client");
+    expect(await phone.page.locator(".ib4-chips .ib4-count").count(), "the phone's chips have no numbers").toBe(0);
+    await none.click();
+    await expect.poll(() => phone.page.locator("li.ib4-row .ib4-row-title").allTextContents()).toEqual(["Send the cutover checklist"]);
+    expect((await call(phone.page, "followup.delete", { id: added.data.followUp.id })).ok).toBe(true);
+    await go();
+    expect(await phone.page.locator('[data-chip="no-client"]').count(), "once nothing lacks a client, the chip goes").toBe(0);
     await phone.page.close();
-    await call(page, "followup.delete", { id: added.data.followUp.id });
   }, T);
 });
