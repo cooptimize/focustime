@@ -54,11 +54,13 @@ export const isTransition = (c: VmChip) => c === "starting" || c === "stopping";
 // ---- VM-4: a read that failed ----
 
 /**
- * Why FocusTime couldn't read the VM's state, in the four words the chip uses: it can't reach Azure (no network, a
- * time-out, or FocusTime itself didn't answer the page), Azure is busy (it asked to wait, or had a fault of its own),
- * the Azure sign-in needs doing again, or Azure refused (permission, not found, any other no).
+ * Why FocusTime couldn't read the VM's state, in the words the chip uses: it can't reach Azure (no network, a time-out,
+ * or FocusTime itself didn't answer the page), Azure is busy (it asked to wait, or had a fault of its own), the Azure
+ * sign-in needs doing again, or Azure said no. VM-6: a no says Azure's reason when its code gives one: not allowed right
+ * now (AuthorizationFailed: the person's access, perhaps switched on for a time), not found (moved or deleted), or
+ * refused (any other no, or none given, as production's 403s of Nov 17 and 18).
  */
-export type ReadProblem = "network" | "busy" | "sign_in" | "refused";
+export type ReadProblem = "network" | "busy" | "sign_in" | "not_allowed" | "not_found" | "refused";
 /** While a read fails the chip keeps the last state it knew and asks again this often. */
 export const CHECK_AGAIN_MS = 10_000;
 /** After failing this long it says the reason on its face. */
@@ -66,11 +68,20 @@ export const PROBLEM_AFTER_MS = 2 * 60_000;
 /** After that, it keeps asking, a little less often. */
 export const CHECK_LATER_MS = 30_000;
 
-/** The reason from a failure's kind (AzureError or AuthFailure kinds) and, for Azure, its HTTP status. */
-export function readProblemOf(kind: string, status = 0): ReadProblem {
+/** VM-6: Azure's codes for the person's access refusing the call (a role missing now, or one switched on for a time). */
+const NOT_ALLOWED = /^(AuthorizationFailed|LinkedAuthorizationFailed)$/;
+
+/**
+ * The reason from a failure's kind (AzureError or AuthFailure kinds) and, for Azure, its HTTP status and (VM-6) its
+ * error code. A sign-in asked for again is the sign-in whatever the status (sources/azure/client.ts reads a 403's
+ * challenge too).
+ */
+export function readProblemOf(kind: string, status = 0, code = ""): ReadProblem {
   if (kind === "network" || kind === "timeout" || kind === "keyring") return "network";
   if (kind === "throttled" || status >= 500) return "busy";
   if (kind === "not_signed_in" || kind === "consent" || kind === "expired" || kind === "not_connected" || kind === "misconfigured" || kind === "error") return "sign_in";
+  if (kind === "not_found") return "not_found";
+  if (kind === "forbidden" && NOT_ALLOWED.test(code)) return "not_allowed";
   return "refused";
 }
 
@@ -80,6 +91,9 @@ export const READ_NEXT: Record<ReadProblem | "app", string | null> = {
   network: "Check your connection; FocusTime keeps trying",
   busy: "Nothing to do; FocusTime keeps trying",
   sign_in: null,
+  // VM-6: the reason says what to do (switch the access on again; choose another VM).
+  not_allowed: null,
+  not_found: null,
   refused: "Your access may have changed: check the Azure portal or ask an admin",
   app: "Check your connection; FocusTime keeps trying",
 };
@@ -87,10 +101,28 @@ export const READ_PROBLEM: Record<ReadProblem | "app", { short: string; text: st
   network: { short: "Can't reach Azure", text: "FocusTime can't reach Azure to read your VM's state. It keeps trying; nothing to do unless this lasts." },
   busy: { short: "Azure is busy", text: "Azure is busy and asked FocusTime to wait. It keeps trying; nothing to do." },
   sign_in: { short: "Sign in to Azure again", text: "Azure wants you to sign in again before FocusTime can read your VM. Choose Allow Azure access." },
+  // VM-6: Azure's own reasons, from its code. The face stays short; the menu says the rest.
+  not_allowed: { short: "Azure refused", text: "Azure says your sign-in isn't allowed to read this VM right now. If your access is switched on for a time, switch it on again in Azure." },
+  not_found: { short: "VM not found", text: "Azure can't find this VM. It may have been moved or deleted." },
   refused: { short: "Azure refused", text: "Azure refused to show your VM's state. If this lasts, check in the Azure portal that you can still see the VM, or tell an admin." },
   // The page couldn't reach FocusTime itself (the request for the status failed).
   app: { short: "Can't reach FocusTime", text: "FocusTime isn't answering, so it can't check your VM. It keeps trying; nothing to do unless this lasts." },
 };
+/** VM-6: the menu's line when the state was read but the auto-shutdown time wasn't (the state still shows). */
+export const SCHEDULE_UNREAD = "FocusTime couldn't read your VM's auto-shutdown time.";
+
+/**
+ * VM-6: "Last read 2:14 PM" in my zone, the time of the last good read of the state (never of a failed one); "Last read
+ * Tue 2:14 PM" when that was another day. Null when nothing was read yet.
+ */
+export function lastReadText(at: string | null, myZone: string, today: IsoDate): string | null {
+  if (!at) return null;
+  const z = Temporal.Instant.from(at).toZonedDateTimeISO(myZone);
+  const h = z.hour % 12 === 0 ? 12 : z.hour % 12;
+  const time = `${h}:${String(z.minute).padStart(2, "0")} ${z.hour < 12 ? "AM" : "PM"}`;
+  const day = z.toPlainDate().toString() === today ? "" : `${["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][z.dayOfWeek - 1]} `;
+  return `Last read ${day}${time}`;
+}
 export const CHECKING = "Checking…";
 
 /**

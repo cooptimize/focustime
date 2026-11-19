@@ -82,11 +82,13 @@ describe("VM-4: one failed read", () => {
     expect(await s.status()).toMatchObject({ chip: "running", checking: null, problem: null, refreshMs: 60_000, readAt: "2026-11-17T21:01:10.000Z" });
   });
 
-  for (const kind of ["network", "busy", "sign_in", "refused"] as const)
-    it(`failing for 2 minutes (${kind}): the reason on the face and in the menu, still the last state`, async () => {
+  // VM-6: the fake's "refused" is AuthorizationFailed, which now says Azure's reason (not_allowed); "no_code" is
+  // production's 403 with no code, which keeps VM-4's "Azure refused".
+  for (const [fail, kind] of [["network", "network"], ["busy", "busy"], ["sign_in", "sign_in"], ["refused", "not_allowed"], ["no_code", "refused"]] as const)
+    it(`failing for 2 minutes (${fail}): the reason on the face and in the menu, still the last state`, async () => {
       const s = await setup();
       await s.status();
-      s.readFails.kind = kind;
+      s.readFails.kind = fail;
       s.clock.advance(60_000); // 21:01: the first failed read
       expect((await s.status()).problem).toBeNull();
       s.clock.advance(119_000); // 1 minute 59 seconds of failing

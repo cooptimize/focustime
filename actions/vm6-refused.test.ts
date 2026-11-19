@@ -68,6 +68,7 @@ async function setup() {
   const status = () => run<VmStatus>("vm.status", {});
   /** Reads fail this way for more than 2 minutes: what the chip says then. */
   const failing = async (kind: VmReadFail) => {
+    await status();
     readFails.kind = kind;
     clock.advance(10_000);
     await status();

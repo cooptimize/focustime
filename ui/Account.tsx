@@ -276,21 +276,25 @@ export function VmProvider({ children, onSettings }: { children: ReactNode; onSe
   const openMenu = useCallback((at: { x: number; y: number }) => {
     const s = status;
     const items: MenuItem[] = [];
+    const note: string[] = [];
     if (s?.vm) {
       if (s.canStart) items.push({ id: "start", label: "Start", action: "vm.preview", run: () => act("start") });
       // VM-2: Stop only while it runs, always through its preview. Nothing touches the auto-shutdown (D475).
       if (s.canStop) items.push({ id: "stop", label: "Stop…", action: "vm.preview", run: () => act("deallocate") });
       const consent = () => void signIn(true).then((m) => (m ? notify(m) : void refresh(true)));
       // VM-4: a state that couldn't just be read: how old it is, and after 2 minutes the reason and what to do.
+      // VM-6: under the state, Azure's reason in its words and when the state was last read ("Last read 2:14 PM").
       if (s.checking) {
         const ago = agoText(s.readAt ?? null, Date.now());
         const said = s.problem ? s.problem.text : `FocusTime couldn't read your VM's state just now and is asking again.${ago ? ` The state shown was read ${ago}.` : ""}`;
+        note.push(s.problem ? s.problem.text : "FocusTime couldn't read your VM's state just now and is asking again.");
         // The reason, then what to do (review: the menu said only the reason). A sign-in is one item that signs in.
         const next = s.problem ? READ_NEXT[s.problem.kind] : null;
         const head: MenuItem[] = [s.problem?.kind === "sign_in" ? { id: "checking", label: "Sign in to Azure again…", ...(ago ? { hint: `Read ${ago}` } : {}), run: consent } : { id: "checking", label: s.problem?.short ?? CHECKING, ...(ago ? { hint: `Read ${ago}` } : {}), run: () => void notify(said) }];
         if (next) head.push({ id: "checking-next", label: next, run: () => void notify(said) });
         items.unshift(...head);
       }
+      if (note.length && s.lastRead) note.push(s.lastRead);
       // VM-2: today's automatic start couldn't sign in (said once; the chip's ! until this menu was opened).
       if (s.autoStart?.signInProblem) items.push({ id: "auto-signin", label: "Auto-start couldn't sign in to Azure", hint: "Allow Azure access", run: consent });
       else if (s.needsConsent && s.problem?.kind !== "sign_in") items.push({ id: "consent", label: "Allow Azure access…", run: consent });
@@ -312,7 +316,7 @@ export function VmProvider({ children, onSettings }: { children: ReactNode; onSe
       if (s.autoStart?.leftOff && !s.autoStart.leftOff.seen) void call("vm.autostart_seen", { what: "left_off" }).then(() => refresh(), () => undefined);
     }
     items.push({ id: "choose", label: s?.vm ? "Choose another VM…" : "Find my VM…", action: "vm.choose", run: onSettings });
-    open(at, { title: s?.vm ? `${s.vm.name}: ${s.label ?? CHECKING}` : "My VM", items });
+    open(at, { title: s?.vm ? `${s.vm.name}: ${s.label ?? CHECKING}` : "My VM", items, ...(note.length ? { note } : {}) });
   }, [status, act, open, onSettings, refresh, signIn]);
   const api = useMemo(() => ({ status, refresh, act, openMenu }), [status, refresh, act, openMenu]);
   // The command menu's VM commands open this menu (top right, under the chip).

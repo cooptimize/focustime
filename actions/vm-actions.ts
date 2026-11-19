@@ -12,7 +12,7 @@ import { localToday } from "../week/dates.ts";
 import type { IsoDate } from "../week/types.ts";
 import { AuthFailure } from "../sources/oauth/oauth.ts";
 import { AzureError, parseVmId, sameVm, type AzureClient, type Poll, type VmRef } from "../sources/azure/client.ts";
-import { canStart, canStop, CHECK_AGAIN_MS, CHECK_LATER_MS, CHECKING, chipOf, CHIP_LABEL, chipText, morningPrompt, PROBLEM_AFTER_MS, READ_PROBLEM, readProblemOf, reached, refreshMs, shutdownFrom, shutdownLabel, type PowerState, type ReadProblem, type Shutdown, type VmOp, type VmTransition } from "../plan/vm.ts";
+import { canStart, canStop, CHECK_AGAIN_MS, CHECK_LATER_MS, CHECKING, chipOf, CHIP_LABEL, chipText, morningPrompt, PROBLEM_AFTER_MS, lastReadText, READ_PROBLEM, readProblemOf, reached, refreshMs, shutdownFrom, shutdownLabel, type PowerState, type ReadProblem, type Shutdown, type VmOp, type VmTransition } from "../plan/vm.ts";
 import { autoStartEnvAllowed, autoStartStateOf, clock, dayReason, nextAutoStart, OUTCOMES, outcomeText, outcomeToday, plannedAt, skipText, stopEndsDays, withoutSkip, withSkip, workingWeekdays, type AutoStartState } from "../plan/vm-autostart.ts";
 import type { PlanStore } from "../store/plan-store.ts";
 import { storedIdentity, type MicrosoftAccount } from "./account.ts";
@@ -86,7 +86,7 @@ const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object
 const onlyKeys = (v: unknown, keys: string[]) => v === undefined || v === null || (isObj(v) && Object.keys(v).every((k) => keys.includes(k)));
 
 /** VM-4: the chip's reason for a failed read (plan/vm.ts readProblemOf), from the failure as thrown. */
-export const problemOf = (e: unknown): ReadProblem => (e instanceof AzureError ? readProblemOf(e.kind, e.status) : e instanceof AuthFailure ? readProblemOf(e.kind) : "refused");
+export const problemOf = (e: unknown): ReadProblem => (e instanceof AzureError ? readProblemOf(e.kind, e.status, e.code) : e instanceof AuthFailure ? readProblemOf(e.kind) : "refused");
 
 function errOf(e: unknown): VmError {
   if (e instanceof AzureError) return { kind: e.kind, message: e.message, permission: e.permission };
@@ -328,7 +328,7 @@ async function status(ctx: VmContext, cfg: AppConfig | null, today: IsoDate, fre
     const told = { checking: { since: new Date(checking.since).toISOString() }, problem, needsConsent: checking.err.kind === "consent", error: long || checking.err.kind === "consent" ? checking.err : null, refreshMs: long ? CHECK_LATER_MS : CHECK_AGAIN_MS };
     const autoStart = cfg ? await autoStartView(ctx, cfg, m ? chipOf(m.power, live) : null).catch(() => null) : null;
     // No state read since FocusTime started (a restart): "Checking…", never Unknown.
-    if (!m) return { ...base, ...told, text: CHECKING, readAt: null, autoStart };
+    if (!m) return { ...base, ...told, text: CHECKING, readAt: null, lastRead: null, autoStart };
     const chip = chipOf(m.power, live);
     const label = shutdownLabel(m.schedule, tz, today);
     // Start and Stop stay offered: each reads Azure afresh before it acts (preview, and again at Confirm), so nothing
@@ -336,7 +336,7 @@ async function status(ctx: VmContext, cfg: AppConfig | null, today: IsoDate, fre
     return {
       ...base, ...told, chip, label: CHIP_LABEL[chip], text: chipText(chip, m.schedule, tz, today), power: m.power, transition: live ? { op: live.op, since: live.since } : null, canStart: canStart(chip), canStop: canStop(chip),
       schedule: m.schedule && label ? { label, time: m.schedule.time, status: m.schedule.status, timeZoneId: m.schedule.timeZoneId } : null,
-      noShutdown: !m.schedule && !m.scheduleError, prompt: false, readAt: new Date(m.at).toISOString(), autoStart,
+      noShutdown: !m.schedule && !m.scheduleError, prompt: false, readAt: new Date(m.at).toISOString(), lastRead: lastReadText(new Date(m.at).toISOString(), tz, today), autoStart,
     };
   }
   m = m!;
@@ -352,7 +352,10 @@ async function status(ctx: VmContext, cfg: AppConfig | null, today: IsoDate, fre
     schedule: m.schedule && label ? { label, time: m.schedule.time, status: m.schedule.status, timeZoneId: m.schedule.timeZoneId } : null,
     // VM-2: no schedule read and no read error means Azure has none for this VM.
     noShutdown: !m.schedule && !m.scheduleError,
-    prompt, refreshMs: refreshMs(chip), error: m.scheduleError?.kind === "forbidden" ? m.scheduleError : null, readAt: new Date(m.at).toISOString(), checking: null, problem: null,
+    // VM-6: a refused auto-shutdown read doesn't hide the state: the state shows, and the menu says the time couldn't be
+    // read (before, only a 403 said anything, as the error, and any other failure said nothing).
+   
+    prompt, refreshMs: refreshMs(chip), error: m.scheduleError?.kind === "forbidden" ? m.scheduleError : null, readAt: new Date(m.at).toISOString(), lastRead: lastReadText(new Date(m.at).toISOString(), tz, today), checking: null, problem: null,
     autoStart: cfg ? await autoStartView(ctx, cfg, chip).catch(() => null) : null,
   };
 }
