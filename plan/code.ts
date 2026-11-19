@@ -75,6 +75,14 @@ export const branchName = (ref: string | null | undefined): string | null => {
   return ref.startsWith("refs/heads/") ? ref.slice("refs/heads/".length) || null : ref;
 };
 
+/**
+ * RB-7: a name a branch can have, as far as Code needs (git's own rules: no control characters, spaces, ~ ^ : ? * [ or
+ * backslash, no "..", no empty part, not ending in ".lock" or "/"). Every branch Code reads by name passes this.
+ */
+export const isBranchName = (n: unknown): n is string =>
+  // eslint-disable-next-line no-control-regex
+  typeof n === "string" && /^[^\u0000-\u001f\u007f\s~^:?*[\\]{1,250}$/.test(n) && !n.startsWith("/") && !n.endsWith("/") && !n.includes("//") && !n.includes("..") && !n.endsWith(".lock") && n !== "@" && !n.includes("@{");
+
 export type CodeEntry = { name: string; path: string; folder: boolean };
 /** D3: folders first, then files, A to Z (case-insensitive, then exact, so the order is stable). */
 export function sortEntries<E extends CodeEntry>(list: readonly E[]): E[] {
