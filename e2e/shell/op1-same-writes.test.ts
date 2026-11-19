@@ -85,14 +85,16 @@ describe.skipIf(!CHROMIUM)("OP-1: the same writes reach DevOps (STEP 0.5)", () =
     const { page } = await freshPage(h);
     const since = await logLength(page);
     await go(page, "#/status");
-    await page.locator(".st-count").waitFor({ timeout: 30_000 });
+    await page.locator("[data-updated]").waitFor({ timeout: 30_000 });
+    // ST-1: every feature, as main showed them.
+    await page.locator("[data-show=all]").click();
     const clients = page.locator(".st-client");
     for (let i = 0; i < 2; i++) {
       const art = clients.nth(i).getByRole("article").first();
-      await art.getByRole("button", { name: "Add a line" }).click();
+      await art.getByRole("button", { name: "Write a line" }).click();
       await art.getByRole("textbox").last().fill(i === 0 ? "Sign-up form designed; review with purchasing on Friday." : "Export filter in test; finance checks it Monday.");
     }
-    await page.getByRole("button", { name: "Push all" }).click();
+    await page.locator("[data-foot-bar]").getByRole("button", { name: "Push to DevOps" }).click();
     // Main showed both clients in one dialog; the one preview shows one client at a time.
     if (RECORD) await confirmAll(page);
     else await confirmPreviews(page, 2);

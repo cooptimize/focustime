@@ -1,4 +1,4 @@
-// OP-1 A2: Week › Status's Push all and Undo through the app's one preview. More than 10 lines go 10 at a time and the
+// OP-1 A2: Week › Status's Push (ST-1: Push to DevOps, on the foot bar) and Undo through the app's one preview. More than 10 lines go 10 at a time and the
 // screen says so first; Not now on the first preview sends nothing and opens no other; a comment delete shows the
 // comment going and is undone through the same preview; a line naming another client is flagged, and Replace writes
 // "another client" in what reaches DevOps and in "Pushed just now"; on the phone the preview fits.
@@ -15,12 +15,13 @@ const log = async (page: Page) => (await call(page, "devops.log", {})).data.entr
 async function openStatus(page: Page) {
   await page.evaluate(() => (location.hash = "#/status"));
   await page.reload();
-  await page.locator(".st-count").waitFor({ timeout: 30_000 });
+  await page.locator("[data-updated]").waitFor({ timeout: 30_000 });
+  await page.locator("[data-show=all]").click();
 }
 const article = (page: Page, name: string) => page.getByRole("article", { name });
 async function addLine(page: Page, feature: string, text: string) {
   const a = article(page, feature);
-  await a.getByRole("button", { name: "Add a line" }).click();
+  await a.getByRole("button", { name: "Write a line" }).click();
   await a.getByRole("textbox").last().fill(text);
   await a.getByRole("textbox").last().press("Escape");
 }
@@ -36,10 +37,10 @@ describe.skipIf(!CHROMIUM)("OP-1: Status through the one preview", () => {
     const { page, errors } = await freshPage(h);
     await openStatus(page);
     for (let i = 1; i <= 11; i++) await addLine(page, "Order history export", `Step ${i} of the export work is done.`);
-    await expect.poll(() => page.locator(".st-pending-count").textContent()).toBe("11 lines to push");
+    await expect.poll(() => page.locator(".st-pending-count").textContent()).toBe("11 lines ready to push");
     await expect.poll(() => page.locator(".st-parts").textContent()).toBe("11 lines go in 2 previews, 10 at most in each.");
     const before = (await log(page)).length;
-    await page.getByRole("button", { name: "Push all" }).click();
+    await page.locator("[data-foot-bar]").getByRole("button", { name: "Push to DevOps" }).click();
     const d = onePreview(page);
     await d.locator(".dw-step", { hasText: "Preview 1 of 2" }).waitFor();
     expect(await d.locator(".dw-row").count()).toBe(10);
@@ -48,8 +49,8 @@ describe.skipIf(!CHROMIUM)("OP-1: Status through the one preview", () => {
     await page.waitForTimeout(800);
     expect(await onePreview(page).count()).toBe(0);
     expect((await log(page)).length).toBe(before);
-    expect(await page.locator(".st-pending-count").textContent()).toBe("11 lines to push");
-    await page.getByRole("button", { name: "Push all" }).click();
+    expect(await page.locator(".st-pending-count").textContent()).toBe("11 lines ready to push");
+    await page.locator("[data-foot-bar]").getByRole("button", { name: "Push to DevOps" }).click();
     const seen = await confirmPreviews(page, 2);
     expect(seen.map((x) => x.rows)).toEqual([10, 1]);
     await expect.poll(async () => (await log(page)).length - before, { timeout: 30_000 }).toBe(11);
@@ -65,7 +66,7 @@ describe.skipIf(!CHROMIUM)("OP-1: Status through the one preview", () => {
     const a = article(page, "Order history export");
     const mine = a.locator(".st-comment", { hasText: "CSV export is merged" }).first();
     await mine.getByRole("button", { name: "Delete" }).click();
-    await page.getByRole("button", { name: "Push all" }).click();
+    await page.locator("[data-foot-bar]").getByRole("button", { name: "Push to DevOps" }).click();
     const d = onePreview(page);
     await d.waitFor();
     await expect.poll(() => d.locator(".wd-fields").textContent()).toContain("CSV export is merged");
@@ -86,7 +87,7 @@ describe.skipIf(!CHROMIUM)("OP-1: Status through the one preview", () => {
     const { page } = await freshPage(h);
     await openStatus(page);
     await addLine(page, "Order history export", "Same filter as the one we built for Harbor Health last month.");
-    await page.getByRole("button", { name: "Push all" }).click();
+    await page.locator("[data-foot-bar]").getByRole("button", { name: "Push to DevOps" }).click();
     const d = onePreview(page);
     await d.locator(".mention-flag").waitFor();
     await expect.poll(() => d.locator(".mention-flag").textContent()).toMatch(/This mentions Harbor.*Northwind's DevOps and Monday's report/);
@@ -107,7 +108,7 @@ describe.skipIf(!CHROMIUM)("OP-1: Status through the one preview", () => {
     await openStatus(page);
     await addLine(page, "Order history export", "Export filter in test; finance checks it Monday.");
     await addLine(page, "Internal reporting refresh", "Sign-up form designed; review with purchasing on Friday.");
-    await page.getByRole("button", { name: "Push all" }).click();
+    await page.locator("[data-foot-bar]").getByRole("button", { name: "Push to DevOps" }).click();
     const d = onePreview(page);
     await d.locator(".dw-step").waitFor();
     const fits = await page.evaluate(() => {

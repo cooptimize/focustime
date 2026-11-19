@@ -14,7 +14,7 @@ const THURSDAY = "2026-11-05T10:00:00-05:00";
 
 async function openReport(page: Page, client: string) {
   await page.goto(`${new URL(page.url()).origin}/#/week/status`);
-  await page.locator(".st-count").waitFor({ timeout: 30_000 });
+  await page.locator("[data-updated]").waitFor({ timeout: 30_000 });
   await page.getByRole("combobox", { name: "Client report" }).selectOption({ label: `${client} report` });
   await page.getByRole("heading", { name: `${client} report` }).waitFor({ timeout: 30_000 });
   await page.locator(".st-report").waitFor();
@@ -29,7 +29,7 @@ describe.skipIf(!CHROMIUM)("the client report (SR-2)", () => {
     await h?.stop();
   }, T);
 
-  it("shows Northwind's whole report, and a line added from No update yet lands in it after Push all", async () => {
+  it("shows Northwind's whole report, and a line added from No update yet lands in it after Push to DevOps", async () => {
     const { page, errors } = await freshPage(h);
     await openReport(page, "Northwind");
     await expect.poll(() => page.locator(".st-sends").textContent()).toBe("Draft for Monday, Nov 9 · Kat sends it at 7:00 AM · last sent Nov 2");
@@ -42,26 +42,26 @@ describe.skipIf(!CHROMIUM)("the client report (SR-2)", () => {
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/sr2-report-1920.png`, fullPage: true });
     await shotBoth(page, "sr2-report-view-1920", page.locator(".st-report"));
     // No update yet, folded below the report: open it and add a line to Supplier onboarding.
-    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    await page.getByRole("button", { name: "Write", exact: true }).click();
     const nu = page.locator(".st-noupdate");
     await nu.locator("summary").click();
     await expect.poll(() => nu.locator(".st-nu-head .st-title").allTextContents()).toEqual(["Supplier onboarding", "Store locator"]);
     await expect.poll(() => nu.locator(".st-nu").first().locator(".st-meta").textContent()).toContain("Owner Alex Rivera");
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/sr2-no-update-1920.png`, fullPage: true });
-    await nu.locator(".st-nu").first().getByRole("button", { name: "Add a line" }).click();
+    await nu.locator(".st-nu").first().getByRole("button", { name: "Write a line" }).click();
     await nu.getByRole("textbox", { name: "New line for Supplier onboarding" }).fill("Sign-up form designed; purchasing reviews it Friday.");
     await expect.poll(() => nu.locator(".st-box-foot .muted").first().textContent()).toContain("Shows as Alex Rivera");
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/sr2-add-line-1920.png`, fullPage: true });
-    await page.getByRole("button", { name: "Push all" }).click();
+    await page.locator("[data-foot-bar]").getByRole("button", { name: "Push to DevOps" }).click();
     await confirmPreviews(page, 1);
     // Read back: Supplier onboarding is in the report now (backlog order), out of No update yet.
     await expect.poll(() => titles.allTextContents()).toEqual(["Order history export", "Supplier onboarding", "Loyalty points"]);
     await expect.poll(() => page.locator(".st-noupdate .st-nu").count()).toBe(1);
-    await page.locator(".st-push").getByRole("button", { name: "Refresh" }).click();
+    await page.locator(".st-report-tools").getByRole("button", { name: "Refresh" }).click();
     await expect.poll(() => page.locator(".st-fresh").textContent()).toMatch(/^Refreshed /);
     // Back to My features: SR-1's view, unchanged.
     await page.getByRole("button", { name: "My features" }).click();
-    await page.getByRole("heading", { name: /Status report · for Monday, Nov 9/ }).waitFor();
+    await page.getByRole("heading", { name: "Status report" }).waitFor();
     expect(errors).toEqual([]);
     await page.close();
   }, T);
@@ -90,9 +90,9 @@ describe.skipIf(!CHROMIUM)("the client report (SR-2)", () => {
       expect(m.right, `${px}px root font: something reaches past the screen`).toBeLessThanOrEqual(0);
       if (SHOTS) await page.screenshot({ path: `${SHOTS}/sr2-phone-390-${px}px.png`, fullPage: true });
     }
-    // SR-3: the phone writes too (Add a line and Push all are there); No update yet still reads.
-    expect(await page.getByRole("button", { name: "Push all" }).count()).toBe(1);
-    expect(await page.getByRole("button", { name: "Add a line" }).count()).toBeGreaterThan(0);
+    // SR-3: the phone writes too (Write a line is there; ST-1: no Push until a line is ready); No update yet still reads.
+    expect(await page.getByRole("button", { name: "Push to DevOps" }).count()).toBe(0);
+    expect(await page.getByRole("button", { name: "Write a line" }).count()).toBeGreaterThan(0);
     await page.locator(".st-noupdate summary").waitFor();
     await page.close();
   }, T);
