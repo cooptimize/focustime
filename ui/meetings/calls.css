@@ -48,9 +48,10 @@
 .calls-left-bar { width: 40px; height: 3px; }
 .calls-amber { color: var(--watch); font-size: var(--fs-2); }
 .calls-row-end .mini { min-height: 26px; }
-/* Skip all: a quiet button on the selected, hovered or focused row only. */
+/* Skip all: a quiet button on a hovered or focused row that isn't the call open beside the list (MC-6: the open call's
+   Skip all is in its own header, said once). */
 .need-row .calls-skip { display: none; min-height: 0; padding: 0 4px; font-size: var(--fs-2); }
-.need-row:is(:hover, :focus-within, .open) .calls-skip { display: inline-flex; }
+.need-row:not(.open):is(:hover, :focus-within) .calls-skip { display: inline-flex; }
 
 /* A week's rows: one line each: when, the square, the name, the client, the mark and Hide (on hover or focus). */
 .calls-row.one { grid-template-columns: [tick] auto [time] auto [sq] auto [main] minmax(0, 1fr) [end] auto; padding: 3px 8px; border-left: 1px solid transparent; }
