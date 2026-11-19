@@ -170,3 +170,51 @@ a.sp-btn:hover { background: var(--wash-1); }
 .sp-check-box { display: inline-grid; place-items: center; min-width: var(--target, 28px); min-height: var(--target, 28px); cursor: pointer; }
 .sp-check { margin: 0; width: 16px; height: 16px; accent-color: var(--action); cursor: pointer; }
 @media (max-width: 599.98px) { .sp-check-box { min-width: var(--tap, 44px); min-height: var(--tap, 44px); } }
+
+/* SA-5: all of Settings works on the phone. Every control is at least 44 px high with 8 px between two of them; a
+   switch's or a select's whole row takes the press (.sp-press, parts.tsx); a choice's sides are full-width rows;
+   fields take the column's width. At every Text size (the tap target doesn't shrink as the text grows). */
+:root .app.phone :is(.sp-select, .sp-text-input, .sp-num input, .sp-date, .sp-time, .sp-check-box, .sp-swatch) { min-height: 44px; }
+:root .app.phone :is(.sp-select, .sp-text-input, .sp-date) { width: 100%; }
+:root .app.phone :is(.sp-more, .sp-fold) > summary { min-height: 44px; }
+:root .app.phone .sp-more > summary { margin-top: 2px; }
+:root .app.phone .sp-row.sp-press { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+:root .app.phone .sp-row.sp-press:active { background: var(--wash-1); }
+:root .app.phone .sp-row:has(> .sp-control > .sp-choice) > .sp-control { justify-self: stretch; }
+:root .app.phone .sp-choice { display: flex; flex-direction: column; align-items: stretch; width: 100%; gap: 0; }
+:root .app.phone .sp-choice .seg-btn { justify-content: flex-start; width: 100%; min-height: 44px; text-align: left; }
+:root .app.phone :is(.sp-buttons, .sp-controls, .sp-item-actions, .sp-status-actions, .sp-list-add, .sp-form, .sp-item, .sp-item-main) { gap: 8px; }
+:root .app.phone .sp-list { gap: 8px; }
+/* A list on the phone: an entry's controls stack, and Remove and Add take the full width. */
+:root .app.phone .sp-item { flex-direction: column; align-items: stretch; padding: 8px; }
+:root .app.phone .sp-item-main { flex-direction: column; align-items: stretch; }
+:root .app.phone .sp-item-actions { margin-left: 0; }
+:root .app.phone :is(.sp-item-actions, .sp-list-add) > .sp-btn { flex: 1 1 100%; }
+/* The section-made controls inside Settings on a phone: a fold's summary, a link standing alone on its line, a client
+   chat's Open in Teams and its members, a deployment item's Default, the VM's field and buttons. */
+:root .app.phone :is(.ps-body, .ps-most) details > summary { padding-block: max(0px, calc((44px - 1lh) / 2)); }
+:root .app.phone :is(.ps-body, .ps-most) .sp-more { margin-top: 8px; }
+:root .app.phone :is(.ps-body, .ps-most) .sp-more > summary { min-height: 44px; padding-block: 0; display: flex; align-items: center; }
+:root .app.phone :is(.ps-body, .ps-most) p > a:only-child, :root .app.phone :is(.ps-body, .ps-most) a.link-btn { display: inline-flex; align-items: center; min-height: 44px; }
+:root .app.phone :is(.ps-body, .ps-most) .dep-on { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; }
+:root .app.phone :is(.ps-body, .ps-most) .dep-list li { row-gap: 8px; }
+:root .app.phone :is(.ps-body, .ps-most) :is(.dchat-card, .set-field, .sp-below) { gap: 8px; row-gap: 8px; }
+:root .app.phone :is(.ps-body, .ps-most) .set-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+:root .app.phone :is(.ps-body, .ps-most) .set-actions > :is(button, a) { min-height: 44px; }
+:root .app.phone :is(.ps-body, .ps-most) select { min-height: 44px; max-width: 100%; }
+:root .app.phone :is(.ps-body, .ps-most) .set-check { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+:root .app.phone :is(.ps-body, .ps-most) :is(.sp-more, .sp-fold) { margin-block: 8px; }
+:root .app.phone :is(.ps-body, .ps-most) a { overflow-wrap: anywhere; white-space: normal; }
+/* A row that opens a page (a client): its detail goes under its name on a phone. */
+:root .app.phone .sp-link-item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 10px; padding-block: 8px; }
+:root .app.phone .sp-link-item > .sp-swatch-dot { grid-column: 1; grid-row: 1 / span 2; }
+:root .app.phone .sp-link-item > .sp-label { grid-column: 2; grid-row: 1; }
+:root .app.phone .sp-link-item > .sp-help { grid-column: 2; grid-row: 2; }
+:root .app.phone .sp-link-item > .sp-chev { grid-column: 3; grid-row: 1 / span 2; }
+/* A list entry's two-to-four choice (a standing block's day and half) stays one row of 44 px sides. */
+:root .app.phone .sp-item .sp-choice { flex-direction: row; flex-wrap: wrap; }
+:root .app.phone .sp-item .sp-choice .seg-btn { flex: 1 1 0; width: auto; justify-content: center; }
+:root .app.phone .sp-fold[open] > summary { margin-bottom: 8px; }
+/* Admin's rows on a phone: a select and the buttons beside it keep 8 px apart. */
+:root .app.phone .ps-body :is(.dchat-title, .dchat-card) { row-gap: 8px; column-gap: 8px; }
+:root .app.phone .ps-body td :is(select, button, a) { margin-block: 4px; }
