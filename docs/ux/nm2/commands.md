@@ -7,7 +7,7 @@ Verdicts:
 - **wrong words**: it works, but its title, its group, its reason or where it opens is out of date.
 - **hollow**: its title names something that has no screen any more, or it only opens a place where what it names can't be done.
 
-The reading taken where it was unclear (`docs/open-questions.md`, NM-2): a command that opens the place where the thing it names is done is true, as most of the menu is (Add a calendar by link opens Calendars added by link). A command that names a conversation or a request is hollow unless From chats offers the same thing on a suggestion; then its words change to say suggestion.
+The reading taken where it was unclear (`docs/open-questions/nm-2.md`, NM-2): a command that opens the place where the thing it names is done is true, as most of the menu is (Add a calendar by link opens Calendars added by link). A command that names a conversation or a request is hollow unless From chats offers the same thing on a suggestion; then its words change to say suggestion.
 
 What each row became is in the last column. Hidden commands keep their actions, data and tests; they are listed with their reason in `HOLLOW` in `ui/menu.ts`, beside `HIDDEN_FOR_NOW` (Team's).
 

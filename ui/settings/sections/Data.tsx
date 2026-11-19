@@ -1,6 +1,6 @@
 // SA-3: Settings › Your data: What FocusTime keeps about you first, then what it changed in other apps (Activity's five
 // logs, as tabs), Export, Reset, Delete, Diagnostics and the demo. Diagnostics is its own panel (DX-1) and keeps its
-// insides in a parts card (docs/open-questions.md, SA-2).
+// insides in a parts card (docs/open-questions/sa-2.md, SA-2).
 import { useEffect, useState } from "react";
 import { useDeveloperLoop } from "../../appenv.ts";
 import { call } from "../../api.ts";

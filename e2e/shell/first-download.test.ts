@@ -313,7 +313,7 @@ describe.skipIf(!CHROMIUM)("PF-1: the first download, split by screen (browser, 
     // FT-1: what the server sends for a screen's file is decided by one route, set before any page below fetches a
     // screen, and never added or removed while a page is open. A route added to a page already open let that page's
     // next screen file through now and then under load: Chromium fetched the real file and Playwright saw no request
-    // (docs/open-questions.md, FT-1). `serve` says what the file answers. The old page is told by the page itself (a
+    // (docs/open-questions/ft-1.md, FT-1). `serve` says what the file answers. The old page is told by the page itself (a
     // mark set after the cold start, which a reload clears), not by counting load events: the new page can ask for the
     // file before Playwright reports its load.
     // FT-1: the page counts its own documents (an init script runs at the start of each, before the app's scripts), so

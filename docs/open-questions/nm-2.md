@@ -1,0 +1,39 @@
+## NM-2
+
+- The hidden commands (`HOLLOW` in `ui/menu.ts`) and what would bring each back. Their actions, data and tests are kept.
+  - Conversation ownership (I'll take it, Give to…, Add helper, Release, Take it over, its Undo), Merge (and its preview and Unmerge), Resolve, Reopen, Not a request, Hide for me, Close out a conversation, Move or split messages, Mark seen, the count of conversations that need you: a conversation screen with these buttons again (From chats lists suggestions only since IB-4). Or remove the actions in a later step, with their tests.
+  - The held-back list (Show, Sort in bulk, Not work): a held-back view in the Inbox again (GD-2's list is out of view since IB-4).
+  - This is work: a Chatter list to answer from.
+  - Unlink a conversation's item: a place that lists linked conversations (a linked one leaves From chats). The assistant's `unlink` tool still does it for a promise.
+  - Skip a follow-through suggestion: follow-through suggestions made again.
+  - The `requests.*` commands (context, resolve, reopen, search, sort again, show hidden, refresh) and the `inbox.*` ones (today, count, hide, snooze, looked, seen): a Requests list or an Inbox with those buttons again. Refresh From chats does the same read as requests.refresh.
+  - Snooze a promise and Review heads-ups: Snooze on Promises, or a heads-up review screen.
+  - Add a draft feature to the week, its tier, Nothing this week, Mark as being broken down, Ask for priorities, the carry hint: a week list with these again (WD-1 and WD-2 took it apart).
+  - Ask a lead to look: Team shown again, or a way for a lead to reply outside Team. The lead's notice and the replies are kept; replies to asks made before NM-2 now show only in Team.
+- STEP 0.6: C1 (a to-do's title on a block card) was lost by accident: WD-2 added it, and `PickRow` linked only a stored DevOps URL. Built in this step.
+- Unreachable now, left in place (nothing removed beyond E):
+  - `roadmapRowMenu` in `ui/menu.ts` and its test `ui/roadmapmenu.test.ts`: only `ui/Roadmap.tsx` called it.
+  - The CSS for the day bar's `kbd` and for `ui/Roadmap.tsx`'s classes.
+  - `conv.closed_shown_days` is hidden but still read by the Inbox's read and the assistant's commitments read; whether those reads still need it is a question for a later step.
+- Taken as the reading that changes less:
+  - Settings' and Admin's lists are named Asking phrases (a client's message with one is checked for what it asks); "Urgent request" stays the notice's name, since it is a notice kind people switch.
+  - The send-can't-take-a-Must notice to the other leads said Open Team and opened Week; it now says Open Week, like Ask to look's.
+  - The command "Settings" moves from the group Week to the group Settings.
+  - The Renamed list's word budget went from 260 to 270 rather than dropping an older row.
+  - The Technical docs' "Checked against" lines are left as they were: only the lines this step changed were checked again.
+- From the review:
+  - The assistant's `unlink` tool still names a conversation as well as a promise. A linked conversation leaves From chats, so the inbox read the tool depends on never lists one, and in practice only promises are unlinked. Left as it is; drop the conversation case from the tool when its actions are next looked at.
+  - Replies to Ask a lead to look made before NM-2 show only in Team (hidden); the `look_reply` notice opens Week, where the reply isn't shown. Show the reply in the block panel's You sent again, or show Team?
+  - To place's group still has the heading "From your team" (its own section heading, not a pointer). Rename it with the next pass on the block panel's words?
+  - The pointer check reads only the first segment of a path ("Settings › Profile › Run setup again" checks Profile).
+  - The command menu shows the From chats group heading twice: the registry's commands keep their order (RS-2 D7), and the Inbox's keys sit between two runs of From chats commands.
+- From the newcomer review (the demo only), not changed here:
+  - On Week, a to-do's title on a card is a link with tabindex -1, like every control inside a card (the cards use roving focus: arrows and Enter open the block panel). A click opens the story card; the keyboard reaches the same card from the block panel. Should a card's title join the card's tab order?
+  - The demo's chats contradict each other: From chats has suggestions and "last checked", while Settings › Client chats and Admin › Clients say "Not read yet", Admin › Status "Last poll: never", and Chat.Read shows Missing. Demo data, not a screen; a demo pass should line them up.
+  - Near-duplicates in the command menu: Promises twice, "Link a promise to a DevOps item" twice, "From chats" twice, "Close the loop without sending" beside "Close the loop on a promise without sending", "Send a test notification" beside "Send a sample notification".
+  - Sign out and Sign in with Microsoft open Settings › Profile, where the buttons are, rather than doing it.
+  - Admin › Status and Admin › Audit carry Admin's "Changes save as you make them" subtitle though nothing there changes.
+  - The demo's Lunch reads "12:30-12:30"; Profile promises first-run setup, which the demo says isn't part of it.
+  - On the phone's Week, the week's Previous and Next sit just above the day's and look the same (each is named).
+  - "1 late" chips and the Demo tag are about 22 px tall on the phone.
+

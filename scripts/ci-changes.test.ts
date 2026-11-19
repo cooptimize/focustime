@@ -17,7 +17,7 @@ const code = (paths: string[]) => classify(paths).stdout.trim();
 describe("which changes skip the heavy jobs (CI-3)", () => {
   it("skips them for docs outside docs/technical only", () => {
     expect(code(["docs/ux/zz1/notes.md"])).toBe("code=false");
-    expect(code(["docs/decisions.md", "docs/open-questions.md", "docs/ux/README.md", "docs/azure/runbook.md", "docs/demo/script.md"])).toBe("code=false");
+    expect(code(["docs/decisions.md", "docs/open-questions.md", "docs/decisions/mc-6.md", "docs/open-questions/mc-6.md", "docs/ux/README.md", "docs/azure/runbook.md", "docs/demo/script.md"])).toBe("code=false");
   });
 
   it.each([

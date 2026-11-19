@@ -1,0 +1,33 @@
+## MC-5: Calls made scannable, a call's page with less to read, Add a call from Pocket (Nov 18)
+
+- **"A recording not yet a call's transcript".** FocusTime doesn't keep which recording became a transcript (only the transcript), so Add a call leaves out a recording that goes with a call that already has a transcript. One that fits a call with no transcript is offered with Review that call.
+- **Hide the list moved into the header's menu.** The brief lists the menu as Refresh, Check Pocket and Select calls; Hide the list had to go somewhere at the head, and the menu is the head's one control.
+- **When Pocket was last checked is the menu item's hint** ("Checked 4:30 PM"), not a line.
+- **After Set my Pocket address the line says "Pocket address saved" once,** then what is still left out, if anything.
+- **MC-4's amber note in two words and a day** reads "Transcript goes Nov 26": the day the call's transcript is deleted, for a call left open from an earlier week.
+- **The transcript choices also show while a call waits on its transcript or was marked as having none this week,** where MC-2's upload box showed, so nothing that was reachable is lost.
+- **Review that call** opens that call with the recording chosen: its setup for a calendar call nobody has read, its page for a call FocusTime keeps.
+- **A file chosen in Add a call is uploaded once the call's page opens,** so the date question (a Pocket export from another day) is asked there, as for any call.
+- **Upload a transcript from the call's menu replaces a transcript without asking,** as the file picker did before; a drop still asks first.
+- **A hand-added call may take a recording that also fits another listed call.** The recording is mine and the call only I see. The other call still shows it as fitting, and bringing it there too would give both calls the same words; that isn't refused.
+- **On the phone Skip all reads "Skip all" or "Skip last N"** in the call's header, its full words as its label, so the header keeps one row.
+- **CLAUDE.md's Pocket sentence** changes only to name the presses as they are now and the hand-added call; it is quoted in the pull request for the product owner's OK.
+- **From the demo walkthrough, left for a later step** (each would reach past MC-5's brief or into words other screens share):
+  - (Answered by MC-6, item 13.) My own promise reads "in Alex's Promises" and the toast "Added to Alex's Promises" (MC-1's words). "your Promises" needs my id on each proposal.
+  - (Answered by MC-6, item 7.) With a call open, Skip all is on its selected row and in its header. The brief puts it on the selected row; hiding it there while the same call is open would say it once.
+  - (Answered by MC-6, item 6.) The Show chips' counts repeat their group heads' counts ("New in DevOps 3" and "NEW IN DEVOPS 3"), and the chip says "Comments" where the head says "Comments on stories".
+  - (Answered by MC-6, item 19.) Add a call offers a recording that already has a row ("Which client?"). Choosing the client on that row is shorter. Leaving rows with a client question out of Add a call's list would be a change to what Add a call offers.
+  - (Answered by MC-6, item 8.) In Add a call, a chosen recording's time shows on its card and again beside About.
+  - (Answered by MC-6, item 11.) A quote says time into the call ("1:05"), the Transcript says clock time ("1:01 PM").
+  - "2 people" counts the invite; a Pocket transcript names "Speaker 2" with no way to name a speaker.
+  - (Answered by MC-6, item 10.) The Undo toast from Keep stays through a later Skip, so its Undo can look like it undoes the Skip.
+  - (Answered by MC-6, item 14.) "Open 24" counts the calls in the folds too.
+- **From the pictures review, left for a later step:**
+  - (Answered by MC-6, item 2.) Week row titles are cut at 1440 ("Northwind data model ...") where they showed whole before: the time, the picker and the mark take a fixed share of the row. Section 11 says nothing is cut to make a row one line; letting the title wrap to a second line would answer it.
+  - (Answered by MC-6, item 3.) On the phone the line under a call's title wraps with its separator at the start of the next line ("· Reviewers see it").
+  - (Answered by MC-6, item 4.) On the phone the Show row scrolls, so "0 of 11 decided" is past its right edge until scrolled.
+  - (Answered by MC-6, item 5.) Group heads ("NEW IN DEVOPS 3") are a size above the page's other section labels, and each group card keeps its colored left stripe (MC-1's look).
+  - (Answered by MC-6, item 18.) Add a call's Day and Starts are the browser's own date and time fields ("11/05/2026", "04:30 PM"), as MC-1's form was.
+  - (Answered by MC-6, item 12.) Durations read "2 h 15 min" (MC-2b's Pocket words) where the time words elsewhere are "2h 15m".
+  - The Transcript view's "Kept 30 days, for this call's reviewers and attendees only. Read only." (MC-2) is kept: it says how long, which the header doesn't.
+  - (Answered by MC-6, item 9.) "Done selecting" is drawn as the ticked rows' bar's button before anything is ticked.

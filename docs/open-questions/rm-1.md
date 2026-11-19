@@ -1,0 +1,13 @@
+## RM-1
+
+- CLAUDE.md GD-2 point 3 says a held-back message is "sortable by hand". The held list's commands were off the screen since IB-4 and RM-1 removed them, so held messages stay held until an admin changes a client's names (`held_recheck`) or retention deletes them. Reword the rule, or bring sorting by hand back on the Inbox?
+- `conversations.undo_ownership` stays for assistant proposals confirmed before IB-4 (confirmed proposals are deleted 24 hours after they're done). Remove it in the next release that follows a prod deploy of IB-4 by more than a day?
+- `weekplan.add_draft` and `weekplan.draft_tier` are hollow since WD-2 but weren't on RM-1's list, so they stay. Remove them in a later step?
+- The ownership backfill (`conversation_ownership_backfill`) still runs once per build and still writes the claim columns. Retire it once every environment has run it?
+- Tables, columns and settings nothing writes any more, with what still reads each, are in `docs/cleanup-step-2.md` (RM-1). Each drop needs the product owner's OK; `work_templates` was earlier said to be kept "for a later use". The patterns tables hold user ids in `started_by` and `made_by` that Delete my data never cleared; dropping the tables would clear them.
+- `conversation_suggestions` has had no live writer since before RM-1 (only tests called `addSuggestion` on main). Stored suggestions still show with Post and Skip. Remove the writer and, later, the table?
+- Exports already dead on main, not behind a hidden feature, were left: `pinLabel`, `pickDoneFrom`, `otherStoriesLine` (plan/weeklist), `planBudget`, `pinnedToPto`, `PINNED_TO_PTO` (plan/weekplan), `weekModeStatus` (plan/modes), `MoveTo` and `openBreakdown` (ui/WeekStories), `suggestionCount`, `tabCount`, `escalateAt`, `kindOf`, `estimateMicros`, `prioritiesKey`. A later cleanup can take them.
+- `docs/analysis/wp1-*.md` describe the removed patterns page; they are kept as a record with a note at the top. Delete them?
+- Old Ask to look requests: my unanswered ones still show in Inbox › Waiting on for 14 days, but nobody can reply any more, and a lead's earlier reply no longer shows anywhere (it was drawn only in the removed views). Leave them to age out, or stop listing them in Waiting on?
+- Found in RM-1's demo review, not caused by it (also on main): the Send to… dialog's success line says "You'll see their answer in Plan" (`ui/Team.tsx`), but Week has no Plan mode; the answer shows in the block panel's You sent. An Inbox address for a conversation that doesn't exist (`#/inbox/conversation/<id>`) lands on the Inbox with no error text but logs a 404 in the console. After Accept and schedule the address goes from the day's block to `#/week` while the panel stays on that block. Fix in a later step?
+

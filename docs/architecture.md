@@ -205,7 +205,7 @@ The hosted image: a build stage, then a slim Node runtime that runs as the `node
 The written docs.
 
 - `technical/` is how FocusTime works now, also read in the app (`#/docs`); its [README](technical/README.md) lists the pages.
-- `decisions.md` and `open-questions.md` are the logs of every decision and every open question, by step.
+- `decisions/` and `open-questions/` hold every decision and every open question, one file per step (`decisions/README.md` says how a step adds its own); `decisions.md` and `open-questions.md` are their indexes, one line per step.
 - `design/` holds the style guide, the wording rules and the brand; `setup/` the setup guides for the Teams bot, meeting capture and Close the loop; `azure/` the Azure move's plan, reports and runbook.
 - `settings.md`, `guide.md` and `assistant-interface.md` say how to add a setting, how to add to the Guide, and what the assistant's interface is.
 - `history/` keeps each slice's plan as written. `ux/` holds each step's working notes and screenshots. `cleanup-step-2.md` lists what a later cleanup may drop. `analysis/` holds old notes on DevOps patterns, which the app does not have; `scope/` keeps the scope documents the chat steps started from; `teams/` the Teams bot's screenshots. `demo/README.md` says how the demo works (its seeds, Reset demo and what a demo session refuses). `demo/`'s screenshots and script, `roadmap.md`, `demo.md`, `phone.md` and `settings-inventory.md` describe an older app, and each says at its top what date it describes.

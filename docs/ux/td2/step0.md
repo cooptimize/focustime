@@ -51,7 +51,7 @@ Principles, Hard rules, Glossary, Working style and Completion report per increm
 | `docs/roadmap.md` | spec.md as "the living source" | Its new top line says what is current |
 | `docs/azure/A0-plan.md`, `A0-inventory.md`, `A5-report.md`, `runbook.md` | both | Left: `docs/azure/` is out of this step; they land on the note and the guide |
 | `docs/ux/br1/step0.md`, `docs/ux/nm2/step0.md` | both | Left: records of their steps; they land |
-| `docs/decisions.md` (D457, an RF-1 row) | `docs/architecture.md` | Left: history |
+| `docs/decisions/d19-to-d666.md` (D457, an RF-1 row) | `docs/architecture.md` | Left: history |
 | `docs/open-questions.md` (its first line, NM-1, TD-1 sections) | both | Left: only this step's section is edited |
 | `actions/dispatch.ts`, `config/starter.ts`, `week/risks.ts`, `week/types.ts` (comments) | spec sections 4, 5 and 6 | Left: code; they land on the note, which says where the spec went |
 | `store/retention.ts` (a comment) | "docs/architecture.md, Retention" | Left: code. No such section existed before either; retention is in `docs/technical/data.md` (noted in open questions) |

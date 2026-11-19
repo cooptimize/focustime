@@ -1,7 +1,7 @@
 // OP-1: one DevOps preview on every screen. ui/DevOpsWrite.tsx (useDevOpsWrite's begin, series and retry) is the only
 // place in the UI that asks DevOps for a preview, confirms or retries one, or draws a confirm for a change to a client's
 // DevOps. Every other file reaches DevOps through it. The exceptions are named here with their reason; a new one needs
-// a decision in docs/decisions.md first.
+// a decision in the step's docs/decisions/<step>.md first.
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -21,8 +21,8 @@ const DOOR = "DevOpsWrite.tsx";
 /** Who else may name an action, and why. */
 const EXCEPTIONS: Record<string, { actions: string[]; why: string }> = {
   "Feedback.tsx": { actions: ["feedback.preview", "feedback.send"], why: "Send feedback writes to FocusTime's own backlog, not a client's DevOps; it keeps its own action and shows through the one preview's parts (OP-1 B)" },
-  "WrapUp.tsx": { actions: ["wrapup.preview", "wrapup.confirm", "devops.retry"], why: "not yet moved: Wrap it up's confirm is the server's composite of several changes to one item, previewed again between them; moving it changes the server's write rules (docs/open-questions.md, OP-1)" },
-  "DoneOffer.tsx": { actions: ["wrapup.preview", "wrapup.confirm"], why: "not yet moved: Close out's Wrap up batch is the same composite (docs/open-questions.md, OP-1)" },
+  "WrapUp.tsx": { actions: ["wrapup.preview", "wrapup.confirm", "devops.retry"], why: "not yet moved: Wrap it up's confirm is the server's composite of several changes to one item, previewed again between them; moving it changes the server's write rules (docs/open-questions/op-1.md, OP-1)" },
+  "DoneOffer.tsx": { actions: ["wrapup.preview", "wrapup.confirm"], why: "not yet moved: Close out's Wrap up batch is the same composite (docs/open-questions/op-1.md, OP-1)" },
 };
 /** A line that only names an action (the command menu's metadata), never calls it. */
 const naming = (line: string) => (/^\s*case "[^"]+":/.test(line) || /\baction: "[^"]+"/.test(line)) && !/\bcall\b/.test(line);

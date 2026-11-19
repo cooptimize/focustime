@@ -6,7 +6,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { ARCHIVE, LARGE_OK, OFFICE, runGuards } from "./guards.ts";
+import { ARCHIVE, LARGE_OK, OFFICE, runGuards, stepIndexHits } from "./guards.ts";
 
 const SCRIPT = join(import.meta.dirname, "guards.ts");
 const client = Buffer.from("VyZD", "base64").toString("utf8");
@@ -131,6 +131,23 @@ describe("one guard script (HK-1)", () => {
     writeFileSync(join(d, "ui/small.png"), Buffer.alloc(299 * 1024, 1));
     expect(runGuards(d).hits.map((h) => h.at)).toEqual(["assets/huge.bin: 301 KB"]);
     expect(cli(d).status).toBe(1);
+  });
+
+  it("fails on a step heading or a decision row added to an index, and passes the index without it (DOC-1)", () => {
+    const d = repo();
+    mkdirSync(join(d, "docs/decisions"), { recursive: true });
+    const index = "# Decision log\n\n- [MC-6: Calls polish (Nov 18)](decisions/mc-6.md)\n";
+    writeFileSync(join(d, "docs/decisions.md"), index);
+    writeFileSync(join(d, "docs/decisions/mc-6.md"), "## MC-6: Calls polish (Nov 18)\n\n| # | Status | Decision |\n|---|---|---|\n| - | Done | A row. |\n");
+    expect(runGuards(d).hits).toEqual([]);
+    expect(cli(d).status).toBe(0);
+    writeFileSync(join(d, "docs/decisions.md"), `${index}\n## ZZ-9: A made-up step (Nov 19)\n\n| # | Status | Decision |\n|---|---|---|\n| - | Done | A row. |\n`);
+    expect(runGuards(d).hits.map((h) => h.at.split(":").slice(0, 2).join(":"))).toEqual(["docs/decisions.md:5", "docs/decisions.md:7", "docs/decisions.md:8", "docs/decisions.md:9"]);
+    const r = cli(d);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/step docs hit.*docs\/decisions\/<step>\.md/);
+    expect(stepIndexHits("docs/open-questions.md", "# Open questions\n## XY-1\n- Q.\n")).toEqual([2]);
+    expect(stepIndexHits("docs/decisions/mc-6.md", "## MC-6\n| - | Done | x |\n")).toEqual([]);
   });
 
   it("names a reason for every file that may be large", () => {

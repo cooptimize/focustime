@@ -14,8 +14,8 @@ No branch `fix/pv1-zip` and no pull request for this step. Pull request #33 also
 | `docs/ux/U1/designer-prompt.md` | 57, 284, 293 | The same line at the top; section 7's heading says the zip was removed, and the two lines on `screens/live/` say it was removed |
 | `docs/ux/U4/report.md` | 3 | Says the mockups were in the zip, removed in PV-1, and why |
 | `docs/ux/ci3/step0.md` | 56 | A line under its heading says both are off main and remain in history |
-| `docs/open-questions.md` (CI-3) | 1238 | The question says it was answered in PV-1 |
-| `docs/decisions.md` (CI-3) | 2922, 2923 | Left as they were: a record of what CI-3 decided. PV-1's section records the removal |
+| `docs/open-questions/ci-3.md` (CI-3) | 1238 | The question says it was answered in PV-1 |
+| `docs/decisions/ci-3.md` (CI-3) | 2922, 2923 | Left as they were: a record of what CI-3 decided. PV-1's section records the removal |
 | `docs/ux/README.md` | 5 | Already says the archive leaves out `U1/screens/live/`; still true |
 | `scripts/guards.ts` | 92 | The zip leaves `LARGE_OK` (commit B) |
 
@@ -202,7 +202,7 @@ The one archive, `docs/ux/U1/designer-handoff.zip` (87 files), by name only:
 - `screens/demo/`: 49 PNG files
 - `screens/live/`: 32 PNG files, named `<width>-<theme>-<screen>[-p2|-p3].png` (widths 1920 and 3840; screens checkin, closeout, now, planday, planweek, planweek-next, week). The CI-3 notes call these real.
 
-Files that may hold real screens: the 29 `docs/demo/` files of steps 15.4, 15.5, 16.2, 16.3 and 17.6 (`154-*`, `155-*`, `162-*`, `163-*`, `176-*`). The scripts for 15.4 to 16.3 (`scripts/screenshot-step154.mjs` and the others) use demo mode only when given `--demo`, and nothing records that they were given it. Step 17.6's four have no script on main, and nothing records that they came from the demo. Step 16.4's say so (the spec: "Demo screenshots"), and so do the others in the table. They are not removed here; `docs/open-questions.md` (PV-1) lists them by path.
+Files that may hold real screens: the 29 `docs/demo/` files of steps 15.4, 15.5, 16.2, 16.3 and 17.6 (`154-*`, `155-*`, `162-*`, `163-*`, `176-*`). The scripts for 15.4 to 16.3 (`scripts/screenshot-step154.mjs` and the others) use demo mode only when given `--demo`, and nothing records that they were given it. Step 17.6's four have no script on main, and nothing records that they came from the demo. Step 16.4's say so (the spec: "Demo screenshots"), and so do the others in the table. They are not removed here; `docs/open-questions/pv-1.md` (PV-1) lists them by path.
 
 ## 0.4 The shots/ branches
 

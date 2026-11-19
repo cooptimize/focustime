@@ -1,0 +1,6 @@
+## Housekeeping (HK-1, Nov 5)
+
+- Q-HK1-1: `infra/scripts/app-registration.sh`'s consent step uses `az ad app permission grant`, which deletes every grant the app has for that API (people's own incremental consents included; azure-cli issue 20974) and recreates one tenant-wide grant of GRAPH_SCOPES, which lacks Chat.Read (granted later for AP-1). A full run today would drop everyone's Chat.Read until they consent again. Until the step merges scopes into the AllPrincipals grant only (through Graph's oauth2PermissionGrants), use `--claims-only` for claim changes. Who owns the fix, and should Chat.Read join GRAPH_SCOPES?
+- Q-HK1-2: The names guard's history exceptions (`docs/decisions.md`, `docs/azure/`) mean a real name can still land there. Should the guard cover them too, with an allowlist for the old entries?
+- Q-HK1-3: Exception messages are redacted by pattern; an unquoted person's name or a client name FocusTime hasn't seen yet in this process could pass. Should errors that carry values move to typed errors with a fixed message?
+- Q-HK1-4: The DevOps checks dominate ingest (about 0.35 GB a month in prod at 1-minute checks). If prod's ingest passes 2 GB a month, sample the `devops_check` job items that changed nothing first.

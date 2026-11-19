@@ -1880,7 +1880,7 @@ function uiCommands(env: MenuEnv): MenuItem[] {
 /**
  * NM-2: commands that name a place or a button the app no longer has, or that can't finish, each with the reason.
  * They leave the command menu, the assistant and the Teams bot; their actions, data and tests stay
- * (docs/open-questions.md, NM-2, says what would bring each back).
+ * (docs/open-questions/nm-2.md, NM-2, says what would bring each back).
  */
 export const HOLLOW: Readonly<Record<string, string>> = {
   "conversations.list": "Names a Conversations list; the Inbox has none since IB-4 (From chats lists suggestions)",

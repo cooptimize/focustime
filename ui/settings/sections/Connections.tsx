@@ -1,6 +1,6 @@
 // SA-3: Settings › Connections (was Accounts and calendars, with DevOps): one card per connection, all the same shape.
 // My VM's rows are shared with Setup, and the calendar links and Pocket forms are their own components: they sit in
-// their cards and keep their insides (docs/open-questions.md, SA-2).
+// their cards and keep their insides (docs/open-questions/sa-2.md, SA-2).
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { SourceSummary } from "../../../actions/types.ts";
 import { POCKET_WORDS } from "../../../plan/pocket-words.ts";

@@ -1,6 +1,6 @@
 # The FocusTime and Coop comment contract, v1
 
-For engineers on FocusTime and on Coop. Checked against `2f4c0ea` on Nov 13, 2026. **Proposed, not built.** Neither side reads or posts these comments yet. This page, the schemas and the fixtures are what both sides agree to before either builds it. Open points are in [open questions](../open-questions.md).
+For engineers on FocusTime and on Coop. Checked against `2f4c0ea` on Nov 13, 2026. **Proposed, not built.** Neither side reads or posts these comments yet. This page, the schemas and the fixtures are what both sides agree to before either builds it. Open points are in [open questions](../open-questions/cx-0.md).
 
 Azure DevOps is the mailbox. FocusTime and Coop never call each other: each reads and writes comments on the feature, with plain DevOps access.
 
@@ -332,4 +332,4 @@ The current status is the update for the highest brief revision with the latest 
 - A direct service channel (a later phase) needs event ids and sequence numbers. Those are added optional fields, not a v2.
 - On FocusTime's side today, only those readers exist: they fold a brief or update into one labelled line. Nothing posts or parses these comments, and the reserved background name `coop_mailbox` (`config/background-policy.ts`) never runs.
 
-History: the contract's decisions and open points are recorded under its step in [docs/decisions.md](../decisions.md) and [docs/open-questions.md](../open-questions.md).
+History: the contract's decisions and open points are recorded under its step in [docs/decisions/cx-0.md](../decisions/cx-0.md) and [docs/open-questions/cx-0.md](../open-questions/cx-0.md).
