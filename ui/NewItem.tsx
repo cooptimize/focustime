@@ -5,7 +5,7 @@
 // keeps it local. Without the client's write PAT it says so in one line and Save as draft is the way. No browser
 // controls: the app's own select, date field and people list (AH-5). Works with no AI; a draft's AI version is offered.
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { aOr, formDefaults, parentTypesOf, TITLE_MAX, type NewOptions, type NewPlace } from "../plan/quick-create.ts";
+import { formDefaults, parentTypesOf, TITLE_MAX, vowelSound, type NewOptions, type NewPlace } from "../plan/quick-create.ts";
 import type { DraftStory } from "../plan/types.ts";
 import { PeopleField } from "./ahead/People.tsx";
 import { call } from "./api.ts";
@@ -311,7 +311,7 @@ export function NewItemDialog({ place, hooks, clients, colors, today, onClose }:
           <span className="set-label">Parent</span>
           <span className="nf-parent">
             {type && !allowedParents.size ? (
-              <span className="muted">{aOr(type.toLowerCase()).replace(/^a/, "A")} is at the top: no parent</span>
+              <span className="muted">{vowelSound(type) ? "An" : "A"} {type.toLowerCase()} is at the top: no parent</span>
             ) : (
               <>
                 <SelectField label="Parent" value={parentId === null ? "" : String(parentId)} options={parentOptions} onChange={(k) => setParentId(k ? Number(k) : null)} className="nf-select" />
