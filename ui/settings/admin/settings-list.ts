@@ -55,6 +55,7 @@ export const ADMIN_SETTINGS: readonly AdminSetting[] = [
   client("source_systems", "Source systems", "ai"),
   client("house_style", "House style for Break down", "ai"),
   client("code_access", "Who can read this client's code", "code", ["code access", "who can read code"]),
+  client("code_branch", "Code opens on", "code", ["opening branch", "branch", "code branch", "default branch"]),
   client("data_platform", "Data platform", "deployments"),
   client("deploy_items", "Deployment items", "deployments", ["deployment", "deploy"]),
   client("open_states", "States treated as open", "backlog"),

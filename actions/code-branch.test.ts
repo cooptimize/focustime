@@ -4,7 +4,7 @@
 // is it? and every other repo use the opening branch and take no branch from a person. On the demo's invented repos
 // (Northwind's sales-analytics: main, dev, feature/returns-model and more; code search looks in main and dev).
 import { describe, expect, it } from "vitest";
-import { codeAction, type CodeAction, type CodeContext, type CodeInsideAnswer } from "./code-actions.ts";
+import { codeAction, codeOpenings, type CodeAction, type CodeContext, type CodeInsideAnswer, type CodeOpenings } from "./code-actions.ts";
 import { CodeFailure, type CodeGit } from "./code-git.ts";
 import { demoCodeGit } from "../sources/demo/code.ts";
 import type { CodeViewInput } from "../store/code-views-store.ts";
@@ -86,7 +86,7 @@ describe("which branch a read is on", () => {
     let listed = ["dev", "feature/returns-model", "main"];
     const d = demo();
     const g = demo({
-      branches: async (k, r, o) => (d.ops.push(`branches${o?.fresh ? " fresh" : ""}`), { names: listed, cut: false }),
+      branches: async (_k, _r, o) => (d.ops.push(`branches${o?.fresh ? " fresh" : ""}`), { names: listed, cut: false }),
       file: async (k, r, p, b) => {
         if (b === "feature/returns-model") {
           listed = ["dev", "main"];
@@ -243,5 +243,29 @@ describe("search inside files on a branch", () => {
     const r = await inside(ctx(demo().git, { opening: "dev" }).c, { repoId: SALES, branch: "feature/returns-model" });
     expect(r.notSearched?.[0]).toMatchObject({ branch: "feature/returns-model", shown: "main" });
     expect(r.files.filter((f) => f.repoId === SALES).every((f) => f.branch === "main")).toBe(true);
+  });
+});
+
+describe("Admin's Code tab: each repo's opening branch (codeOpenings)", () => {
+  it("each repo with the branch it opens on, and every branch name its repos have to offer", async () => {
+    const r = await codeOpenings(ctx(demo().git, { opening: "dev" }).c, "Northwind");
+    if (!r.ok) throw new Error("refused");
+    const o = r.data as CodeOpenings;
+    expect(o.opening).toBe("dev");
+    expect(o.repos.map((x) => [x.repo.name, x.opens])).toEqual([["archive", null], ["sales-analytics", "dev"], ["store-portal", "main"]]);
+    expect(o.offer).toEqual(["dev", "feature/returns-model", "feature/store-region-dimension-cleanup-before-the-quarterly-refresh", "main", "release/2026-11"]);
+  });
+  it("with none set, each repo's default", async () => {
+    const r = await codeOpenings(ctx(demo().git).c, "Northwind");
+    expect(r.ok && (r.data as CodeOpenings).repos.map((x) => x.opens)).toEqual([null, "main", "main"]);
+  });
+  it("a client set to its team only: refused for an admin not on it, before anything is read; no row in the log", async () => {
+    const d = demo();
+    const { c, views } = ctx(d.git, { rules: { Northwind: "team" } });
+    expect(await codeOpenings(c, "Northwind")).toMatchObject({ ok: false, status: 403, code: "team_only" });
+    expect(d.ops).toEqual([]);
+    const team = ctx(demo().git, { rules: { Northwind: "team" }, onTeam: ["Northwind"] });
+    expect((await codeOpenings(team.c, "Northwind")).ok).toBe(true);
+    expect([...views, ...team.views]).toEqual([]);
   });
 });

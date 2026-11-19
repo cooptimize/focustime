@@ -585,6 +585,39 @@ async function logged(log: (event: CodeViewInput["event"], path: string) => Prom
 
 /** E1: Admin › Clients' status line for one client's code, from its repo list (checked on open or Check, never on a schedule). */
 export type CodeStatus = { state: "readable"; repos: number } | { state: "needs_code_read" | "no_token" | "no_devops" | "error"; text: string };
+/** RB-7: one repo on Admin's Code tab: the branch it opens on, and its branch names. */
+export type CodeOpeningRepo = { repo: CodeRepoView; opens: string | null; names: string[]; cut: boolean; problem: string | null };
+export type CodeOpenings = { opening: string | null; repos: CodeOpeningRepo[]; /** Every branch name the client's repos have, to offer for the Rule (A to Z). */ offer: string[] };
+
+/**
+ * RB-7: for Admin's Code tab (admin.code_branches, after the admin check): each of a client's repos with the branch it
+ * opens on, and the branch names its repos have, so the opening branch is offered from real names. Through the same
+ * checks as every Code read (code.repos: a Cooptimizer, a listed client, its Rule), so an admin not on a client that
+ * is its team only gets the refusal, as in Code. Branch names only; no row in the log, nothing kept.
+ */
+export async function codeOpenings(ctx: CodeContext, clientKey: string): Promise<ActionResponse> {
+  const r = await codeAction(ctx, "code.repos", { clientKey });
+  if (!r.ok) return r;
+  const git = ctx.git!;
+  const opening = openingRule(await ctx.opening(clientKey).catch(() => null));
+  const all = await git.repos(clientKey);
+  const repos = await Promise.all(
+    all.map(async (repo): Promise<CodeOpeningRepo> => {
+      const view = repoView(repo);
+      if (view.state !== "ok") return { repo: view, opens: null, names: [], cut: false, problem: null };
+      try {
+        const list = await git.branches(clientKey, repo);
+        return { repo: view, opens: openingOf(repo.defaultBranch!, opening, list.names), names: list.names, cut: list.cut, problem: null };
+      } catch (e) {
+        const f = failure(e instanceof CodeFailure ? e.reason : "error", clientKey);
+        return { repo: view, opens: repo.defaultBranch, names: [], cut: false, problem: f.ok ? null : f.error };
+      }
+    }),
+  );
+  const offer = [...new Set(repos.flatMap((x) => x.names))].sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }) || (a < b ? -1 : 1));
+  return { ok: true, data: { opening, repos, offer } satisfies CodeOpenings };
+}
+
 export async function codeStatus(git: CodeGit | null, clientKey: string, name: string): Promise<CodeStatus> {
   if (!git) return { state: "error", text: CODE_TEXT.notHere };
   try {

@@ -86,8 +86,9 @@ async function setup() {
 
 describe("admin actions", () => {
   it("SA-4: the admin actions are the ones main had, each still refused for a non-admin", () => {
-    // SA-4 moved screens only: no action added, removed or renamed (the refusal test below runs each of them).
-    expect([...ADMIN_ACTIONS].sort()).toEqual(["admin.audit", "admin.code_check", "admin.code_views", "admin.identity", "admin.invite_access", "admin.invite_preview", "admin.invite_retry", "admin.invite_send", "admin.invited", "admin.load", "admin.override", "admin.refresh_people", "admin.remove_person", "admin.set", "admin.standards_sync", "admin.status", "admin.status_action"]);
+    // SA-4 moved screens only: no action added, removed or renamed (the refusal test below runs each of them). RB-7
+    // added admin.code_branches (each repo's opening branch for Admin's Code tab).
+    expect([...ADMIN_ACTIONS].sort()).toEqual(["admin.audit", "admin.code_branches", "admin.code_check", "admin.code_views", "admin.identity", "admin.invite_access", "admin.invite_preview", "admin.invite_retry", "admin.invite_send", "admin.invited", "admin.load", "admin.override", "admin.refresh_people", "admin.remove_person", "admin.set", "admin.standards_sync", "admin.status", "admin.status_action"]);
     expect([...ADMIN_SECTIONS]).toEqual(["clients", "ai", "conversations", "people", "setup", "organization", "standards", "status", "audit"]);
   });
 
@@ -300,6 +301,26 @@ describe("Code (RB-1)", () => {
     expect(await s.store.auditList({})).toMatchObject([{ actorName: "Ada Admin", target: "fabrikam", setting: "client:fabrikam/code_access", oldValue: null, newValue: '"team"' }]);
     const c = await s.run(s.admin, "admin.load", { section: "clients" });
     expect(c.ok && (c.data as { clients: { key: string; codeAccess: string }[] }).clients.find((x) => x.key === "fabrikam")?.codeAccess).toBe("team");
+  });
+  it("RB-7: Code opens on is a client Rule (each repo's default when unset), a branch's name only, set and cleared by an admin, audited", async () => {
+    const s = await setup();
+    expect((await s.org.rules()).clients.fabrikam?.codeBranch ?? null).toBeNull();
+    expect(await s.run(s.ben, "admin.set", { scope: "client:fabrikam", key: "code_branch", value: "dev" })).toMatchObject({ ok: false, status: 403 });
+    for (const value of ["a b", "../x", "x:y", 7, "refs/heads/"]) expect(await s.run(s.admin, "admin.set", { scope: "client:fabrikam", key: "code_branch", value }), String(value)).toMatchObject({ ok: false, status: 422 });
+    expect(await s.run(s.admin, "admin.set", { scope: "client:fabrikam", key: "code_branch", value: "feature/returns" })).toMatchObject({ ok: true });
+    s.org.invalidate();
+    expect((await s.org.rules()).clients.fabrikam?.codeBranch).toBe("feature/returns");
+    const c = await s.run(s.admin, "admin.load", { section: "clients" });
+    expect(c.ok && (c.data as { clients: { key: string; codeBranch: string | null }[] }).clients.find((x) => x.key === "fabrikam")?.codeBranch).toBe("feature/returns");
+    expect(await s.run(s.admin, "admin.set", { scope: "client:fabrikam", key: "code_branch", value: null })).toMatchObject({ ok: true });
+    s.org.invalidate();
+    expect((await s.org.rules()).clients.fabrikam?.codeBranch ?? null).toBeNull();
+    expect((await s.store.auditList({})).filter((a) => a.setting.endsWith("/code_branch")).map((a) => [a.oldValue, a.newValue])).toEqual([['"feature/returns"', "null"], [null, '"feature/returns"']]);
+  });
+  it("RB-7: each repo's opening branch is read for an admin only, through Code's own checks", async () => {
+    const s = await setup();
+    expect(await s.run(s.ben, "admin.code_branches", { clientKey: "fabrikam" })).toMatchObject({ ok: false, status: 403 });
+    expect(await s.run(s.admin, "admin.code_branches", { clientKey: "fabrikam", repoId: "x" })).toMatchObject({ ok: false, status: 400 });
   });
   it("Check reads a client's code status for an admin only", async () => {
     const s = await setup();

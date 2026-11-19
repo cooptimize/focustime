@@ -61,7 +61,7 @@ import { followedKeys } from "../week/follow.ts";
 import { followOptions } from "./follow.ts";
 import { guideAction } from "./guide-actions.ts";
 import { docsAccessAction } from "./docs-actions.ts";
-import { codeAction, type CodeAction, type CodeContext } from "./code-actions.ts";
+import { codeAction, codeOpenings, type CodeAction, type CodeContext } from "./code-actions.ts";
 import type { CodeGit } from "./code-git.ts";
 import type { CodeViewsStore } from "../store/code-views-store.ts";
 import { defaultWeekStart, localToday, minutesOn, mondayOf, todayTarget, weekDates7 } from "../week/dates.ts";
@@ -2434,6 +2434,7 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
     case "admin.standards_sync":
     case "admin.code_views":
     case "admin.code_check":
+    case "admin.code_branches":
     case "admin.invite_access":
     case "admin.invite_preview":
     case "admin.invite_send":
@@ -2462,6 +2463,8 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
           send: { sender: async () => (await accountOf(ctx))?.sender ?? null, access: sendProbe(ctx), canAsk: !ctx.demo?.on },
           // SA-4: the clients chats.add would let this admin register a chat under (the same check, read only).
           chatTargets: async () => (await chatContext(ctx)).clientKeys(),
+          // RB-7: each repo's opening branch, through Code's own checks as this admin.
+          codeBranches: (k) => codeOpenings(codeCtx(ctx), k),
         },
         action as AdminAction,
         req.input,
