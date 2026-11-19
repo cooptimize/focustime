@@ -64,7 +64,8 @@ describe.skipIf(!CHROMIUM)("MC-5: Calls made scannable (browser, demo mode)", ()
     await calls(page);
     // The header: Calls, Add a call and the menu; no subtitle.
     await expect(page.locator(".calls-head").textContent()).resolves.toBe("CallsAdd a call");
-    await page.getByRole("button", { name: "More for Calls" }).click();
+    // The page may still be wiring the button up on the first press: press again until the menu opens.
+    await expect.poll(async () => (await page.getByRole("menuitem").count()) > 0 || (await page.getByRole("button", { name: "More for Calls" }).click(), false), { timeout: W }).toBe(true);
     for (const name of ["Refresh", "Check Pocket", "Select calls"]) await expect.poll(() => page.getByRole("menuitem", { name: new RegExp(`^${name}`) }).count(), { message: name, timeout: W }).toBe(1);
     await page.keyboard.press("Escape");
     // The Client row: All first and pressed, a chip a client, and No client because a call here has none.
