@@ -32,7 +32,7 @@ const expectGrounded = (r: HandleResult) => {
   for (const sec of sections(r)) for (const l of sec.lines) {
     const id = /#(\d+)/.exec(l.text)?.[1];
     if (id) expect([8100, 8101, 8102, 8200, 8300, 8301, 9100, 9101]).toContain(Number(id));
-    if (l.link) expect(l.link.href).toMatch(/^#\/(week|backlog|inbox|status|meetings|commands|guide)/);
+    if (l.link) expect(l.link.href).toMatch(/^#\/(week|backlog|inbox|status|calls|commands|guide)/);
   }
 };
 
@@ -261,6 +261,9 @@ describe("AS-3 golden set: more from the same week", () => {
     s.question({ topic: "calls" });
     const c = await s.a.handle("Any client calls to review?");
     expect(lines(c)).toEqual(["Tailspin weekly status on Nov 5: proposals to review"]);
+    // UC-3 item 1: the links say Calls and open #/calls.
+    expect(JSON.stringify([c.links, c.sections])).not.toMatch(/#\/meetings|Client calls/);
+    expect(c.links).toEqual([expect.objectContaining({ href: "#/calls", label: "Open Calls" })]);
     expectNoLeak(c, s);
   });
 
