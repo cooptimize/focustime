@@ -24,7 +24,8 @@ import { CellPopover, FilterList } from "./CellPopover.tsx";
 import { MentionFlag, useDevOpsWrite, type DevOpsChange } from "./DevOpsWrite.tsx";
 import { partsLine, partsOf } from "../plan/preview-parts.ts";
 import { clientColor } from "./labels.ts";
-import { stampText } from "./stamp.ts";
+import { stampFull, stampText } from "./stamp.ts";
+import { Stamp } from "./Stamp.tsx";
 import { ModeArea } from "./ModeSwitch.tsx";
 import { WorkLink } from "./WorkLink.tsx";
 import { byRank, closeLine, enterLine, pendingLines, previewFeatures, type Line } from "./status-lines.ts";
@@ -559,7 +560,7 @@ function StatusBody({ tz, switcher, colors, readOnly, version, onChanged, group,
         ) : (
           <>
             <div className="st-report-tools">
-              <span className="muted st-fresh">Refreshed {when(r.refreshedAt, tz)}</span>
+              <span className="muted st-fresh">Refreshed <Stamp at={r.refreshedAt} tz={tz} /></span>
               <button type="button" className="mini quiet" disabled={refreshing} onClick={() => void refresh()} title="Check DevOps now (R)">{refreshing ? "Refreshing…" : "Refresh"}</button>
               {said && <span className="muted st-refreshed" role="status">{said}</span>}
             </div>
@@ -836,7 +837,7 @@ function AddLineButton({ onAdd, label = ST_WORDS.writeLine }: { onAdd: () => voi
   );
 }
 
-/** "Tue" for a comment's day, the full time on hover. */
+/** "Tue" for a comment's day (ST-1: the report's "· Priya Shah, Tue"), the shared full time on hover, as Stamp's. */
 function Day({ at }: { at: string }) {
   const zone = useContext(ZoneCtx) ?? Temporal.Now.timeZoneId();
   let day = "";
@@ -845,7 +846,7 @@ function Day({ at }: { at: string }) {
   } catch {
     day = "";
   }
-  return <time dateTime={at} title={stampText(at, zone)}>{day}</time>;
+  return <time dateTime={at} title={stampFull(at, zone)}>{day}</time>;
 }
 
 /**
