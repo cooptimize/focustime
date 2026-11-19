@@ -11,7 +11,20 @@ import { SHOTS } from "../shots.ts";
 async function pickStory(f: Locator) {
   const r = f.getByRole("radio", { name: "User Story" });
   await r.waitFor({ timeout: 30_000 });
-  if (!(await r.isChecked())) await r.click();
+  // UC-3: right after a client change the old client's levels can still show for a moment, and the new client's
+  // defaults fill in after them; pick until User Story stays chosen.
+  let steady = 0;
+  await expect
+    .poll(async () => {
+      if (!(await r.isVisible().catch(() => false))) return (steady = 0);
+      if (!(await r.isChecked())) {
+        steady = 0;
+        await r.click().catch(() => undefined);
+        return 0;
+      }
+      return ++steady;
+    }, { timeout: 30_000, intervals: [200] })
+    .toBeGreaterThanOrEqual(3);
 }
 
 
