@@ -200,6 +200,36 @@ await forEachDriver("the shared Teams store", ({ open }) => {
     expect((await teams.changes()).map((c) => [c.change, c.byUser])).toEqual([["added", ANA], ["removed", BEN]]);
   });
 
+  it("MC-2c: a transcript event joins its call; one with no call held is dropped; the two lengths of keeping; rows go with their chat", async () => {
+    const { teams } = await store();
+    const start = { chatId: CHAT, callId: "call-1", kind: "started" as const, at: "2026-11-20T14:10:00.000Z", startedAt: "2026-11-20T14:10:00.000Z", initiatorId: ANA, initiatorTenant: "home" };
+    await teams.saveCalls(CHAT, [start, { ...start, kind: "ended", at: "2026-11-20T15:00:00.000Z" }, { ...start, callId: "call-2" }]);
+    const ready = { chatId: CHAT, callId: "call-1", at: "2026-11-20T15:02:00.000Z", transcriptId: "tr-1" };
+    // Joined to its call; an event for a call not held, another chat's, or an unregistered chat's is dropped and counted.
+    expect(await teams.saveTranscriptEvents(CHAT, [ready, { ...ready, callId: "call-unknown" }, { ...ready, chatId: CHAT2 }])).toEqual({ joined: 1, dropped: 2 });
+    expect(await teams.saveTranscriptEvents(CHAT2, [{ ...ready, chatId: CHAT2 }])).toEqual({ joined: 0, dropped: 1 });
+    expect(await teams.transcriptCalls([CHAT], "2026-11-19T00:00:00Z")).toEqual([
+      { chatId: CHAT, callId: "call-1", clientKey: "fabrikam", startedAt: "2026-11-20T14:10:00Z", endedAt: "2026-11-20T15:00:00Z", startedBy: ANA, startedByTenant: "home", transcriptAt: "2026-11-20T15:02:00Z", transcriptId: "tr-1" },
+    ]);
+    // A later event (transcription stopped and started) moves the time; one without an id keeps the id it had.
+    await teams.saveTranscriptEvents(CHAT, [{ ...ready, at: "2026-11-20T15:10:00.000Z", transcriptId: null }]);
+    expect((await teams.transcriptCalls([CHAT], "2026-11-19T00:00:00Z"))[0]).toMatchObject({ transcriptAt: "2026-11-20T15:10:00Z", transcriptId: "tr-1" });
+    // 48 hours on: the call without an event goes, the one with an event stays; at 14 days it goes too.
+    const h48 = "2026-11-22T14:15:00Z";
+    const d14 = "2026-11-06T14:15:00Z";
+    expect(await teams.expireCalls(h48, d14)).toBe(1);
+    expect((await teams.transcriptCalls([CHAT], "2026-11-01T00:00:00Z")).map((c) => c.callId)).toEqual(["call-1"]);
+    expect(await teams.expireCalls("2026-12-04T14:15:00Z", "2026-11-20T14:09:00Z")).toBe(0);
+    expect(await teams.expireCalls("2026-12-04T14:15:00Z", "2026-11-20T14:15:00Z")).toBe(1);
+    // Rows go with their chat: purged, or removed.
+    for (const gone of [() => teams.purgeChats([CHAT]), () => teams.removeChat(CHAT, ANA)]) {
+      await teams.saveCalls(CHAT, [start]).catch(() => 0);
+      await teams.saveTranscriptEvents(CHAT, [ready]);
+      await gone();
+      expect(await teams.transcriptCalls([CHAT], "2026-11-01T00:00:00Z")).toEqual([]);
+    }
+  });
+
   it("CW-1: a call is one row per call id: a start, then its end; open calls, expiry, purge and removal", async () => {
     const { teams } = await store();
     const start = { chatId: CHAT, callId: "call-1", kind: "started" as const, at: "2026-11-20T14:10:00.000Z", startedAt: "2026-11-20T14:10:00.000Z", initiatorId: ANA, initiatorTenant: "home" };

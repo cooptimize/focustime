@@ -256,6 +256,28 @@ describe("one Microsoft sign-in (step 15.4)", () => {
     expect(await client.identity()).toMatchObject({ username: "pat@example.com" });
   });
 
+  // VM-6, lead 2: production's refusals came with one token answering 200 and 403, and with five tokens all refused on one
+  // revision (docs/ux/vm6/what-happened.md). Still, the Azure token must be its own: asked only for Azure, never handed
+  // out for another kind, and dropped at a sign-in so the next read gets a fresh one.
+  it("VM-6: the Azure token asks only for Azure, is kept apart from the others, and a sign-in drops it", async () => {
+    const { client, tok } = ms({ consented: [READ, "user_impersonation"], keyring: memoryKeyring({ "outlook-refresh-token": FAKE_REFRESH }) });
+    await client.accessToken("arm");
+    expect(tok.calls.at(-1)!.body.get("scope")).toBe(`offline_access ${ARM}`);
+    const n = tok.calls.length;
+    await client.accessToken("arm");
+    expect(tok.calls).toHaveLength(n);
+    // Another kind is its own request, never the Azure token reused.
+    await client.accessToken("read");
+    expect(tok.calls).toHaveLength(n + 1);
+    expect(tok.calls.at(-1)!.body.get("scope")).not.toContain("management.azure.com");
+    // A sign-in: the Azure token held before it is gone, and the next one is asked for again.
+    expect(await client.connect({ azure: true, loginHint: "pat@example.com" })).toMatchObject({ status: "connected" });
+    const m = tok.calls.length;
+    await client.accessToken("arm");
+    expect(tok.calls).toHaveLength(m + 1);
+    expect(tok.calls.at(-1)!.body.get("scope")).toBe(`offline_access ${ARM}`);
+  });
+
   it("an older Outlook sign-in keeps working and learns who it is without a new consent", async () => {
     const { client, tok, browser } = ms({ consented: [READ], keyring: memoryKeyring({ "outlook-refresh-token": FAKE_REFRESH }) });
     expect(await client.accessToken()).toBe(FAKE_ACCESS);
@@ -395,7 +417,8 @@ describe("the web registration's calendar scope (A2)", () => {
     const web = microsoftProvider({ tenantId: TENANT, clientId: MS_CLIENT }, { calendars: "Calendars.ReadWrite" });
     // AP-1 (D490): Chat.Read isn't on the registration: each person allows it when they switch Read for asks on.
     // LP-1: Close the loop's send, mail and mail_send are asked the same way, per person, when first needed.
-    const incremental = new Set(["messages", "send", "mail", "mail_send"]);
+    // MC-2c: call_transcripts (CallTranscripts.Read.All) is admin consented in the portal and asked only at a press.
+    const incremental = new Set(["messages", "send", "mail", "mail_send", "call_transcripts"]);
     const asked = [web.scope, web.writeScope, ...Object.entries(web.kinds ?? {}).filter(([k]) => !incremental.has(k)).map(([, v]) => v)].join(" ").split(" ").filter(Boolean);
     for (const s of asked) {
       const name = s.split("/").pop()!;
@@ -412,5 +435,22 @@ describe("Chat.Read is asked for by each person (AP-1, D490)", () => {
     const web = microsoftProvider({ tenantId: TENANT, clientId: MS_CLIENT }, { calendars: "Calendars.ReadWrite" });
     expect(web.kinds?.messages).toBe("offline_access https://graph.microsoft.com/Chat.Read");
     expect(/GRAPH_SCOPES=\(([^)]*)\)/.exec(script)?.[1] ?? "").not.toMatch(/\bChat\.Read\b(?!Basic)/);
+  });
+});
+
+describe("MC-2c: CallTranscripts.Read.All is its own scope set", () => {
+  const web = microsoftProvider({ tenantId: TENANT, clientId: MS_CLIENT }, { calendars: "Calendars.ReadWrite" });
+  it("holds only that permission, apart from the meetings token, whose request is unchanged", () => {
+    expect(web.kinds?.call_transcripts).toBe("offline_access https://graph.microsoft.com/CallTranscripts.Read.All");
+    // The meetings token's scope, byte for byte what main asks for.
+    expect(web.kinds?.meetings).toBe("offline_access https://graph.microsoft.com/OnlineMeetings.Read https://graph.microsoft.com/OnlineMeetingTranscript.Read.All");
+    for (const [k, v] of Object.entries(web.kinds ?? {})) if (k !== "call_transcripts") expect(v, k).not.toContain("CallTranscripts");
+    expect(`${web.scope} ${web.writeScope}`).not.toContain("CallTranscripts");
+  });
+
+  it("isn't on the app registration script (Entra is the product owner's)", async () => {
+    const { readFileSync } = await import("node:fs");
+    const script = readFileSync(new URL("../../infra/scripts/app-registration.sh", import.meta.url), "utf8");
+    expect(script).not.toContain("CallTranscripts");
   });
 });

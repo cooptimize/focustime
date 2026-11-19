@@ -123,7 +123,7 @@ export function WeekRow({ r, open, zone, today, colors, selecting, ticked, onTic
   return (
     <li className={`calls-row one${open ? " open" : ""}${inSeries ? " in-series" : ""}${selecting ? " selecting" : ""}`} style={color ? ({ "--c": color } as CSSProperties) : undefined} data-row={r.key}>
       {selecting && (canHide ? <Tick on={ticked} name={r.name} onTick={onTick} /> : <span className="calls-tick" aria-hidden="true" />)}
-      <span className="calls-time">{inSeries ? dayOf(r.startAt, zone) : shortWhen(r.startAt, r.day, today, zone)}</span>
+      <span className="calls-time">{inSeries ? dayOf(r.startAt, zone) : shortWhen(r.startAt, r.day, today, zone)}{r.other?.chat && r.other.endKnown ? ` to ${timeOf(r.endAt, zone)}` : ""}</span>
       <Square color={color} />
       <button type="button" className="calls-row-main" title={r.name} aria-current={open ? "true" : undefined} data-call-row={r.key} data-bucket={r.bucket} disabled={!!status?.busy} onClick={onOpen}>
         <span className="calls-name">{inSeries ? timeOf(r.startAt, zone) : r.name}</span>
@@ -142,6 +142,8 @@ export function WeekRow({ r, open, zone, today, colors, selecting, ticked, onTic
           <span className="calls-state" data-call-state="">{r.state.label}</span>
         ) : null}
         <MarkShort mark={r.mark} check={r.check} />
+        {/* MC-2c: where a chat call came from, in the mark's place. */}
+        {r.other?.chat && r.occurrenceId === null && <span className="calls-mark quiet" data-call-source="chat">{CALL_LIST.fromChat}</span>}
         {canHide && <button type="button" className="mini quiet calls-hide" onClick={onHide} data-call-act="hide">{CLOSE_TEXT.hide}</button>}
       </span>
       {status?.busy && <p className="calls-row-status muted" role="status">{status.busy}</p>}

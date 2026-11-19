@@ -536,6 +536,26 @@ export function aCallEventMessage(o: { kind?: "started" | "ended"; callId?: stri
   };
 }
 
+/**
+ * MC-2c: a Graph chatMessage carrying the transcript-is-ready event. No real sample exists: built from Microsoft's
+ * documented callTranscriptEventMessageDetail (callId, callTranscriptICalUid, meetingOrganizer) on the same chatMessage
+ * shape as the call events. The ids are fake.
+ */
+export function aTranscriptEventMessage(o: { callId?: string; at?: string; transcriptId?: string | null; messageType?: string; deleted?: boolean; organizer?: string } = {}): Record<string, unknown> {
+  const n = next();
+  const at = o.at ?? "2026-11-04T15:20:00Z";
+  return {
+    id: String(1_700_000_000_000 + n), messageType: o.messageType ?? "unknownFutureValue", createdDateTime: at, lastModifiedDateTime: at, deletedDateTime: o.deleted ? at : null, chatId: "19:fabrikam@thread.v2",
+    from: null, body: { contentType: "html", content: "<systemEventMessage/>" }, attachments: [], mentions: [], reactions: [],
+    eventDetail: {
+      "@odata.type": "#microsoft.graph.callTranscriptEventMessageDetail",
+      callId: o.callId ?? "9c848c0e-f906-4dfc-b22e-c68a785a587c",
+      ...(o.transcriptId === null ? {} : { callTranscriptICalUid: o.transcriptId ?? "demo-transcript-0001" }),
+      meetingOrganizer: { application: null, device: null, user: { id: "00000000-0000-4000-8000-000000000001", displayName: o.organizer ?? "Person A", userIdentityType: "aadUser", tenantId: HOME_TENANT } },
+    },
+  };
+}
+
 /** A call event as plan/cowork.ts reads it (a start in the fabrikam chat by default). */
 export function aCallEvent(o: Partial<import("../../plan/cowork.ts").CallEvent> = {}): import("../../plan/cowork.ts").CallEvent {
   const at = o.at ?? "2026-11-04T14:12:00.000Z";

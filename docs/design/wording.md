@@ -445,7 +445,7 @@ The VM chip's words are in one place, `READ_PROBLEM` and `CHECKING` in `plan/vm.
 - After 2 minutes, on the chip's face and the menu's first line, then the sentence:
   - **"Can't reach Azure"**: "FocusTime can't reach Azure to read your VM's state. It keeps trying; nothing to do unless this lasts."
   - **"Azure is busy"**: "Azure is busy and asked FocusTime to wait. It keeps trying; nothing to do."
-  - **"Sign in to Azure again"**: "Azure wants you to sign in again before FocusTime can read your VM. Choose Allow Azure access."
+  - **"Sign in to Azure again"**: "Azure wants you to sign in again before FocusTime can read your VM. Choose Sign in to Azure again." (VM-6: it named Allow Azure access, which the menu doesn't show beside it.)
   - **"Azure refused"**: "Azure refused to show your VM's state. If this lasts, check in the Azure portal that you can still see the VM, or tell an admin."
   - **"Can't reach FocusTime"** (the page's own request failed): "FocusTime isn't answering, so it can't check your VM. It keeps trying; nothing to do unless this lasts."
 - Under the reason in the menu, what to do (`READ_NEXT`): **"Check your connection; FocusTime keeps trying"**, **"Nothing to do; FocusTime keeps trying"**, **"Your access may have changed: check the Azure portal or ask an admin"**. A sign-in is one item, **"Sign in to Azure again…"**, that signs in. The chip's face keeps the state's one word: **"Stopped · Azure refused"**; on the phone the state and the "!".
@@ -662,3 +662,33 @@ From `plan/call-words.ts` (`LIST_TEXT`, `PAGE_TEXT`, `ADD_TEXT`). What went: the
 - A proposal: **"Create"**, **"Keep"**, **"Add comment"**, **"Skip"**, the chevron **"Details: <title>"**; its fields **"Feature · under #412 Data platform · Me · No date"**, a promise **"Alex Rivera to Dana · by Thu, Nov 12 · in Alex's Promises"** (**"noted with this call"** for anyone else's, **"Pocket didn't say who · No date · noted with this call"**), a comment **"On #1110 Order history export"**; the quote **"Open the transcript at Priya's words"**. Open: **"Level"**, **"Parent"**, **"Assigned to"**, **"Target date"**, **"needed"**, **"Description and size"**, **"Create and break down"**.
 - The transcript choices: **"Transcript"**, **"From Teams"**, **"Pocket recording"**, **"A file"**, **"Later"**; **"Drop a Teams transcript or a Pocket export, or choose a file"** over **".vtt or .docx from Teams, .zip or .pdf exported from Pocket"**; **"Use this recording"**; a hand-added call **"The call takes the recording's time: Tue, Nov 3 · 4:30 PM · 25 min."**
 - Add a call: **"Add a call"**, **"Only you see it"**, **"Name"**, **"Day"**, **"Starts"**, **"Length"**, **"About"**; a recording **"Call with the carrier"**, **"Tue, Nov 3 · 4:30 PM · 25 min"**, **"Goes with Harbor sprint planning"** with **"Review that call"**; **"Add and review"**, **"Add"**, **"Adding…"**.
+- A call started in a chat (MC-2c, merged after): its row's time **"Wed 12:00 PM to 12:35 PM"**, **"From a chat"** in the mark's place; its page's line **"From a chat"** (hover **"Teams gave this transcript without speaker names."** when so) and **"The chat sees it"** (the full sentence on hover).
+
+## MC-2c words (Nov 18)
+
+From `plan/call-words.ts` (`CALL_LIST`, `FETCH_WORDS`, `CHAT_WAY_ON`, `CHAT_NO_SPEAKERS`, `CALLS_TEXT`) and `plan/permissions.ts`.
+
+- A call started in a client's chat, its row: **"Call in Northwind Delivery Team (Cooptimize)"**, its time **"Wed, Nov 4 · 12:00 PM to 12:35 PM"** (its start alone when its end wasn't seen), the mark **"Transcript in Teams"**, **"From a chat"**, **"About Northwind"**. No people count.
+- Its setup: the same line with **"From a chat"** in place of the people.
+- A kept chat call's page: **"You and the Cooptimizers in the chat who follow this client can see this call. Only you can act on it."**
+- No speaker names, above the proposals and in Get it from Teams' answer: **"Teams gave this transcript without speaker names."**
+- Every chat call outcome ends with **"Or download the transcript from the call in the chat in Teams and upload it here."**
+  - Not granted: **"Cooptimize's Microsoft setup hasn't allowed FocusTime to read transcripts of calls started in chats yet. An admin allows it once."**
+  - Refused: **"Microsoft didn't let your sign-in read this call's transcript. Teams lets the people who were on a call read it. If you weren't on it, ask someone who was to review it here."**
+  - Not there: **"Teams doesn't have this transcript, or it isn't ready yet. Try again in a few minutes."**
+  - The organization's setting off, signed out and busy: MC-4's and MC-2's words, unchanged.
+- Not in the chat, or not following its client: **"FocusTime shows a chat's calls to the Cooptimizers in that chat who follow its client. Upload the transcript with Add a call instead."**
+- Settings › Connections: **"CallTranscripts.Read.All"**, **"Calls started in a client's chat: the transcript of one such call, only when you press Review on it, while you're in that chat and follow its client; read only, kept 30 days"**, and while missing **"Calls: asked the first time you press Review on a call started in a client's chat, once Cooptimize's Microsoft setup allows it"**.
+- The Guide: **"Which calls show in Calls?"**
+## VM-6 words (Nov 18)
+
+Azure's reason for a refused read, from its code (`READ_PROBLEM` in `plan/vm.ts`). The chip's face stays short; the menu says the sentence under the state, then when the state was last read.
+
+- **"Azure refused"** (`AuthorizationFailed`): "Azure says your sign-in isn't allowed to read this VM right now. If your access is switched on for a time, switch it on again in Azure."
+- **"VM not found"**: "Azure can't find this VM. It may have been moved or deleted."
+- **"Sign in to Azure again"** (a 401, or a 403 asking for the sign-in again): VM-4's sentence, now ending "Choose Sign in to Azure again.", and its item, **"Sign in to Azure again…"**.
+- The item under the reason no longer carries its age ("Read 3 minutes ago") once the note says "Last read".
+- Any other no, or none given: VM-4's **"Azure refused"** sentence.
+- Under the reason: **"Last read 2:14 PM"**, or **"Last read Tue 2:14 PM"** for another day: the last good read, never a failed one.
+- The state read and the auto-shutdown not: the state on the chip, and in the menu and the chip's title **"FocusTime couldn't read your VM's auto-shutdown time."**
+

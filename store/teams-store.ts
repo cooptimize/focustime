@@ -9,7 +9,7 @@ import type { AskSort, NotSorted } from "../plan/asks-ai.ts";
 import type { ChatKind, ChatMember } from "../plan/chats.ts";
 import { isMember, type ClientChat, type Mention, type PollState, type Reaction, type Request, type TeamsMessage } from "../plan/requests.ts";
 import { hostedImageIds } from "../plan/sanitize.ts";
-import type { CallEvent, StoredCall } from "../plan/cowork.ts";
+import type { CallEvent, StoredCall, TranscriptCall, TranscriptEvent } from "../plan/cowork.ts";
 import { PlanError } from "./plan-store.ts";
 import type { Conn, Param, Row } from "./sql/conn.ts";
 
@@ -368,9 +368,52 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
       const rows = await db.all(`SELECT chat_id, call_id, started_at, ended_at, started_by, started_by_tenant FROM chat_calls WHERE chat_id IN (${list}) AND ended_at IS NULL AND started_at > ?`, [...params, since]);
       return rows.map((r) => ({ chatId: r.chat_id as string, callId: r.call_id as string, startedAt: instant(r.started_at), endedAt: instant(r.ended_at), startedBy: (r.started_by as string | null) ?? null, startedByTenant: (r.started_by_tenant as string | null) ?? null }));
     },
-    /** Calls that started (or, never seen starting, were last changed) before `olderThan` are forgotten. */
-    async expireCalls(olderThan: string): Promise<number> {
-      return db.tx(async () => (await db.run("DELETE FROM chat_calls WHERE COALESCE(started_at, updated_at) < ?", [olderThan])).changes);
+    /**
+     * Calls that started (or, never seen starting, were last changed) before `olderThan` are forgotten. MC-2c: a call
+     * with a transcript-is-ready event is kept until `transcriptOlderThan` instead (14 days from its start).
+     */
+    async expireCalls(olderThan: string, transcriptOlderThan: string = olderThan): Promise<number> {
+      return db.tx(async () => (await db.run("DELETE FROM chat_calls WHERE (transcript_at IS NULL AND COALESCE(started_at, updated_at) < ?) OR COALESCE(started_at, updated_at) < ?", [olderThan, transcriptOlderThan])).changes);
+    },
+    /**
+     * MC-2c: records transcript-is-ready events of a registered chat on the call already held for that call id in that
+     * chat: the event's time (the latest kept) and the transcript's id it carried. An event with no call held is dropped
+     * and only counted; so is one of an unregistered chat. Nothing else of the event is kept.
+     */
+    async saveTranscriptEvents(chatId: string, events: readonly TranscriptEvent[]): Promise<{ joined: number; dropped: number }> {
+      if (!events.length) return { joined: 0, dropped: 0 };
+      return db.tx(async () => {
+        if (!(await store.chat(chatId))) return { joined: 0, dropped: events.length };
+        let joined = 0;
+        let dropped = 0;
+        for (const e of events) {
+          if (e.chatId !== chatId) {
+            dropped++;
+            continue;
+          }
+          const r = await db.get("SELECT transcript_at FROM chat_calls WHERE chat_id = ? AND call_id = ?", [chatId, e.callId]);
+          if (!r) {
+            dropped++;
+            continue;
+          }
+          const had = instant(r.transcript_at);
+          if (!had || Date.parse(e.at) >= Date.parse(had)) {
+            await db.run("UPDATE chat_calls SET transcript_at = ?, transcript_id = COALESCE(?, transcript_id), updated_at = ? WHERE chat_id = ? AND call_id = ?", [e.at, e.transcriptId, stamp(), chatId, e.callId]);
+          }
+          joined++;
+        }
+        return { joined, dropped };
+      });
+    },
+    /** MC-2c: the calls of these chats with a transcript-is-ready event that started on or after `since`. */
+    async transcriptCalls(chatIds: readonly string[], since: string): Promise<TranscriptCall[]> {
+      if (!chatIds.length) return [];
+      const [list, params] = inList(chatIds);
+      const rows = await db.all(`SELECT chat_id, call_id, client_key, started_at, ended_at, started_by, started_by_tenant, transcript_at, transcript_id FROM chat_calls WHERE chat_id IN (${list}) AND transcript_at IS NOT NULL AND started_at >= ?`, [...params, since]);
+      return rows.map((r) => ({
+        chatId: r.chat_id as string, callId: r.call_id as string, clientKey: r.client_key as string, startedAt: instant(r.started_at), endedAt: instant(r.ended_at),
+        startedBy: (r.started_by as string | null) ?? null, startedByTenant: (r.started_by_tenant as string | null) ?? null, transcriptAt: instant(r.transcript_at)!, transcriptId: (r.transcript_id as string | null) ?? null,
+      }));
     },
 
     // ---- images (CV-2) ----

@@ -2,6 +2,7 @@
 // read in four answered 403 for about two hours) and stayed so for a minute. Now it keeps the last state it knew with a
 // checking mark and asks again in about 10 seconds; after 2 minutes it says why; Unknown only when Azure answers with no
 // state. Nothing is started or stopped on an older reading. Fictional VM and person only.
+import type { VmReadFail as ReadFail } from "../plan/vm.ts";
 import { beforeEach, describe, expect, it } from "vitest";
 import { parseConfig } from "../config/schema.ts";
 import { FOUR_DAY_TOML } from "../fixtures/four-day-week.ts";
@@ -24,7 +25,7 @@ async function setup() {
   clearVmState();
   let t = Date.parse("2026-11-17T21:00:00Z");
   const clock = { now: () => new Date(t).toISOString(), advance: (ms: number) => void (t += ms) };
-  const readFails: { kind: "network" | "busy" | "sign_in" | "refused" | "no_state" | null } = { kind: null };
+  const readFails: { kind: ReadFail | null } = { kind: null };
   const arm = fakeArm({ now: () => t, transitionMs: 45_000, readFails });
   arm.addVm({ id: VM, name: "vm-pat-01", resourceGroup: "rg-dev", subscriptionId: SUB, location: "eastus", tags: { Owner: "Pat Example" }, power: "running" }, { time: "1900" });
   const plan = createPlanStore({ path: ":memory:", now: () => Temporal.Instant.from(clock.now()).toZonedDateTimeISO("America/New_York") });
@@ -81,11 +82,13 @@ describe("VM-4: one failed read", () => {
     expect(await s.status()).toMatchObject({ chip: "running", checking: null, problem: null, refreshMs: 60_000, readAt: "2026-11-17T21:01:10.000Z" });
   });
 
-  for (const kind of ["network", "busy", "sign_in", "refused"] as const)
-    it(`failing for 2 minutes (${kind}): the reason on the face and in the menu, still the last state`, async () => {
+  // VM-6: the fake's "refused" is AuthorizationFailed, which now says Azure's reason (not_allowed); "no_code" is
+  // production's 403 with no code, which keeps VM-4's "Azure refused".
+  for (const [fail, kind] of [["network", "network"], ["busy", "busy"], ["sign_in", "sign_in"], ["refused", "not_allowed"], ["no_code", "refused"]] as const)
+    it(`failing for 2 minutes (${fail}): the reason on the face and in the menu, still the last state`, async () => {
       const s = await setup();
       await s.status();
-      s.readFails.kind = kind;
+      s.readFails.kind = fail;
       s.clock.advance(60_000); // 21:01: the first failed read
       expect((await s.status()).problem).toBeNull();
       s.clock.advance(119_000); // 1 minute 59 seconds of failing

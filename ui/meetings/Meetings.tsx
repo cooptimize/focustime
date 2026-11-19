@@ -23,7 +23,7 @@ import { callBatch, proposalWords, toReview, type Proposal } from "../../plan/me
 import { rememberCallsList as remember, rememberedCallsList as remembered, requestFetch, requestRerun, takeFetch, takeRerun, takeReviewCall, type MineData } from "./calls.ts";
 import { useMenu } from "../Menus.tsx";
 import type { MenuItem, MenuStep } from "../menu.ts";
-import { CALL_ACTIONS, CALL_BAR, CALL_FILTERS, CALL_LIST, CALL_ROW, CALL_STATE, CALLS_TEXT, ADD_TEXT, CLOSE_TEXT, FETCH_WORDS, LIST_TEXT, PAGE_TEXT, POCKET_TEXT, rerunLine, SECTION_HEAD, TRANSCRIPT_TEXT, type CallFilter, type FetchOutcome, type ProposalCheck } from "../../plan/call-words.ts";
+import { CALL_ACTIONS, CALL_BAR, CALL_FILTERS, CALL_LIST, CALL_ROW, CALL_STATE, CALLS_TEXT, ADD_TEXT, CHAT_NO_SPEAKERS, CLOSE_TEXT, FETCH_WORDS, LIST_TEXT, PAGE_TEXT, POCKET_TEXT, rerunLine, SECTION_HEAD, TRANSCRIPT_TEXT, type CallFilter, type FetchOutcome, type ProposalCheck } from "../../plan/call-words.ts";
 import { callRows, chipClients, closedAtOf, closedLine, closedList, outcomeOfCall, weekOf, filterCounts, firstToOpen, hiddenList, hiddenMissing, LIST_FILTERS, openList, otherRowKey, hideKeyOf, type CallHides, type CallRow, type CheckState, type Entry, type ListedRecording, type ListFilter, type SeriesEntry } from "../../plan/call-list.ts";
 import { ClosedRow, HiddenRow, NeedsRow, SeriesRow, TickBar, WeekRow, whenOf, type RowStatus } from "./CallsList.tsx";
 import { pocketRows } from "../../plan/call-list-pocket.ts";
@@ -41,7 +41,7 @@ import { forgetCallOptions, useNewOptions } from "./GapFields.tsx";
 import { opensItself, ProposalRow } from "./Proposal.tsx";
 import "./calls.css";
 
-type Review = { meeting: SeriesView; occurrence: OccurrenceView; proposals: Proposal[]; transcript: { lines: number; speakers: number } | null; /** MC-2: what was said (at most 5 lines); null before MC-2 or once the transcript is gone. */ summary?: string[] | null; /** PK-1: from a Pocket export: numbered speakers, no times. */ pocket?: boolean; /** MC-2b: brought in from a Pocket recording: by me, or by another reviewer. */ pocketFrom?: "mine" | "reviewer" | null; canConfirm: boolean; canWrite: boolean; checks: Record<string, ProposalCheck> };
+type Review = { meeting: SeriesView; occurrence: OccurrenceView; proposals: Proposal[]; transcript: { lines: number; speakers: number } | null; /** MC-2: what was said (at most 5 lines); null before MC-2 or once the transcript is gone. */ summary?: string[] | null; /** PK-1: from a Pocket export: numbered speakers, no times. */ pocket?: boolean; /** MC-2b: brought in from a Pocket recording: by me, or by another reviewer. */ pocketFrom?: "mine" | "reviewer" | null; /** MC-2c: Teams gave a chat call's transcript without speaker names. */ noSpeakers?: boolean; canConfirm: boolean; canWrite: boolean; checks: Record<string, ProposalCheck> };
 
 const errText = (e: unknown) => (e instanceof ActionRefusal || e instanceof Error ? e.message : "Something went wrong");
 const dayLabel = (d: string) => Temporal.PlainDate.from(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -748,6 +748,13 @@ const whenLine = (startAt: string, endAt: string, zone: string) => {
   return `${d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: zone })} · ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: zone })} · ${lengthLabel(Math.round((Date.parse(endAt) - Date.parse(startAt)) / 60_000))}`;
 };
 
+/** MC-2c: a chat call's day, start and end ("Tue, Nov 10 · 2:00 PM to 2:45 PM"), or its start alone when its end isn't known. */
+const chatWhen = (c: Pick<OtherCallView, "startAt" | "endAt" | "endKnown">, zone: string) => {
+  const d = new Date(c.startAt);
+  const t = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: zone });
+  return `${d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: zone })} · ${t(c.startAt)}${c.endKnown ? ` to ${t(c.endAt)}` : ""}`;
+};
+
 /** The client choices: my clients (Internal among them), the suggestion first and marked; a call is about one client. */
 function ClientPick({ clients, value, suggested, onChange, id }: { clients: CaptureClient[]; value: string; suggested: string | null; onChange: (k: string) => void; id: string }) {
   const sorted = [...clients].sort((a, b) => Number(b.clientKey === suggested) - Number(a.clientKey === suggested) || a.clientName.localeCompare(b.clientName));
@@ -799,7 +806,8 @@ function CallSetup({ call: c, clients, suggested, zone, pocket = [], startRec = 
   return (
     <div className="mtg-setup" role="region" aria-labelledby="mtg-setup-title" ref={ref} onKeyDown={(e) => e.key === "Escape" && (e.preventDefault(), e.stopPropagation(), onCancel())}>
       <h3 id="mtg-setup-title" tabIndex={-1}>{CALLS_TEXT.setupTitle(c.name)}</h3>
-      <p className="muted">{whenLine(c.startAt, c.endAt, zone)} · {CALLS_TEXT.people(c.people)}</p>
+      {/* MC-2c: a chat call: its start and end (or its start alone), where it came from, never a people count. */}
+      <p className="muted">{c.chat ? `${chatWhen(c, zone)} · ${CALL_LIST.fromChat}` : `${whenLine(c.startAt, c.endAt, zone)} · ${CALLS_TEXT.people(c.people)}`}</p>
       <label className="mtg-setup-field" htmlFor="mtg-setup-client">{CALLS_TEXT.setupClient}</label>
       <ClientPick id="mtg-setup-client" clients={clients} value={client} suggested={suggested} onChange={setClient} />
       <p className="muted mtg-setup-hint">{CALLS_TEXT.setupClientHint}</p>
@@ -1278,8 +1286,8 @@ function ReviewScreen(props: ReviewProps) {
 
   const decided = r.proposals.length - open.length;
   const people = m.call ? props.people ?? null : m.attendees || null;
-  const who = m.call === "hand" ? PAGE_TEXT.who.hand : m.call ? PAGE_TEXT.who.calendar : PAGE_TEXT.who.registered;
-  const origin = r.pocket ? { text: PAGE_TEXT.origin.pocket, hint: r.pocketFrom ? `${r.pocketFrom === "mine" ? PW.fromMine : PW.fromReviewer} ${PW.unnamed}` : POCKET_TEXT.note } : m.call === "hand" ? { text: PAGE_TEXT.origin.hand, hint: null } : null;
+  const who = m.call === "hand" ? PAGE_TEXT.who.hand : m.call === "chat" ? PAGE_TEXT.who.chat : m.call ? PAGE_TEXT.who.calendar : PAGE_TEXT.who.registered;
+  const origin = r.pocket ? { text: PAGE_TEXT.origin.pocket, hint: r.pocketFrom ? `${r.pocketFrom === "mine" ? PW.fromMine : PW.fromReviewer} ${PW.unnamed}` : POCKET_TEXT.note } : m.call === "hand" ? { text: PAGE_TEXT.origin.hand, hint: null } : m.call === "chat" ? { text: CALL_LIST.fromChat, hint: r.noSpeakers ? CHAT_NO_SPEAKERS : null } : null;
   const shownFilters = CALL_FILTERS.filter((f) => counts[f.key] > 0);
   const skipWords = open.length === r.proposals.length ? CLOSE_TEXT.skipAllClose : CLOSE_TEXT.skipLastClose(open.length);
   // A call with no transcript, or one waiting on it or marked as having none this week (as the old upload box showed): the choices.

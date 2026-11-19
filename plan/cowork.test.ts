@@ -1,9 +1,9 @@
 // CW-1: call started and ended events read off chat messages, the live rule (and the stale limit), the Teams links and
 // the card a live call shows on.
 import { describe, expect, it } from "vitest";
-import { aCallEventMessage, HOME_TENANT } from "../test/builders/index.ts";
+import { aCallEventMessage, aTranscriptEventMessage, HOME_TENANT } from "../test/builders/index.ts";
 import { messageOf } from "../sources/graph/chats.ts";
-import { callEventOf, chatCallLink, durationMs, isLive, liveCall, liveCallCard, liveLine, STALE_CALL_HOURS } from "./cowork.ts";
+import { callEventOf, callIdOfKey, chatCallKey, chatCallListed, transcriptEventOf, chatCallLink, durationMs, isLive, liveCall, liveCallCard, liveLine, STALE_CALL_HOURS } from "./cowork.ts";
 
 const CHAT = "19:fabrikam@thread.v2";
 
@@ -94,5 +94,61 @@ describe("words and links", () => {
     expect(liveCallCard(cards, "fabrikam", "2026-11-04T17:30:00Z")).toBe("pm");
     expect(liveCallCard(cards, "fabrikam", "2026-11-04T23:00:00Z")).toBeNull();
     expect(liveCallCard(cards, "northwind", "2026-11-04T14:00:00Z")).toBeNull();
+  });
+});
+
+describe("MC-2c: the transcript-is-ready event", () => {
+  it("Microsoft's documented shape gives the call's id, the event's time and the transcript's id, and nothing else", () => {
+    for (const messageType of ["unknownFutureValue", "systemEventMessage", "message"]) {
+      const e = transcriptEventOf(aTranscriptEventMessage({ messageType, at: "2026-11-04T15:20:00Z", transcriptId: "tr-0001" }), CHAT);
+      expect(e).toEqual({ chatId: CHAT, callId: "9c848c0e-f906-4dfc-b22e-c68a785a587c", at: "2026-11-04T15:20:00.000Z", transcriptId: "tr-0001" });
+      expect(Object.keys(e!).sort()).toEqual(["at", "callId", "chatId", "transcriptId"]);
+      // The organizer named in the event is never returned.
+      expect(JSON.stringify(e)).not.toContain("Person A");
+    }
+  });
+
+  it("an event with no transcript id keeps the call and its time", () => {
+    expect(transcriptEventOf(aTranscriptEventMessage({ transcriptId: null }), CHAT)).toMatchObject({ transcriptId: null });
+  });
+
+  it("a malformed one, a deleted one and any other system event give nothing", () => {
+    expect(transcriptEventOf(aTranscriptEventMessage({ deleted: true }), CHAT)).toBeNull();
+    expect(transcriptEventOf(aTranscriptEventMessage({ callId: "" }), CHAT)).toBeNull();
+    expect(transcriptEventOf(aTranscriptEventMessage({ callId: "bad id with spaces" }), CHAT)).toBeNull();
+    expect(transcriptEventOf(aTranscriptEventMessage({ at: "not a time" }), CHAT)).toBeNull();
+    expect(transcriptEventOf(aTranscriptEventMessage(), "not a chat")).toBeNull();
+    expect(transcriptEventOf({ ...aTranscriptEventMessage(), eventDetail: null }, CHAT)).toBeNull();
+    expect(transcriptEventOf(aCallEventMessage(), CHAT)).toBeNull();
+    expect(transcriptEventOf(aCallEventMessage({ kind: "ended" }), CHAT)).toBeNull();
+    expect(transcriptEventOf({ ...aCallEventMessage(), eventDetail: { "@odata.type": "#microsoft.graph.membersAddedEventMessageDetail" } }, CHAT)).toBeNull();
+    // A transcript id that isn't an id is dropped (the call is still known).
+    expect(transcriptEventOf(aTranscriptEventMessage({ transcriptId: "<b>no</b>" }), CHAT)).toMatchObject({ transcriptId: null });
+  });
+
+  it("the call events and messageOf leave it alone: it is never a call event or a message", () => {
+    expect(callEventOf(aTranscriptEventMessage(), CHAT)).toBeNull();
+    expect(messageOf(aTranscriptEventMessage(), CHAT, "fabrikam")).toBeNull();
+  });
+
+  it("which chat calls Calls lists: with a transcript event, a known start, not live, inside the window", () => {
+    const now = "2026-11-18T15:00:00Z";
+    const from = "2026-11-05T05:00:00Z";
+    const ended = { startedAt: "2026-11-18T13:00:00Z", endedAt: "2026-11-18T14:00:00Z", transcriptAt: "2026-11-18T14:02:00Z" };
+    expect(chatCallListed(ended, now, from)).toBe(true);
+    expect(chatCallListed({ ...ended, transcriptAt: null as unknown as string }, now, from)).toBe(false);
+    expect(chatCallListed({ ...ended, startedAt: null }, now, from)).toBe(false);
+    // Still live (no end, started an hour ago): CW-1 shows it, Calls doesn't.
+    expect(chatCallListed({ ...ended, endedAt: null }, now, from)).toBe(false);
+    // No end event and past the stale limit: listed with its start alone.
+    expect(chatCallListed({ ...ended, startedAt: "2026-11-17T13:00:00Z", endedAt: null }, now, from)).toBe(true);
+    expect(chatCallListed({ ...ended, startedAt: "2026-11-04T13:00:00Z" }, now, from)).toBe(false);
+  });
+
+  it("a chat call's key is its call id only, and back", () => {
+    expect(chatCallKey("abc-1")).toBe("chat:abc-1");
+    expect(callIdOfKey("chat:abc-1")).toBe("abc-1");
+    expect(callIdOfKey("demo-ical-x")).toBeNull();
+    expect(callIdOfKey("chat:has space")).toBeNull();
   });
 });

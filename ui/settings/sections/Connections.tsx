@@ -208,7 +208,7 @@ function Permissions() {
         <>
           {admin.length > 0 && (
             <Note tone="problem" live>
-              An admin must allow {admin.map((r) => r.why.toLowerCase()).join(", ")} for the Cooptimize tenant (Entra admin center › App registrations › FocusTime › API permissions › Grant admin consent).
+              An admin must allow {admin.map((r) => r.why.charAt(0).toLowerCase() + r.why.slice(1)).join("; ")} for the Cooptimize tenant (Entra admin center › App registrations › FocusTime › API permissions › Grant admin consent).
             </Note>
           )}
           {rows?.some((r) => r.state === "needs_consent" && !r.admin) && <Note>Not allowed yet: sign out and sign in again to allow it, or ask your FocusTime admin to allow it for everyone.</Note>}

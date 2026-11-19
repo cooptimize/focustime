@@ -2,7 +2,7 @@
 // admin must. Settings > Connections lists them with their state for the signed-in person. Keep this list in step with
 // infra/scripts/app-registration.sh (GRAPH_SCOPES and the Azure Service Management scope) and sources/oauth/oauth.ts.
 /** The sign-in's token kinds (sources/oauth/oauth.ts TokenKind), repeated here so plan/ stays pure. */
-export type TokenKind = "read" | "write" | "id" | "arm" | "presence" | "photo" | "chats" | "messages" | "meetings" | "send" | "mail" | "mail_send";
+export type TokenKind = "read" | "write" | "id" | "arm" | "presence" | "photo" | "chats" | "messages" | "meetings" | "send" | "mail" | "mail_send" | "call_transcripts";
 
 export type Permission = {
   scope: string;
@@ -34,6 +34,8 @@ export const PERMISSIONS: readonly Permission[] = [
   { scope: "Mail.Send", api: "Microsoft Graph", why: "Close the loop by email: Send now sends your update from your mailbox, only after you confirm the preview", admin: false, kind: "mail_send", later: "Close the loop: allow it the first time you choose Send now" },
   { scope: "OnlineMeetings.Read", api: "Microsoft Graph", why: "Meeting capture: finds a client call registered in FocusTime from its join link; never any other meeting", admin: true, kind: "meetings" },
   { scope: "OnlineMeetingTranscript.Read.All", api: "Microsoft Graph", why: "Meeting capture: the transcript of a registered client call organized at Cooptimize, for its reviewers; read only, kept 30 days", admin: true, kind: "meetings" },
+  // MC-2c: its own scope set, apart from the meetings token; a token for it is asked only at a press, so it isn't probed.
+  { scope: "CallTranscripts.Read.All", api: "Microsoft Graph", why: "Calls started in a client's chat: the transcript of one such call, only when you press Review on it, while you're in that chat and follow its client; read only, kept 30 days", admin: true, kind: "call_transcripts", later: "Calls: asked the first time you press Review on a call started in a client's chat, once Cooptimize's Microsoft setup allows it" },
   { scope: "user_impersonation", api: "Azure Service Management", why: "Your VM, with your own Azure access", admin: false, kind: "arm" },
 ];
 

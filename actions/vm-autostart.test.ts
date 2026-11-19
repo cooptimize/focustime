@@ -1,6 +1,7 @@
 // VM-2: the automatic start's runner against a fake Azure Resource Manager: production only (nothing read outside it),
 // one start a day, the log row marked automatic, the notice, sign-in that can't be used, PTO, pausing, Skip, and dev
 // beside prod on the same VM. Fictional data only.
+import type { VmReadFail as ReadFail } from "../plan/vm.ts";
 import { beforeEach, describe, expect, it } from "vitest";
 import { parseConfig, type AppConfig } from "../config/schema.ts";
 import { FOUR_DAY_TOML } from "../fixtures/four-day-week.ts";
@@ -479,7 +480,7 @@ describe("VM-5: a Stop before the day", () => {
 
   it("a Stop while a start is still being retried after an unreadable state ends the retries for today", async () => {
     let now = 0;
-    const readFails: { kind: "network" | "busy" | "sign_in" | "refused" | "no_state" | null } = { kind: "busy" };
+    const readFails: { kind: ReadFail | null } = { kind: "busy" };
     const arm = fakeArm({ now: () => now, transitionMs: 30_000, readFails });
     const w = await world({ start: nyAt(minus(workStart(), 5)), arm }).init();
     const pass = () => ((now = Date.parse(w.clock.now())), autoStartCheck(w.deps("prod")));
@@ -612,7 +613,7 @@ describe("the status's auto-start part", () => {
 describe("VM-4: a failed state read at the planned time", () => {
   const failingWorld = async () => {
     let now = 0;
-    const readFails: { kind: "network" | "busy" | "sign_in" | "refused" | "no_state" | null } = { kind: "refused" };
+    const readFails: { kind: ReadFail | null } = { kind: "refused" };
     const arm = fakeArm({ now: () => now, transitionMs: 30_000, readFails });
     const w = await world({ start: nyAt(minus(workStart(), 5)), arm }).init();
     // The fake's clock follows the world's.
@@ -657,6 +658,30 @@ describe("VM-4: a failed state read at the planned time", () => {
       expect(t.w.sent).toHaveLength(1);
       expect(t.logs.filter((l) => l.op === "vm_autostart").map((l) => l.kind)).toEqual(["state_unreadable", "state_unreadable_late"]);
     });
+
+  // VM-6: the refusal production had (403, no Azure code, for hours on one revision) is still not the day's try; a 403
+  // that asks for the sign-in again is the sign-in, as VM-2 has it (the day is used and the person told).
+  it("VM-6: production's 403 with no code at the planned time isn't the day's try; it is read again", async () => {
+    const t = await failingWorld();
+    t.readFails.kind = "no_code";
+    expect(await t.pass()).toBe("state_retry");
+    t.w.clock.advance(30_000);
+    expect(await t.pass()).toBe("state_retry");
+    expect(t.w.starts()).toBe(0);
+    expect(await t.w.plan.marked(AUTOSTART_MARK, "2026-11-11")).toBe(false);
+    t.readFails.kind = null;
+    t.w.clock.advance(30_000);
+    expect(await t.pass()).toBe("started");
+  });
+
+  it("VM-6: a 403 asking for the sign-in again at the planned time is VM-2's sign_in, never a start", async () => {
+    const t = await failingWorld();
+    t.readFails.kind = "challenge";
+    expect(await t.pass()).toBe("sign_in");
+    expect(t.w.starts()).toBe(0);
+    t.w.clock.advance(30_000);
+    expect(await t.pass()).toBe("not_due");
+  });
 
   it("a start sent to Azure is the day's try, as VM-2 has it (Azure failing the start isn't retried)", async () => {
     let now = 0;

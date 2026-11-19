@@ -54,7 +54,9 @@ describe.skipIf(!CHROMIUM)("VM-4: the VM chip while reads fail (browser, demo mo
     await page.keyboard.press("Escape");
 
     // Two minutes later, still failing: the reason on the chip's face, the same words and what to do in its menu.
-    for (const [kind, short] of [["refused", "Azure refused"], ["network", "Can't reach Azure"], ["busy", "Azure is busy"], ["sign_in", "Sign in to Azure again"]] as const) {
+    // VM-6: "no_code" is production's 403 with no code (VM-4's "Azure refused" and what to do); AuthorizationFailed
+    // ("refused" here) says Azure's reason instead (e2e/shell/vm-reasons.test.ts).
+    for (const [kind, short] of [["no_code", "Azure refused"], ["network", "Can't reach Azure"], ["busy", "Azure is busy"], ["sign_in", "Sign in to Azure again"]] as const) {
       await post(page, "demo.vm_fail", { kind });
       await post(page, "demo.vm_tick", { advanceMinutes: 3 });
       await page.waitForTimeout(9_000);

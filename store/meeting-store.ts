@@ -9,7 +9,7 @@
 // them and the Cooptimizers on their invite, acted on by them alone; a hand-added one by its adder only. The lists of
 // registered calls (the job's, the admin's, the Graph gate's, registration's duplicate check) never include one, and
 // the job's due checks and retries never reach one.
-import { CALL_KINDS, canConfirm, canView, joinKey, type CallKind, OCCURRENCE_STATES, PROPOSAL_STATES, type MeetingSeries, type Occurrence, type OccurrenceState, type Proposal, type ProposalBody, type ProposalState, type Quote, type TranscriptKind, type TranscriptSource } from "../plan/meetings.ts";
+import { CALL_KINDS, TRANSCRIPT_KINDS, canConfirm, canView, joinKey, type CallKind, OCCURRENCE_STATES, PROPOSAL_STATES, type MeetingSeries, type Occurrence, type OccurrenceState, type Proposal, type ProposalBody, type ProposalState, type Quote, type TranscriptKind, type TranscriptSource } from "../plan/meetings.ts";
 import type { TranscriptLine } from "../plan/transcript.ts";
 import { PlanError } from "./plan-store.ts";
 import type { Conn, Param, Row } from "./sql/conn.ts";
@@ -59,7 +59,7 @@ const toOccurrence = (r: Row): Occurrence => ({
   checks: Number(r.checks ?? 0),
   transcriptFrom: (s(r.transcript_from) as TranscriptSource | null) ?? null,
   transcriptAt: s(r.transcript_at),
-  ...(r.transcript_kind === "pocket" || r.transcript_kind === "teams" || r.transcript_kind === "pocket_api" ? { transcriptKind: r.transcript_kind } : {}),
+  ...(TRANSCRIPT_KINDS.includes(r.transcript_kind as TranscriptKind) ? { transcriptKind: r.transcript_kind as TranscriptKind } : {}),
   aiOutcome: s(r.ai_outcome),
   dismissedBy: s(r.dismissed_by),
   reviewedBy: s(r.reviewed_by),
@@ -120,9 +120,12 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
     async callsSince(fromDay: string): Promise<MeetingSeries[]> {
       return (await db.all("SELECT s.* FROM meeting_series s WHERE s.call_kind IS NOT NULL AND s.removed_at IS NULL AND EXISTS (SELECT 1 FROM meeting_occurrences o WHERE o.series_id = s.id AND o.day >= ?) ORDER BY s.id", [fromDay])).map(toSeries);
     },
-    /** MC-2: the kept call for one calendar meeting (by its iCalUId, the same on every attendee's calendar), or null. */
+    /**
+     * MC-2: the kept call for one calendar meeting (by its iCalUId, the same on every attendee's calendar), or null.
+     * MC-2c: or for one call started in a registered client chat (by "chat:<its call id>").
+     */
     async callByKey(key: string): Promise<{ series: MeetingSeries; occurrence: Occurrence } | null> {
-      const r = await db.get("SELECT * FROM meeting_series WHERE call_kind = 'calendar' AND event_id = ? AND removed_at IS NULL", [key]);
+      const r = await db.get("SELECT * FROM meeting_series WHERE call_kind IN ('calendar', 'chat') AND event_id = ? AND removed_at IS NULL", [key]);
       if (!r) return null;
       const o = await db.get("SELECT * FROM meeting_occurrences WHERE series_id = ? ORDER BY id", [Number(r.id)]);
       return o ? { series: toSeries(r), occurrence: toOccurrence(o) } : null;
@@ -134,8 +137,8 @@ function baseStore(db: Conn, now: () => Temporal.Instant) {
      */
     async addCall(x: NewCall): Promise<{ series: MeetingSeries; occurrence: Occurrence; existed: boolean }> {
       return db.tx(async () => {
-        if (x.callKind === "calendar" && x.eventId) {
-          const have = await db.get(`SELECT id FROM meeting_series${db.dialect === "sqlserver" ? " WITH (UPDLOCK, HOLDLOCK)" : ""} WHERE call_kind = 'calendar' AND event_id = ? AND removed_at IS NULL`, [x.eventId]);
+        if ((x.callKind === "calendar" || x.callKind === "chat") && x.eventId) {
+          const have = await db.get(`SELECT id FROM meeting_series${db.dialect === "sqlserver" ? " WITH (UPDLOCK, HOLDLOCK)" : ""} WHERE call_kind IN ('calendar', 'chat') AND event_id = ? AND removed_at IS NULL`, [x.eventId]);
           if (have) {
             const o = await db.get("SELECT * FROM meeting_occurrences WHERE series_id = ? ORDER BY id", [Number(have.id)]);
             if (o) return { series: (await seriesById(Number(have.id)))!, occurrence: toOccurrence(o), existed: true };

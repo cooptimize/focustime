@@ -1,7 +1,10 @@
 // Named, validated actions (docs/spec.md section 5). The UI calls these through the local server;
 // the future chat panel will call the same ones. Unknown actions and unexpected input are rejected.
+import { VM_READ_FAILS, type VmReadFail as ReadFail } from "../plan/vm.ts";
 import type { PressGrants } from "./call-press.ts";
 import type { ExistsGrants, ExistsHold } from "./call-exists.ts";
+import type { ChatCallPresses } from "./chat-call-press.ts";
+import { chatCallsPort } from "./chat-calls-port.ts";
 import { exactCaseDefault } from "../plan/common-words.ts";
 import { boundaryCheck } from "./boundary-actions.ts";
 import type { DayPromise } from "../plan/conversation-views.ts";
@@ -238,7 +241,7 @@ export type ActionContext = {
   /** Media control for focus (step 10): the host's. Absent: none (tests, demo). */
   media?: MediaControl;
   /** Step 15 (D272): demo mode, whether this context is the demo one and how to switch. Absent: no demo mode. */
-  demo?: { on: boolean; set: (on: boolean) => Promise<void>; /** DM-1: Reset demo (absent: not offered here). */ reset?: () => Promise<void>; /** DM-1: how the demo's AI has answered (counts and the last reason, never text). */ status?: () => DemoStatus; /** DV-2: a teammate's change in the demo's DevOps (not through FocusTime), to watch it arrive. */ devopsChange?: (clientKey: string, change: unknown) => { ok: true; id: number } | { ok: false; error: string }; /** VM-2 (verification runs only, --clock): move this demo session's clock on and run the VM auto-start's pass once. */ vmTick?: (advanceMinutes: number) => Promise<string>; /** VM-3 (verification runs only): Admin › Health's pretend slow pass holds or lets go. */ passStall?: (on: boolean) => void; /** VM-4 (verification runs only): the demo VM's state reads fail this way. */ vmFail?: (kind: "network" | "busy" | "sign_in" | "refused" | "no_state" | null) => void; /** VM-4 (verification runs only): the next call of an action fails unexpectedly. */ failNext?: (action: string) => void; takeFail?: (action: string) => boolean; /** DP-3: be a demo teammate (a second signed-in person on the demo's database), or "me" again; null: who I am now and who I could be. */ be?: (who: string | null) => Promise<{ ok: true; current: string; people: { id: string; name: string }[] } | { ok: false; error: string }> };
+  demo?: { on: boolean; set: (on: boolean) => Promise<void>; /** DM-1: Reset demo (absent: not offered here). */ reset?: () => Promise<void>; /** DM-1: how the demo's AI has answered (counts and the last reason, never text). */ status?: () => DemoStatus; /** DV-2: a teammate's change in the demo's DevOps (not through FocusTime), to watch it arrive. */ devopsChange?: (clientKey: string, change: unknown) => { ok: true; id: number } | { ok: false; error: string }; /** VM-2 (verification runs only, --clock): move this demo session's clock on and run the VM auto-start's pass once. */ vmTick?: (advanceMinutes: number) => Promise<string>; /** VM-3 (verification runs only): Admin › Health's pretend slow pass holds or lets go. */ passStall?: (on: boolean) => void; /** VM-4 (verification runs only): the demo VM's state reads fail this way. */ vmFail?: (kind: ReadFail | null) => void; /** VM-4 (verification runs only): the next call of an action fails unexpectedly. */ failNext?: (action: string) => void; takeFail?: (action: string) => boolean; /** DP-3: be a demo teammate (a second signed-in person on the demo's database), or "me" again; null: who I am now and who I could be. */ be?: (who: string | null) => Promise<{ ok: true; current: string; people: { id: string; name: string }[] } | { ok: false; error: string }> };
   /**
    * Step 15.4: the Microsoft sign-in for a config (null without an [outlook] app registration), and an Azure Resource
    * Manager client on a token. Absent: no sign-in here (tests that don't need it), and the config's "me" is used.
@@ -1426,6 +1429,8 @@ export type MeetingsPort = {
   pocketHold?: PocketHold;
   /** MC-4: the "exists" allowances the Graph gate lets through and the 15 minute answers (actions/call-exists.ts). */
   exists?: { grants: ExistsGrants; hold: ExistsHold };
+  /** MC-2c: the presses the chat call transcript client lets through (actions/chat-call-press.ts); absent: not here. */
+  chatPress?: ChatCallPresses;
 };
 
 /**
@@ -1469,6 +1474,21 @@ export async function meetingContext(ctx: ActionContext): Promise<MeetingContext
     ...(ctx.meetings?.press ? { press: ctx.meetings.press } : {}),
     ...(ctx.meetings?.exists ? { exists: ctx.meetings.exists } : {}),
     ...(ctx.meetings?.cooptimizer ? { cooptimizer: ctx.meetings.cooptimizer } : {}),
+    // MC-2c: the calls started in my registered client chats (what the poll kept), and their press and client.
+    ...(ctx.requests?.teams && ctx.meetings?.cooptimizer
+      ? {
+          chatCalls: chatCallsPort({
+            teams: ctx.requests.teams,
+            me: rc.me,
+            clientKeys: async () => (await chatContext(ctx)).clientKeys(),
+            users: async () => (ctx.meetings ? (await ctx.meetings.users()).map((u) => ({ id: u.id, name: u.name, deleted: false })) : []),
+            cooptimizer: ctx.meetings.cooptimizer,
+            now: ctx.now,
+          }),
+        }
+      : {}),
+    ...(ctx.meetings?.chatPress ? { chatPress: ctx.meetings.chatPress } : {}),
+    adhoc: (cfg) => ctx.account?.(cfg)?.adhocCalls ?? null,
     // MC-2b: my own Pocket for the two presses in Calls: my port (my key, the client), the hold, my addresses.
     ...(ctx.pocket && ctx.meetings?.pocketHold
       ? {
@@ -1859,8 +1879,8 @@ async function dispatchAction(ctx: ActionContext, req: ActionRequest): Promise<A
       // fail as asked, to see the chip keep its state, check and then say why.
       if (!ctx.demo?.on || !ctx.demo.vmFail) return { ok: false, status: 403, error: "Only in a demo verification run" };
       const i = req.input as Record<string, unknown> | null;
-      const kinds = ["network", "busy", "sign_in", "refused", "no_state", null];
-      if (typeof i !== "object" || i === null || Array.isArray(i) || Object.keys(i).some((k) => k !== "kind") || !kinds.includes(i.kind as never)) return bad("demo.vm_fail takes { kind: network | busy | sign_in | refused | no_state | null }");
+      const kinds = [...VM_READ_FAILS, null];
+      if (typeof i !== "object" || i === null || Array.isArray(i) || Object.keys(i).some((k) => k !== "kind") || !kinds.includes(i.kind as never)) return bad(`demo.vm_fail takes { kind: ${VM_READ_FAILS.join(" | ")} | null }`);
       ctx.demo.vmFail(i.kind as never);
       return { ok: true, data: { kind: i.kind } };
     }

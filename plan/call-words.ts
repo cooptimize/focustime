@@ -201,6 +201,10 @@ export const CALLS_TEXT = {
   summary: "What was said",
   whoSees: "You and the Cooptimizers on the invite can see this call. Only you can act on it.",
   whoSeesHand: "Only you can see this call.",
+  /** MC-2c: a call started in a client's chat. */
+  whoSeesChat: "The Cooptimizers in the chat who follow this client see this call in Calls, and each can review it with their own sign-in.",
+  /** MC-2c: the upload box on a chat call. */
+  uploadChat: "Download it from the call in the chat in Teams. It's kept 30 days, for you and the Cooptimizers in the chat who follow this client only.",
 } as const;
 
 /**
@@ -225,6 +229,9 @@ export const CALL_LIST = {
   uploadedByReviewer: "Uploaded by a reviewer",
   teamsOrFile: "From Teams or a file",
   fileOnly: "Upload only",
+  /** MC-2c: a call started in a client's registered chat: its name, and its source line. */
+  fromChat: "From a chat",
+  chatCallName: (chat: string) => `Call in ${chat}`,
   /** The mark on a registered weekly call, before its type. */
   weekly: "Weekly",
   noneHere: "No calls here.",
@@ -255,8 +262,11 @@ export const CALL_LIST = {
   failedOthers: "FocusTime couldn't read your calendar's calls just now. The calls it keeps are listed.",
 } as const;
 
+/** MC-2c: the way on from any chat call outcome: the transcript is in the chat in Teams. */
+export const CHAT_WAY_ON = "Or download the transcript from the call in the chat in Teams and upload it here.";
+
 /** MC-2: Get it from Teams, one try per press: what came of it, in plain words, each pointing to the upload when it failed. */
-export const FETCH_OUTCOMES = ["found", "none", "outside", "not_allowed", "tenant_off", "not_on_invite", "not_online", "signin", "consent", "busy", "unreadable", "not_cooptimizer", "unavailable"] as const;
+export const FETCH_OUTCOMES = ["found", "none", "outside", "not_allowed", "tenant_off", "not_on_invite", "not_online", "signin", "consent", "busy", "unreadable", "not_cooptimizer", "unavailable", "chat_not_granted", "chat_refused", "chat_none", "not_in_chat"] as const;
 export type FetchOutcome = (typeof FETCH_OUTCOMES)[number];
 export const FETCH_WORDS: Record<Exclude<FetchOutcome, "found">, string> = {
   none: "Teams has no transcript for this call. Transcription may not have been on. Upload a file instead.",
@@ -272,7 +282,14 @@ export const FETCH_WORDS: Record<Exclude<FetchOutcome, "found">, string> = {
   unreadable: "The transcript from Teams couldn't be read. Upload the file instead.",
   not_cooptimizer: "Only a Cooptimizer who was on a call can ask FocusTime to read it.",
   unavailable: "Getting a transcript from Teams isn't available here. Upload a file instead.",
+  // MC-2c: a call started in a client's chat. Each ends with the way on: the transcript from the chat, uploaded here.
+  chat_not_granted: `Cooptimize's Microsoft setup hasn't allowed FocusTime to read transcripts of calls started in chats yet. An admin allows it once. ${CHAT_WAY_ON}`,
+  chat_refused: `Microsoft didn't let your sign-in read this call's transcript. Teams lets the people who were on a call read it. If you weren't on it, ask someone who was to review it here. ${CHAT_WAY_ON}`,
+  chat_none: `Teams doesn't have this transcript, or it isn't ready yet. Try again in a few minutes. ${CHAT_WAY_ON}`,
+  not_in_chat: "FocusTime shows a chat's calls to the Cooptimizers in that chat who follow its client. Upload the transcript with Add a call instead.",
 };
+/** MC-2c: once, above the proposals and the Transcript, when Teams gave a chat call's transcript without speaker names. */
+export const CHAT_NO_SPEAKERS = "Teams gave this transcript without speaker names.";
 export const fetchFound = (lines: number, proposals: number, ran = true) => `Got the transcript from Teams (${lines} ${lines === 1 ? "line" : "lines"}). ${!ran ? `${CALL_STATE.aiFailed}.` : proposals ? `${proposals} ${proposals === 1 ? "proposal" : "proposals"} to review.` : "Nothing to propose from it."}`;
 
 /** MC-1d: the reviewer's notice (in the app and the Teams card) when the AI step failed and FocusTime stopped trying. */
@@ -506,6 +523,7 @@ export const PAGE_TEXT = {
   who: {
     hand: { short: "Only you see it", full: CALLS_TEXT.whoSeesHand },
     calendar: { short: "The invite sees it", full: CALLS_TEXT.whoSees },
+    chat: { short: "The chat sees it", full: CALLS_TEXT.whoSeesChat },
     registered: { short: "Reviewers see it", full: "Only this call's reviewers and the Cooptimizers on its invite see it, for 30 days." },
   },
   onlyLook: (names: readonly string[]) => `Only ${names.join(", ")} can act on it. You can look.`,

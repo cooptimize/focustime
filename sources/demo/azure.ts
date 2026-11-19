@@ -1,5 +1,6 @@
 // Demo mode (step 15.4): a fictional signed-in person and VM. The Azure side is the fake Resource Manager behind a fetch
 // that never leaves the process: a start takes about 20 seconds, the auto-shutdown is 7:00 PM (read only). No Azure calls.
+import type { VmReadFail as ReadFail } from "../../plan/vm.ts";
 import type { MicrosoftAccount } from "../../actions/account.ts";
 import { createAzureClient } from "../azure/client.ts";
 import { fakeArm } from "../azure/fake-arm.ts";
@@ -11,6 +12,8 @@ import { demoChats } from "./chats.ts";
 import { demoSender } from "./send.ts";
 import { demoMeetings } from "./meetings-graph.ts";
 import type { MeetingGate } from "../graph/meetings.ts";
+import type { AdhocGate } from "../graph/adhoc-calls.ts";
+import { demoAdhocCalls } from "./adhoc-calls.ts";
 
 /** Step 16.4: generated avatars for the fictional people (one has none, to show initials). No Graph calls. */
 export function demoPhotos(): PhotoClient {
@@ -45,9 +48,9 @@ export const DEMO_VM_ID = "/subscriptions/00000000-0000-4000-8000-0000000000f1/r
 export const DEMO_VM_NO_SHUTDOWN_ID = "/subscriptions/00000000-0000-4000-8000-0000000000f1/resourceGroups/rg-demo-dev/providers/Microsoft.Compute/virtualMachines/vm-demo-spare";
 
 /** MC-2: `meetingsGate`, the same gate the hosted app puts before every transcript read (the press, in the demo). */
-export function createDemoAzure(o: { meetingsGate?: MeetingGate; /** PK-4: "long" adds 30 one-off calendar calls. */ calls?: "long" } = {}) {
+export function createDemoAzure(o: { meetingsGate?: MeetingGate; /** PK-4: "long" adds 30 one-off calendar calls. */ calls?: "long"; /** MC-2c: the chat call press gate; absent: no chat call transcripts here. */ adhocGate?: AdhocGate } = {}) {
   // VM-4: verification runs only (demo.vm_fail): reads of the demo VM's state fail in the way asked, to see the chip.
-  const readFails: { kind: "network" | "busy" | "sign_in" | "refused" | "no_state" | null } = { kind: null };
+  const readFails: { kind: ReadFail | null } = { kind: null };
   const arm = fakeArm({ now: () => Date.now(), transitionMs: 20_000, readFails });
   arm.addVm({ id: DEMO_VM_ID, name: "vm-demo-alex", resourceGroup: "rg-demo-dev", subscriptionId: "00000000-0000-4000-8000-0000000000f1", location: "eastus", tags: { Owner: DEMO_PERSON.name }, power: "deallocated" }, { time: "1900", timeZoneId: "Eastern Standard Time" });
   arm.addVm({ id: DEMO_VM_NO_SHUTDOWN_ID, name: "vm-demo-spare", resourceGroup: "rg-demo-dev", subscriptionId: "00000000-0000-4000-8000-0000000000f1", location: "eastus", tags: {}, power: "deallocated" });
@@ -61,9 +64,11 @@ export function createDemoAzure(o: { meetingsGate?: MeetingGate; /** PK-4: "long
     chats: demoChats(),
     // MC-1c: a fictional calendar for registering a client call (sources/demo/meetings-graph.ts).
     meetings: demoMeetings(o.meetingsGate, o.calls),
+    // MC-2c: the transcripts of the calls started in Northwind's delivery chat (sources/demo/adhoc-calls.ts).
+    ...(o.adhocGate ? { adhocCalls: demoAdhocCalls(o.adhocGate) } : {}),
     // LP-1: Teams posts and Outlook drafts are pretended (sources/demo/send.ts); Send now isn't allowed, to show the fallback.
     sender: demoSender(),
-    probe: async (kind) => (kind === "mail_send" ? { kind, state: "consent", granted: [] } : { kind, state: "granted", granted: kind === "arm" ? ["user_impersonation"] : kind === "send" ? ["ChatMessage.Send", "Chat.Create"] : kind === "mail" ? ["Mail.ReadWrite"] : ["User.Read", "Calendars.ReadWrite", "MailboxSettings.Read", "Presence.ReadWrite", "Presence.Read.All", "ProfilePhoto.Read.All", "Chat.ReadBasic"] }),
+    probe: async (kind) => (kind === "mail_send" ? { kind, state: "consent", granted: [] } : { kind, state: "granted", granted: kind === "arm" ? ["user_impersonation"] : kind === "send" ? ["ChatMessage.Send", "Chat.Create"] : kind === "mail" ? ["Mail.ReadWrite"] : ["User.Read", "Calendars.ReadWrite", "MailboxSettings.Read", "Presence.ReadWrite", "Presence.Read.All", "ProfilePhoto.Read.All", "Chat.ReadBasic", "CallTranscripts.Read.All"] }),
     signOut: async () => {},
   };
   return { account, azure: (token: () => Promise<string>) => createAzureClient({ fetch: arm.fetch, token, log: () => {} }), arm, readFails };
