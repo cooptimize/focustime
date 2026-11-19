@@ -1275,7 +1275,8 @@ function ReviewScreen(props: ReviewProps) {
   const origin = r.pocket ? { text: PAGE_TEXT.origin.pocket, hint: r.pocketFrom ? `${r.pocketFrom === "mine" ? PW.fromMine : PW.fromReviewer} ${PW.unnamed}` : POCKET_TEXT.note } : m.call === "hand" ? { text: PAGE_TEXT.origin.hand, hint: null } : null;
   const shownFilters = CALL_FILTERS.filter((f) => counts[f.key] > 0);
   const skipWords = open.length === r.proposals.length ? CLOSE_TEXT.skipAllClose : CLOSE_TEXT.skipLastClose(open.length);
-  const noTranscript = editable && !r.transcript && !o.hasTranscript;
+  // A call with no transcript, or one waiting on it or marked as having none this week (as the old upload box showed): the choices.
+  const noTranscript = editable && ((!r.transcript && !o.hasTranscript) || o.state === "needs_upload" || o.state === "waiting" || o.state === "no_transcript");
   const isOpen = (p: Proposal) => openProps.has(p.id);
   const setOpen = (p: Proposal, on: boolean) => setOpenProps((x) => { const n = new Set(x); if (on) n.add(p.id); else n.delete(p.id); return n; });
   const row = (p: Proposal, live: boolean) => (
@@ -1308,7 +1309,7 @@ function ReviewScreen(props: ReviewProps) {
             {!m.call && <span>{m.roleLabel}</span>}
             <span>{whenOf(o.startAt, zone)}</span>
             {people ? <span>{CALLS_TEXT.people(people)}</span> : null}
-            {origin && <span title={origin.hint ?? undefined}>{origin.text}</span>}
+            {origin && <span title={origin.hint ?? undefined} data-call-origin="">{origin.text}</span>}
             <span title={who.full}>{who.short}</span>
           </p>
         </header>
@@ -1330,9 +1331,9 @@ function ReviewScreen(props: ReviewProps) {
         )}
       </div>
       {run.msg && <p className="muted mtg-run-line" role="status">{run.msg}</p>}
-      {up.ask && <DateAsk text={up.ask.text} onAnswer={up.answer} />}
+      {up.ask && !noTranscript && <DateAsk text={up.ask.text} onAnswer={up.answer} />}
       {up.msg && !up.ask && !noTranscript && <p className="muted mtg-run-line" role="status">{up.msg}</p>}
-      {editable && r.transcript && dragging && (
+      {editable && r.transcript && dragging && !noTranscript && (
         <div className="mtg-drop mtg-drop-replace dropping" {...dropProps(up)}>{POCKET_TEXT.dropReplace}</div>
       )}
       {editable && <input ref={fileRef} type="file" accept={ACCEPT} hidden onChange={(e) => (up.pick(e.target.files?.[0]), (e.target.value = ""))} data-call-file="" />}

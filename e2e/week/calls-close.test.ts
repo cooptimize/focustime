@@ -14,7 +14,8 @@ const hash = (page: Page) => page.evaluate(() => location.hash);
 const go = (page: Page, x: string) => page.evaluate((v) => (location.hash = v), x);
 const item = (page: Page, name: string | RegExp) => page.locator("[data-calls-list] li").filter({ has: page.locator(".calls-name", { hasText: name }) }).first();
 const filter = (page: Page, f: string) => page.locator(`[data-calls-filter="${f}"]`);
-const count = async (page: Page, f: string) => Number(await filter(page, f).locator(".seg-count").textContent());
+// MC-5: a count of zero isn't shown.
+const count = async (page: Page, f: string) => Number((await filter(page, f).locator(".seg-count").allTextContents())[0] ?? 0);
 const undo = (page: Page) => page.getByRole("button", { name: "Undo" }).first();
 
 async function openCalls(page: Page) {
@@ -32,10 +33,14 @@ describe.skipIf(!CHROMIUM)("MC-4: Calls you can scan, hide and close (browser, d
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
     await openCalls(page);
     // Teams said this one has a transcript; the client is FocusTime's suggestion.
-    await expect.poll(() => item(page, "Northwind data model review").locator("[data-call-mark]").textContent(), { timeout: 30_000 }).toBe("Transcript in Teams");
-    await expect(item(page, "Northwind data model review").locator("[data-call-about] option:checked").textContent()).resolves.toBe("About Northwind");
+    // MC-5: the mark is a word, its full words on its label and hover; the client is the picker's value.
+    await expect.poll(() => item(page, "Northwind data model review").locator("[data-call-mark]").textContent(), { timeout: 30_000 }).toBe("Teams");
+    await expect(item(page, "Northwind data model review").locator("[data-call-mark]").getAttribute("aria-label")).resolves.toBe("Transcript in Teams");
+    await expect(item(page, "Northwind data model review").locator("[data-call-about] option:checked").textContent()).resolves.toBe("Northwind");
     // Hide: one press, out of Open and into Hidden; Undo puts it back.
     const open0 = await count(page, "open");
+    // MC-5: Hide shows on hover.
+    await item(page, "Northwind data model review").hover();
     await item(page, "Northwind data model review").locator("[data-call-act='hide']").click();
     await expect.poll(() => count(page, "hidden"), { timeout: 30_000 }).toBe(1);
     await expect.poll(() => count(page, "open"), { timeout: 30_000 }).toBe(open0 - 1);
@@ -83,8 +88,10 @@ describe.skipIf(!CHROMIUM)("MC-4: Calls you can scan, hide and close (browser, d
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
     await openCalls(page);
     const needs = page.locator("[data-section='needs'] li").first();
-    await expect(needs.textContent()).resolves.toMatch(/(\d+) left of \1/);
-    // No question first: Undo is the way back.
+    await expect(needs.textContent()).resolves.toMatch(/\d+ left/);
+    // MC-5: Skip all is a quiet button on the hovered row. No question first: Undo is the way back.
+    await needs.hover();
+    await expect(needs.locator("[data-call-act='skip-all']").textContent()).resolves.toBe("Skip all");
     await needs.locator("[data-call-act='skip-all']").click();
     await expect.poll(() => page.locator("[data-section='needs']").count(), { timeout: 30_000 }).toBe(0);
     await expect.poll(() => page.locator(".topbar .view-tab").filter({ hasText: /^Calls/ }).locator(".count").count(), { timeout: 30_000 }).toBe(0);
@@ -95,8 +102,8 @@ describe.skipIf(!CHROMIUM)("MC-4: Calls you can scan, hide and close (browser, d
     await page.locator("[data-section='needs']").waitFor({ timeout: 30_000 });
     // Close it from its page this time.
     await page.locator("[data-section='needs'] [data-call-row]").first().click();
-    await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor({ timeout: 30_000 });
-    await page.locator("[data-open-head] [data-call-act='skip-all']").click();
+    await page.getByRole("heading", { level: 2, name: "Northwind weekly status call" }).waitFor({ timeout: 30_000 });
+    await page.locator("[data-call-head] [data-call-act='skip-all']").click();
     const closed = page.locator("[data-closed-page]");
     await closed.waitFor({ timeout: 30_000 });
     await expect(closed.locator("h3").textContent()).resolves.toMatch(/^Closed Thu, Nov 5/);
@@ -104,20 +111,21 @@ describe.skipIf(!CHROMIUM)("MC-4: Calls you can scan, hide and close (browser, d
     await closed.locator("[data-see-skipped]").click();
     await page.locator(".mtg-prop.skipped").first().getByRole("button", { name: "Bring back" }).click();
     await expect.poll(() => page.locator("[data-closed-page]").count(), { timeout: 30_000 }).toBe(0);
-    await page.locator("[data-open-head]").waitFor();
-    await expect(page.locator("[data-open-head] [data-call-act='skip-all']").textContent()).resolves.toBe("Skip the last 1 and close");
+    await expect(page.locator("[data-call-head] [data-call-act='skip-all']").textContent()).resolves.toBe("Skip the last 1 and close");
     expect(errors).toEqual([]);
     await page.close();
   }, T);
 
-  it("Review from the row reads the transcript with no setup and opens the call", async () => {
+  it("a click on a row with a client and Teams' transcript reads it with no setup and opens the call", async () => {
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
     await openCalls(page);
     const model = item(page, "Northwind data model review");
-    await expect.poll(() => model.locator("[data-call-mark]").textContent(), { timeout: 30_000 }).toBe("Transcript in Teams");
-    await model.locator("[data-call-act='review']").click();
+    await expect.poll(() => model.locator("[data-call-mark]").textContent(), { timeout: 30_000 }).toBe("Teams");
+    // MC-5: no Review button; the row itself.
+    await expect(model.locator("[data-call-act='review']").count()).resolves.toBe(0);
+    await model.locator("[data-call-row]").click();
     await expect.poll(() => hash(page), { timeout: 30_000 }).toMatch(/^#\/calls\/\d+/);
-    await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor({ timeout: 30_000 });
+    await page.getByRole("heading", { level: 2, name: "Northwind data model review" }).waitFor({ timeout: 30_000 });
     expect(errors).toEqual([]);
     await page.close();
   }, T);
@@ -130,7 +138,7 @@ describe.skipIf(!CHROMIUM)("MC-4: Calls you can scan, hide and close (browser, d
     expect((await page.locator("[data-week-calls-line]").boundingBox())!.height).toBeGreaterThanOrEqual(44);
     await openCalls(page);
     await page.locator("[data-call-mark]").first().waitFor({ timeout: 30_000 });
-    for (const b of await page.locator("[data-calls-list] .calls-row-acts button, [data-calls-list] .calls-row-acts select, [data-calls-list] .calls-tick, [data-calls-list] [data-call-row], [data-calls-list] .calls-head-actions button").all()) {
+    for (const b of await page.locator("[data-calls-list] .calls-row-acts button, [data-calls-list] .calls-row-acts select, [data-calls-list] .calls-tick, [data-calls-list] li[data-row], [data-calls-list] .calls-head button").all()) {
       if (!(await b.isVisible())) continue;
       expect((await b.boundingBox())!.height, (await b.textContent()) ?? "").toBeGreaterThanOrEqual(44);
     }

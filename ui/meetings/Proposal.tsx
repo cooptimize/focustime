@@ -21,7 +21,8 @@ export function fieldsLine(p: Proposal): string {
     const who = b.assignTo === undefined || b.assignTo === "me" ? PAGE_TEXT.me : b.assignTo ? b.assignTo : PAGE_TEXT.nobody;
     return [b.type, b.parentId !== null ? PAGE_TEXT.under(b.parentId, b.parentTitle ?? null) : PAGE_TEXT.noParent, who, b.date ? dayLabel(b.date) : PAGE_TEXT.noDate].join(" · ");
   }
-  if (b.kind === "commitment") return [`${b.side === "unknown" ? CALL_ROW.noOwner : b.who}${b.toName ? ` to ${b.toName}` : ""}`, b.due ? PAGE_TEXT.by(dayLabel(b.due)) : PAGE_TEXT.noDate].join(" · ");
+  if (b.kind === "commitment")
+    return [`${b.side === "unknown" ? CALL_ROW.noOwner : b.who}${b.toName ? ` to ${b.toName}` : ""}`, b.due ? PAGE_TEXT.by(dayLabel(b.due)) : PAGE_TEXT.noDate, b.side === "cooptimize" ? `in ${b.who.split(/\s+/)[0]}'s Promises` : b.side === "client" ? "in your Waiting on" : null].filter(Boolean).join(" · ");
   return PAGE_TEXT.on(b.itemId, b.itemTitle);
 }
 

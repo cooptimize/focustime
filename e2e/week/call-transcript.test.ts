@@ -37,7 +37,7 @@ describe.skipIf(!CHROMIUM)("a call's transcript (browser, demo mode)", () => {
     const mine = (await call(page, "meeting.mine", {})).data;
     const id = mine.occurrences[0].id as number;
     await open(page, `#/meetings/${id}`);
-    await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor({ timeout: 30_000 });
+    await page.getByRole("heading", { level: 2, name: /^Northwind weekly status call/ }).waitFor({ timeout: 30_000 });
     await page.locator(".mtg-switch").getByRole("button", { name: /Transcript/ }).click();
     await expect.poll(() => page.evaluate(() => location.hash)).toBe(`#/calls/${id}/transcript`);
     const lines = page.locator(".mtg-lines li");
@@ -60,12 +60,12 @@ describe.skipIf(!CHROMIUM)("a call's transcript (browser, demo mode)", () => {
     const toProposal = page.locator(".mtg-lines li.marked").first().getByRole("button", { name: /^Go to the proposal/ });
     await toProposal.click();
     await expect.poll(() => page.evaluate(() => location.hash)).toMatch(new RegExp(`^#/calls/${id}/proposal/\\d+$`));
-    await expect.poll(() => page.evaluate(() => document.activeElement?.querySelector<HTMLInputElement>("input:not([type=checkbox])")?.value)).toBe("Accountant reporting area");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.closest("[data-prop]")?.getAttribute("aria-label"))).toBe("Accountant reporting area");
     await page.locator(".mtg-switch").getByRole("button", { name: /Transcript/ }).click();
     await lines.first().waitFor({ timeout: 30_000 });
-    // Show in transcript from a proposal: the Transcript view at its first line, focused.
+    // MC-5: a proposal's quote line opens the Transcript view at that line, focused.
     await page.locator(".mtg-switch").getByRole("button", { name: /Proposals/ }).click();
-    const jump = page.locator(".mtg-prop").first().getByRole("button", { name: /^Show in transcript/ });
+    const jump = page.locator(".mtg-prop").first().locator("button.mtg-p3");
     await jump.click();
     await expect.poll(() => page.evaluate(() => location.hash)).toMatch(new RegExp(`^#/calls/${id}/transcript/\\d+$`));
     const n = Number((await page.evaluate(() => location.hash)).split("/").pop());

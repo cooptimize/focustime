@@ -1,5 +1,5 @@
 {
- "source": "ci runs 44346002266; e2e/settings/sa3.test.ts from main (measured locally)",
+ "source": "ci runs 44346002266; e2e/settings/sa3.test.ts from main (measured locally); e2e/week/calls-mc5.test.ts from its branch (measured locally)",
  "files": {
   "e2e/admin/admin-phone-width.test.ts": 6.6,
   "e2e/admin/background-passes.test.ts": 5.8,
@@ -140,6 +140,7 @@
   "e2e/week/call-create-break-down.test.ts": 12.6,
   "e2e/week/call-pocket.test.ts": 16.2,
   "e2e/week/call-transcript.test.ts": 6.5,
+  "e2e/week/calls-mc5.test.ts": 22,
   "e2e/week/calls-pocket-recordings.test.ts": 25.2,
   "e2e/week/calls-tab.test.ts": 65.4,
   "e2e/week/calls.test.ts": 7.2,

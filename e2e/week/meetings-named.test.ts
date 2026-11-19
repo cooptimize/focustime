@@ -127,7 +127,7 @@ describe.skipIf(!CHROMIUM)("WK-6: meetings named on the day in focus (browser, d
     await seed(page);
     await week(page);
     await named(page, WED, "AM").locator(".cm-row", { hasText: "requirements workshop" }).locator("a.cm-hit").click();
-    await page.getByRole("heading", { name: "Update Northwind's plan" }).waitFor({ timeout: 30_000 });
+    await page.getByRole("heading", { level: 2, name: /^Northwind requirements workshop/ }).waitFor({ timeout: 30_000 });
     expect(await page.evaluate(() => location.hash)).toMatch(/^#\/calls\/\d+/);
     await page.goBack();
     await expect.poll(() => page.evaluate(() => location.hash)).toBe("#/week");

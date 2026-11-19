@@ -114,7 +114,7 @@
 .mtg-sec-count { margin-left: 6px; font-variant-numeric: tabular-nums; }
 
 /* A proposal folded: three lines. */
-.mtg-prop.mc5 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; padding: 6px 0; }
+.mtg-prop.mc5 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; padding: 6px 0; position: relative; }
 .mtg-p1 { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto auto; align-items: center; column-gap: 8px; min-width: 0; }
 .mtg-prop.mc5 .mtg-tick { padding-top: 0; min-width: 0; display: inline-flex; }
 .mtg-prop.mc5 .mtg-main { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
