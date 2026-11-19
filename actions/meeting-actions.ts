@@ -19,7 +19,7 @@ import type { ClientEntry } from "../ai/guard.ts";
 import type { AiService } from "../ai/service.ts";
 import type { AppConfig } from "../config/schema.ts";
 import type { LogRecord } from "../log/logger.ts";
-import { fromPocket, unnamedSpeakers, attendeeIds, canConfirm, isCall, mayRead, commentLevelOk, defaultReviewers, detectSource, joinKey, lastReadLine, MEETING_ROLES, newOnly, nextRetry, nudgesFor, outcomeOf, parseOutcome, proposalOrder, retryable, ROLE_LABEL, toReview, type MeetingRole, type MeetingSeries, type Occurrence, type Proposal, type ProposalBody, type TranscriptKind, type TranscriptSource } from "../plan/meetings.ts";
+import { fromPocket, pastedAs, speakersNamed, attendeeIds, canConfirm, isCall, mayRead, commentLevelOk, defaultReviewers, detectSource, joinKey, lastReadLine, MEETING_ROLES, newOnly, nextRetry, nudgesFor, outcomeOf, parseOutcome, proposalOrder, retryable, ROLE_LABEL, toReview, type MeetingRole, type MeetingSeries, type Occurrence, type Proposal, type ProposalBody, type TranscriptKind, type TranscriptSource } from "../plan/meetings.ts";
 import { AnswersError, parseAnswers, type Answers } from "../plan/three-questions.ts";
 import { callWriteWords, CALL_LIST, CALL_ROW, FETCH_WORDS, fetchFound, type FetchOutcome, type ProposalCheck, type RequiredField, CHAT_OTHER_CLIENT, DISMISS_TEXT } from "../plan/call-words.ts";
 import { inWindow, isOtherCall, OTHER_CALL_DAYS, otherCallsWindow, type CalendarMeeting } from "../plan/calls.ts";
@@ -34,7 +34,8 @@ import { pocketAdd, pocketAddressAdd, pocketAddressRemove, pocketBring, pocketLi
 
 /** RQ-1: devops.needed's answer as a row reads it. */
 export type NeededCheck = NeededAnswer & { level: "story" | "above" | null; projectName?: string };
-import { aiFailedLine, aiNextLine } from "../plan/call-words.ts";
+import { aiFailedLine, aiNextLine, PASTE_TEXT } from "../plan/call-words.ts";
+import { readPaste, type PasteAs } from "../plan/transcript.ts";
 import type { ProcessModel } from "../plan/process.ts";
 import { atOf, joinTranscriptParts, parseVtt, TranscriptError, type TranscriptLine } from "../plan/transcript.ts";
 import { AuthFailure } from "../sources/oauth/oauth.ts";
@@ -643,6 +644,9 @@ async function review(ctx: MeetingContext, store: MeetingStore, cfg: AppConfig, 
       pocket: fromPocket(r.o.transcriptKind),
       // MC-2c: Teams gave this chat call's transcript without speaker names.
       noSpeakers: r.o.transcriptKind === "teams_unnamed",
+      // MC-7: what a reviewer pasted, a transcript or their notes; null for any other source.
+      pasted: pastedAs(r.o.transcriptKind),
+      transcriptKind: lines ? r.o.transcriptKind ?? null : null,
       // MC-2b: whose Pocket recording it was, said only as mine or a reviewer's (never a name); null otherwise.
       pocketFrom: r.o.transcriptKind === "pocket_api" && lines ? ((await store.transcriptBy(r.o.id))?.toLowerCase() === me.toLowerCase() ? "mine" : "reviewer") : null,
       canConfirm: reviewer,
@@ -920,6 +924,13 @@ export type PassDeps = {
   retriesHere?: boolean;
 };
 
+/** MC-7: who pasted a call's notes (a note's "I"), by FocusTime id and name; null when not known. */
+async function writerOf(store: MeetingStore, occurrenceId: number, users: readonly MeetingUser[]): Promise<{ id: string; name: string } | null> {
+  const by = await store.transcriptBy(occurrenceId).catch(() => null);
+  const u = by ? users.find((x) => lower(x.id) === lower(by)) : null;
+  return u ? { id: lower(u.id), name: u.name } : null;
+}
+
 /**
  * Runs the AI pass on a stored transcript and records its proposals and outcome. MC-1d: a pass that ran is "ready"
  * (with its proposals, or none); one that failed is "failed" with its kind (and, for a call sent in parts, which part),
@@ -941,7 +952,7 @@ export async function runPass(d: PassDeps, series: MeetingSeries, occ: Occurrenc
     const cooptimizers = series.attendees.flatMap((a) => users.filter((u) => lower(u.id) === lower(a)).map((u) => ({ id: lower(u.id), name: u.name })));
     // PK-1: a Pocket export's speakers are numbered, never named: the AI is told so, and promises' owners checked for it.
     // MC-2: a call that isn't registered has no role (it isn't a weekly status or planning call): none is said.
-    const r = await capturePass(ai, { clientKey: series.clientKey, clientName: cap.clientName, internal: cap.internal, meeting: { name: series.name, role: isCall(series) ? null : series.role, date: occ.date }, cooptimizers, items: cap.items, model: cap.model, directory: cap.directory, lines, speakersNamed: !unnamedSpeakers(occ.transcriptKind) });
+    const r = await capturePass(ai, { clientKey: series.clientKey, clientName: cap.clientName, internal: cap.internal, meeting: { name: series.name, role: isCall(series) ? null : series.role, date: occ.date }, cooptimizers, items: cap.items, model: cap.model, directory: cap.directory, lines, speakersNamed: speakersNamed(occ.transcriptKind, [...new Set(lines.map((l) => l.speaker))]), ...(occ.transcriptKind === "pasted_notes" ? { notes: true, writer: await writerOf(d.store, occ.id, users) } : {}) });
     if (r.ok) {
       await d.store.saveSummary(occ.id, r.summary);
       // MC-1e: what the page already has done, skipped or failed stays as it is, and the same thing again is left out.
@@ -978,7 +989,7 @@ const refusedRequest = (kind: string, status: number | undefined) => kind === "p
  * recording's length), and the page sends the file again with `dateOk` only on a yes. The log has kinds, sizes and
  * counts, never a word, a title, a label or a file's name.
  */
-export async function uploadTranscript(ctx: MeetingContext, q: { seriesId: number; date: string; bytes: Uint8Array; dateOk?: boolean }): Promise<ActionResponse> {
+export async function uploadTranscript(ctx: MeetingContext, q: { seriesId: number; date: string; bytes: Uint8Array; dateOk?: boolean; /** MC-7: pasted text, read as a transcript or as notes. */ paste?: PasteAs | "bad" }): Promise<ActionResponse> {
   const store = ctx.meetings;
   const me = await ctx.me();
   const cfg = await ctx.config();
@@ -990,6 +1001,7 @@ export async function uploadTranscript(ctx: MeetingContext, q: { seriesId: numbe
   if (!canConfirm(series, me)) return bad("Only this meeting's reviewers can upload its transcript", 403);
   // MC-2: a call has one occurrence; its transcript goes there, never under another day.
   if (series.callKind && !(await store.occurrencesOf(series.id)).some((o) => o.date === q.date)) return bad("Upload this call's transcript on its own day", 422);
+  if (q.paste) return savePaste(ctx, { store, me, cfg, series, date: q.date, bytes: q.bytes, as: q.paste });
   let read: TranscriptRead;
   try {
     read = await readTranscriptFile(q.bytes, { readPdf: ctx.readPdf });
@@ -1019,6 +1031,45 @@ export async function uploadTranscript(ctx: MeetingContext, q: { seriesId: numbe
   if (facts.pages) ctx.log({ source: "plan", op: "meeting_upload_pages", kind: facts.kind, count: facts.pages });
   const r = await runPass({ store, ai: ctx.ai, capture: (k) => ctx.capture(cfg, k), users: ctx.users, log: ctx.log, now: ctx.now, ...(ctx.retriesHere ? { retriesHere: true } : {}) }, series, (await store.occurrence(occ.id))!, lines);
   return { ok: true, data: { occurrenceId: occ.id, lines: lines.length, kind, ...r } };
+}
+
+/**
+ * MC-7: a pasted transcript or notes for a call, after uploadTranscript's checks (who may, the call's day): read as
+ * the box said, refused when nearly empty or longer than a transcript may be (nothing saved), stored as the call's
+ * transcript ("pasted" or "pasted_notes"), then the same AI pass as a file. The log says only that a paste was saved,
+ * its kind and its line count: never a word of it, a name or a title.
+ */
+async function savePaste(ctx: MeetingContext, x: { store: MeetingStore; me: string; cfg: AppConfig; series: MeetingSeries; date: string; bytes: Uint8Array; as: PasteAs | "bad" }): Promise<ActionResponse> {
+  if (x.as !== "transcript" && x.as !== "notes") return bad("Say whether it is a transcript or notes", 400);
+  let text: string;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(x.bytes);
+  } catch {
+    ctx.log({ source: "plan", op: "meeting_paste_refused", kind: "not_text", count: x.bytes.length });
+    return bad("That isn't plain text. Paste the words themselves", 422);
+  }
+  // MC-6: a chat call's words are its chat's client's, or Internal's: never pasted under another client.
+  if (x.series.callKind === "chat") {
+    const callId = x.series.eventId ? callIdOfKey(x.series.eventId) : null;
+    const c = callId && ctx.chatCalls ? await ctx.chatCalls.one(callId).catch(() => null) : null;
+    if (!(await chatClientAllowed(ctx, c && c.chatId === chatIdOf(x.series) ? c.clientKey : "", x.series.clientKey))) {
+      ctx.log({ source: "plan", op: "meeting_paste_refused", kind: "chat_other_client" });
+      return { ok: false, status: 403, error: CHAT_OTHER_CLIENT, code: "chat_other_client" };
+    }
+  }
+  const read = readPaste(text, x.as);
+  const kind: TranscriptKind = x.as === "notes" ? "pasted_notes" : "pasted";
+  if (read.tooLong || read.tooShort || read.noNames) {
+    ctx.log({ source: "plan", op: "meeting_paste_refused", kind: read.tooLong ? "long" : read.tooShort ? "short" : "no_names", count: read.lines.length });
+    return bad(read.tooLong ? PASTE_TEXT.tooLong : read.tooShort ? PASTE_TEXT.tooShort : PASTE_TEXT.noNames, 422);
+  }
+  const v = x.store.viewer(x.me);
+  const start = Temporal.PlainDate.from(x.date).toZonedDateTime({ timeZone: x.series.zone, plainTime: Temporal.PlainTime.from(x.series.start) });
+  const occ = await v.ensureOccurrence(x.series.id, x.date, start.toInstant().toString(), start.add({ minutes: x.series.minutes }).toInstant().toString());
+  await v.saveTranscript(occ.id, read.lines, kind);
+  ctx.log({ source: "plan", op: "meeting_paste", kind, count: read.lines.length });
+  const r = await runPass({ store: x.store, ai: ctx.ai, capture: (k) => ctx.capture(x.cfg, k), users: ctx.users, log: ctx.log, now: ctx.now, ...(ctx.retriesHere ? { retriesHere: true } : {}) }, x.series, (await x.store.occurrence(occ.id))!, read.lines);
+  return { ok: true, data: { occurrenceId: occ.id, lines: read.lines.length, kind, ...r } };
 }
 
 // ---- MC-2: calls that aren't registered ----

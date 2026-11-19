@@ -733,3 +733,26 @@ From `ui/status-states.ts` (`STATE_NAME`, `STATE_KEY`, `ST_WORDS`, `LINE_NOTE`).
 - The foot bar: **"3 lines ready to push"** (**"1 line ready to push"**), **"Harbor 1, Cooptimize 1, Northwind 1"**, OP-1's line, **"Push to DevOps"**.
 - Pushed just now: **"On the report"** with **"Undo"**, **"Undone"**, **"Ready to push · Didn't push: <why>"** with **"Retry"**.
 - Preview: **"No update yet"**; **"2 lines aren't on the report yet"** (**"1 line isn't on the report yet"**), **"Show them"** (**"Hide them"**), **"Push to DevOps"**.
+
+## MC-7 words (Nov 19)
+
+| Where | Words |
+|---|---|
+| The transcript choices | From Teams · Pocket recording · A file · **Paste** · Later |
+| The box's label | Paste a transcript or your notes |
+| Under the box | Plain text. A transcript with names (copied from another tool), or notes you typed during the call. |
+| The line, a transcript | A transcript: 142 lines, 4 speakers |
+| The line, notes | Notes: 23 lines |
+| The switch | Read it as notes · Read it as a transcript |
+| Too long | That is longer than FocusTime can read for one call. Paste the part that matters. |
+| Too short | Paste at least a few words. |
+| A transcript with no names | No names found, so it can't be read as a transcript. |
+| The button | Add and review (Add a call) · Use this (a call's page) · Reading… |
+| The call's menu | Paste a transcript or notes (under Upload a transcript) |
+| Replacing | Replace the Teams transcript? (the pasted transcript, the pasted notes, the Pocket transcript) and Propose again's words |
+| Leaving with text | Leave without using what you pasted? FocusTime doesn't keep it. |
+| After the press | Read 23 note lines. 4 proposals to review. · Read 142 lines. … |
+| The call's line | Pasted transcript · Pasted notes |
+| A call's source | Transcript pasted by a reviewer · Notes pasted by a reviewer |
+| The Transcript view, notes | Your notes (the tab and the heading) · Words (the filter's hint) · Notes pasted by a reviewer, not what was said word for word. Kept 30 days, for this call's reviewers and attendees only. |
+| A note's quote | Open your notes at this line |

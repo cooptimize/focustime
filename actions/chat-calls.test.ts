@@ -23,7 +23,7 @@ import { aChatMember } from "../test/builders/index.ts";
 import { addUsers, sqliteDb } from "../test/db.ts";
 import { createChatCallPresses } from "./chat-call-press.ts";
 import { chatCallsPort } from "./chat-calls-port.ts";
-import { chatClientAllowed, meetingAction, type MeetingAction, type MeetingContext } from "./meeting-actions.ts";
+import { chatClientAllowed, meetingAction, uploadTranscript, type MeetingAction, type MeetingContext } from "./meeting-actions.ts";
 
 const ME = "11111111-1111-4111-8111-111111111111";
 const MATE = "33333333-3333-4333-8333-333333333333";
@@ -133,7 +133,7 @@ async function setup() {
   const chatRows = async (me: string) => (await others(me)).filter((c) => c.chat);
   const start = (me: string, callId = CALL_A, clientKey = "contoso", o?: { admin?: boolean }) => act(me, "meeting.call_start", { key: chatCallKey(callId), startAt: "2026-11-10T14:00:00Z", endAt: "2026-11-10T14:40:00Z", clientKey }, o);
   const fetchIt = (me: string, occurrenceId: number) => act(me, "meeting.call_fetch", { occurrenceId });
-  return { db, teams, meetings, act, data, others, chatRows, start, fetchIt, sent, answers, follows, logs, presses };
+  return { db, teams, meetings, act, ctxAs, data, others, chatRows, start, fetchIt, sent, answers, follows, logs, presses };
 }
 
 describe("MC-2c: who sees a chat call in Calls", () => {
@@ -271,6 +271,23 @@ describe("MC-6: a chat call keeps its chat's client", () => {
     const kept = (await t.meetings.callByKey(chatCallKey(CALL_A)))!;
     expect(await t.act(MATE, "meeting.update", { seriesId: kept.series.id, name: "x" }, { admin: true })).toMatchObject({ ok: false, status: 404 });
     expect((await t.act(MATE, "meeting.update", { seriesId: kept.series.id, clientKey: "fabrikam" }, { admin: true })).ok).toBe(false);
+  });
+
+  it("MC-7: a paste on a chat call goes only under its chat's client or Internal; under another, nothing is saved", async () => {
+    const t = await setup();
+    const paste = async (callId: string, words: string) => {
+      const kept = (await t.meetings.callByKey(chatCallKey(callId)))!;
+      return uploadTranscript(t.ctxAs(ME), { seriesId: kept.series.id, date: kept.occurrence.date, bytes: new TextEncoder().encode(words), paste: "notes" });
+    };
+    expect((await t.start(ME, CALL_A, "contoso")).ok).toBe(true);
+    expect((await t.start(ME, CALL_D, "cooptimize")).ok).toBe(true);
+    expect(await paste(CALL_A, "- Rates export is first\n- holiday import next")).toMatchObject({ ok: true });
+    expect(await paste(CALL_D, "- Internal notes about the week")).toMatchObject({ ok: true });
+    const a = (await t.meetings.callByKey(chatCallKey(CALL_A)))!.occurrence.id;
+    const before = await t.meetings.transcript(a);
+    await t.db.conn.run("UPDATE meeting_series SET client_key = ? WHERE event_id = ?", ["fabrikam", chatCallKey(CALL_A)]);
+    expect(await paste(CALL_A, "- something else entirely here")).toMatchObject({ ok: false, status: 403, code: "chat_other_client", error: CHAT_OTHER_CLIENT });
+    expect(await t.meetings.transcript(a)).toEqual(before);
   });
 
   it("a chat call kept under another client before MC-6 is never read under it: Get it from Teams is refused before Teams is asked", async () => {

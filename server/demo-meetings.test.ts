@@ -22,15 +22,38 @@ const run = async <T = Record<string, unknown>>(ctx: ActionContext, action: stri
   if (!r.ok) throw new Error(`${action}: ${r.error}`);
   return r.data as T;
 };
-type Mine = { meetings: { id: number; name: string; source: string }[]; occurrences: { id: number; date: string; state: string; open: number }[]; nudges: { key: string; kind: string }[] };
+type Mine = { meetings: { id: number; name: string; source: string; call: string | null }[]; occurrences: { id: number; seriesId: number; date: string; state: string; open: number }[]; nudges: { key: string; kind: string }[] };
+/** The registered weekly call's occurrences (MC-7: the demo also has two calls added by hand, reviewed from a paste). */
+const weekly = (m: Mine) => {
+  const s = m.meetings.find((x) => !x.call)!;
+  return { ...m, meetings: [s], occurrences: m.occurrences.filter((o) => o.seriesId === s.id), nudges: m.nudges.filter((n) => m.occurrences.some((o) => o.seriesId === s.id && n.key.endsWith(`:${o.id}`))) };
+};
 type Review = { proposals: Proposal[]; canConfirm: boolean; canWrite: boolean; transcript: { lines: number; speakers: number } | null };
 
 describe("meeting capture on the demo (MC-1)", () => {
   const net = useNoOutbound();
 
-  it("a registered call and its transcript make proposals with quotes; nothing leaves FocusTime", async () => {
+  it("MC-7: one call is reviewed from a pasted transcript and one from pasted notes, each with proposals", async () => {
     const ctx = await demo();
     const mine = await run<Mine>(ctx, "meeting.mine");
+    const hand = mine.meetings.filter((m) => m.call === "hand");
+    const review = async (name: string) => run<Review & { pasted: string }>(ctx, "meeting.review", { occurrenceId: mine.occurrences.find((o) => o.seriesId === hand.find((m) => m.name === name)!.id)!.id });
+    const t = await review("Northwind export check-in");
+    expect(t.pasted).toBe("transcript");
+    expect(t.transcript).toEqual({ lines: 5, speakers: 2 });
+    expect(t.proposals.map((p) => p.body.kind).sort()).toEqual(["comment", "commitment", "gap"]);
+    const n = await review("Northwind statements chat");
+    expect(n.pasted).toBe("notes");
+    expect(n.proposals.every((p) => (p.quotes ?? []).every((q) => q.speaker === "" && q.at === ""))).toBe(true);
+    // "I'll send" is mine; "Dana to share" is Dana's; nothing else is anyone's.
+    const promises = n.proposals.flatMap((p) => (p.body.kind === "commitment" ? [[p.body.what, p.body.who, p.body.side]] : []));
+    expect(promises).toEqual([["Send the date range filter for review", "Alex Rivera", "cooptimize"], ["Share three sample statements from last year", "Dana Brooks", "client"]]);
+    net.expectNone();
+  });
+
+  it("a registered call and its transcript make proposals with quotes; nothing leaves FocusTime", async () => {
+    const ctx = await demo();
+    const mine = weekly(await run<Mine>(ctx, "meeting.mine"));
     expect(mine.meetings.map((m) => [m.name, m.source])).toEqual([["Northwind weekly status call", "upload"]]);
     const occ = mine.occurrences[0]!;
     expect(occ).toMatchObject({ date: "2026-11-02", state: "ready", open: 11 });
@@ -51,7 +74,7 @@ describe("meeting capture on the demo (MC-1)", () => {
 
   it("each row goes its own way: DevOps changes through the one preview, a promise at once; a skipped one writes nothing; Undo puts it back (MC-1e)", async () => {
     const ctx = await demo();
-    const occ = (await run<Mine>(ctx, "meeting.mine")).occurrences[0]!;
+    const occ = weekly(await run<Mine>(ctx, "meeting.mine")).occurrences[0]!;
     const { proposals, checks } = await run<Review & { checks: Record<string, { needs?: { fill: string }[]; blocked?: string }> }>(ctx, "meeting.review", { occurrenceId: occ.id });
     const gap = proposals.find((p) => p.body.kind === "gap" && p.body.parentId === 1110)!;
     const decision = proposals.find((p) => p.body.kind === "comment" && p.body.note === "decision")!;
@@ -99,7 +122,7 @@ describe("meeting capture on the demo (MC-1)", () => {
 
   it("Propose again leaves out what's done, skipped or failed, and says how many are new; the status report shows no call comment (MC-1e)", async () => {
     const ctx = await demo();
-    const occ = (await run<Mine>(ctx, "meeting.mine")).occurrences[0]!;
+    const occ = weekly(await run<Mine>(ctx, "meeting.mine")).occurrences[0]!;
     const { proposals } = await run<Review>(ctx, "meeting.review", { occurrenceId: occ.id });
     const decision = proposals.find((p) => p.body.kind === "comment" && p.body.note === "decision")!;
     const mine = proposals.find((p) => p.body.kind === "commitment" && p.body.what === "Send the date range filter for review")!;
@@ -126,13 +149,13 @@ describe("meeting capture on the demo (MC-1)", () => {
   it("an attendee who isn't a reviewer can look but not confirm", async () => {
     const ctx = await demo();
     const s = ctx.meetings!.store;
-    const [series] = await s.allSeries();
+    const series = (await s.allSeries()).find((x) => !x.callKind);
     await s.updateSeries(series!.id, { reviewers: [PRIYA.aadId.toLowerCase()] });
-    const occ = (await run<Mine>(ctx, "meeting.mine")).occurrences[0]!;
+    const occ = weekly(await run<Mine>(ctx, "meeting.mine")).occurrences[0]!;
     const r = await run<Review>(ctx, "meeting.review", { occurrenceId: occ.id });
     expect(r.canConfirm).toBe(false);
     expect(await dispatch(ctx, { action: "meeting.keep", input: { proposalId: r.proposals.find((p) => p.body.kind === "commitment")!.id } })).toMatchObject({ ok: false, status: 403 });
     expect(await dispatch(ctx, { action: "devops.preview", input: { clientKey: "Northwind", change: { kind: "meeting_create", proposalId: r.proposals[0]!.id } } })).toMatchObject({ ok: false, status: 409 });
-    expect((await run<Mine>(ctx, "meeting.mine")).nudges).toEqual([]);
+    expect(weekly(await run<Mine>(ctx, "meeting.mine")).nudges).toEqual([]);
   });
 });

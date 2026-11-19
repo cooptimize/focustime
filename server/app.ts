@@ -15,6 +15,7 @@ import { errorKind, MALFORMED_WORDS, newRef, unexpectedAnswer } from "./unexpect
 import { assistantTranscribe, chatImage, dispatch, meetingContext, signedContext, type ActionContext } from "../actions/dispatch.ts";
 import { uploadTranscript } from "../actions/meeting-actions.ts";
 import { MAX_UPLOAD_BYTES } from "../actions/transcript-file.ts";
+import { PASTE_TEXT } from "../plan/call-words.ts";
 import { VOICE_MAX_BYTES } from "../assistant/types.ts";
 import type { ServedImage } from "../actions/chat-images.ts";
 import type { Logger } from "../log/logger.ts";
@@ -144,7 +145,8 @@ export const ASSISTANT_VOICE_PATH = "/api/assistant/transcribe";
 /**
  * MC-1: a reviewer's transcript upload (the raw file as the body, ?series=&date=), 5 MB at most. PK-1: a Teams .vtt or
  * .docx, or a Pocket export (its PDF, or the zip holding it), told apart by content; `dateOk=1` after the page asked
- * about a recording dated another day. No file name is sent or read.
+ * about a recording dated another day. No file name is sent or read. MC-7: `paste=transcript|notes` with the pasted
+ * text as the body (UTF-8, the same 5 MB): the same checks, read as the box said.
  */
 export const MEETING_UPLOAD_PATH = "/api/meetings/upload";
 
@@ -452,11 +454,12 @@ export function createApp(opts: AppOptions) {
         try {
           bytes = await readBytes(req, MAX_UPLOAD_BYTES);
         } catch {
-          return json(res, 413, { ok: false, status: 413, error: "That file is over 5 MB" });
+          return json(res, 413, { ok: false, status: 413, error: q.get("paste") ? PASTE_TEXT.tooLong : "That file is over 5 MB" });
         }
         const series = Number(q.get("series"));
+        const paste = q.get("paste");
         const out = Number.isSafeInteger(series) && series > 0
-          ? await uploadTranscript(await meetingContext(await personCtx(s)), { seriesId: series, date: q.get("date") ?? "", bytes: new Uint8Array(bytes), dateOk: q.get("dateOk") === "1" }).catch((e: unknown) => {
+          ? await uploadTranscript(await meetingContext(await personCtx(s)), { seriesId: series, date: q.get("date") ?? "", bytes: new Uint8Array(bytes), dateOk: q.get("dateOk") === "1", ...(paste === "transcript" || paste === "notes" ? { paste } : paste !== null ? { paste: "bad" as const } : {}) }).catch((e: unknown) => {
               opts.onError?.(e, "meeting_upload");
               return { ok: false as const, status: 500, error: "The transcript couldn't be saved. Try again" };
             })

@@ -26,7 +26,9 @@ type Review = { proposals: Proposal[]; checks: Record<string, Check> };
 type Log = { entries: { op: string; title: string; status: string; after: Record<string, string | null> }[] };
 
 async function call(ctx: ActionContext) {
-  const occ = (await run<{ occurrences: { id: number }[] }>(ctx, "meeting.mine")).occurrences[0]!;
+  // The registered weekly call's (MC-7: the demo also has calls added by hand).
+  const mine = await run<{ meetings: { id: number; call: string | null }[]; occurrences: { id: number; seriesId: number }[] }>(ctx, "meeting.mine");
+  const occ = mine.occurrences.find((o) => o.seriesId === mine.meetings.find((m) => !m.call)!.id)!;
   const r = await run<Review>(ctx, "meeting.review", { occurrenceId: occ.id });
   return { occ, ...r };
 }

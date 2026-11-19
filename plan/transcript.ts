@@ -74,8 +74,8 @@ export function timeOf(s: string): number | null {
 
 type Cue = { speaker: string; at: number | null; text: string };
 
-/** Merge consecutive cues of one speaker, split overlong lines, number them. */
-export function linesOf(cues: readonly Cue[]): TranscriptLine[] {
+/** Merge consecutive cues of one speaker, split overlong lines, number them (at most `cap` lines; MC-7 counts past it). */
+export function linesOf(cues: readonly Cue[], cap = MAX_LINES): TranscriptLine[] {
   const merged: Cue[] = [];
   for (const c of cues) {
     const text = clean(c.text);
@@ -95,9 +95,9 @@ export function linesOf(cues: readonly Cue[]): TranscriptLine[] {
       rest = rest.slice(at).trim();
     }
     if (rest) out.push({ n: 0, speaker: c.speaker, at: c.at, text: rest });
-    if (out.length >= MAX_LINES) break;
+    if (out.length >= cap) break;
   }
-  return out.slice(0, MAX_LINES).map((l, i) => ({ ...l, n: i + 1 }));
+  return out.slice(0, cap).map((l, i) => ({ ...l, n: i + 1 }));
 }
 
 /**
@@ -105,6 +105,12 @@ export function linesOf(cues: readonly Cue[]): TranscriptLine[] {
  * (`<v Name>words</v>`) or, in older files, "Name: words". Notes, styles and cue ids are skipped.
  */
 export function parseVtt(text: string): TranscriptLine[] {
+  const lines = linesOf(vttCues(text));
+  if (!lines.length) throw new TranscriptError("That transcript has no spoken lines");
+  return lines;
+}
+
+function vttCues(text: string): Cue[] {
   const body = text.replace(/^﻿/, "").replace(/\r\n?/g, "\n");
   if (!/^WEBVTT/.test(body.trimStart())) throw new TranscriptError("That isn't a WebVTT file");
   const cues: Cue[] = [];
@@ -128,9 +134,7 @@ export function parseVtt(text: string): TranscriptLine[] {
     words = decode(words.replace(/<[^<>]*>/g, ""));
     cues.push({ speaker: decode(speaker), at, text: words });
   }
-  const lines = linesOf(cues);
-  if (!lines.length) throw new TranscriptError("That transcript has no spoken lines");
-  return lines;
+  return cues;
 }
 
 /**
@@ -198,9 +202,10 @@ export function quotesOf(lines: readonly TranscriptLine[], refs: readonly number
   });
 }
 
-/** The lines as the AI gets them: "L12 [4:05] Name: words"; PK-1: "L12 Speaker 1: words" for a line with no time. */
+/** The lines as the AI gets them: "L12 [4:05] Name: words"; PK-1: "L12 Speaker 1: words" for a line with no time; MC-7: "L4 words" for a note. */
 export function numbered(lines: readonly TranscriptLine[]): string {
-  return lines.map((l) => `L${l.n}${l.at === null ? "" : ` [${clock(l.at)}]`} ${l.speaker}: ${l.text}`).join("\n");
+  // MC-7: a note line has no speaker: "L4 words".
+  return lines.map((l) => `L${l.n}${l.at === null ? "" : ` [${clock(l.at)}]`} ${l.speaker ? `${l.speaker}: ` : ""}${l.text}`).join("\n");
 }
 
 /** Rough tokens of a text (4 characters a token), for chunking. */
@@ -270,4 +275,173 @@ function unnamedCues(text: string): string {
     else cues.at(-1)?.words.push(r);
   }
   return `WEBVTT\n\n${cues.filter((c) => c.words.length).map((c, i) => `${c.time}\n<v Cue ${i + 1}>${c.words.join(" ")}`).join("\n\n")}\n`;
+}
+
+// ---- MC-7: a transcript or notes pasted into a call ----
+
+/** What a pasted text is taken for: a transcript (speakers, perhaps times) or the reviewer's own notes. */
+export type PasteAs = "transcript" | "notes";
+
+/** The most a pasted text may be: what a file may be (5 MB), and at most MAX_LINES lines once read. */
+export const MAX_TRANSCRIPT_BYTES = 5 * 1024 * 1024;
+/** The least: a few words. */
+export const PASTE_MIN_WORDS = 3;
+
+/** "Speaker 1", "Speaker B", "Participant 2": a voice numbered or lettered by a tool, not a person (as Pocket's). */
+const NUMBERED = /^(?:speaker|participant|voice|person|guest|unknown speaker|unidentified speaker)\s*(?:\d{1,3}|[a-z])$/i;
+export const numberedSpeaker = (s: string) => NUMBERED.test(s.trim());
+
+/** Words people put before a colon in notes, which are never a speaker ("Decision: CSV only"). Compared in lower case. */
+const NOT_NAMES = new Set(["action", "actions", "action item", "action items", "agenda", "attendees", "background", "blocker", "blockers", "cc", "context", "date", "decision", "decisions", "done", "due", "eta", "follow up", "follow-up", "follow ups", "fyi", "goal", "goals", "idea", "ideas", "issue", "issues", "item", "items", "link", "next", "next step", "next steps", "note", "notes", "open", "outcome", "owner", "problem", "ps", "q", "question", "questions", "re", "risk", "risks", "status", "subject", "summary", "time", "to do", "todo", "topic", "topics", "update", "updates", "when", "where", "who", "why", "what", "how", "wip", "http", "https"]);
+/** Lower-case words a name may hold (van, de, bin). */
+const PARTICLES = new Set(["al", "bin", "da", "de", "del", "der", "di", "du", "la", "le", "van", "von"]);
+
+/** A speaker as pasted: a name of one to five words, each capitalised (or a particle), or a numbered voice. */
+function nameOf(s: string): string | null {
+  const t = clean(s);
+  if (!t || t.length > 60) return null;
+  if (numberedSpeaker(t)) return t;
+  if (NOT_NAMES.has(t.toLowerCase())) return null;
+  const words = t.split(" ");
+  if (words.length > 5) return null;
+  if (!words.every((w) => /^[\p{L}][\p{L}\p{M}'’.\-]*$/u.test(w) && (/^\p{Lu}/u.test(w) || PARTICLES.has(w)))) return null;
+  return t;
+}
+
+/** A time in pasted text: "0:03", "00:01:02", "1:02.5", in brackets or parentheses; a clock time ("10:03 AM") is no time into the call. */
+const T = String.raw`[\[(]?(\d{1,2}:\d{2}(?::\d{2})?(?:[.,]\d{1,3})?)(\s*[AaPp]\.?[Mm]\.?)?[\])]?`;
+const TIME_ONLY = new RegExp(String.raw`^${T}(?:\s*-->\s*${T})?$`);
+const TIME_FIRST = new RegExp(String.raw`^${T}\s*[-–|]?\s*(.+?)\s*:\s*(.*)$`);
+const NAME_FIRST = new RegExp(String.raw`^(.+?)\s*(?:[-–|,]\s*)?(?:${T})?\s*:\s*(.*)$`);
+const HEAD_NAME_TIME = new RegExp(String.raw`^(.+?)\s*[-–|,]?\s*${T}$`);
+const HEAD_TIME_NAME = new RegExp(String.raw`^${T}\s*[-–|]?\s*(.+)$`);
+/** The seconds of a matched time, or null for a clock time (AM or PM). */
+const secOf = (t: string | undefined, ampm: string | undefined) => (t && !ampm ? timeOf(t) : null);
+
+/** `timed`: the line had a time, even a clock time that isn't kept. */
+type Row = { kind: "said" | "head"; speaker: string; at: number | null; timed: boolean; text: string } | { kind: "time"; at: number | null } | { kind: "text"; text: string };
+
+function rowOf(line: string, next: string | undefined): Row {
+  let m = TIME_ONLY.exec(line);
+  if (m) return { kind: "time", at: secOf(m[1], m[2]) };
+  m = TIME_FIRST.exec(line);
+  if (m) {
+    const who = nameOf(m[3]!);
+    if (who) return { kind: m[4]!.trim() ? "said" : "head", speaker: who, at: secOf(m[1], m[2]), timed: true, text: m[4]! };
+  }
+  m = NAME_FIRST.exec(line);
+  if (m) {
+    const who = nameOf(m[1]!);
+    if (who) return { kind: m[4]!.trim() ? "said" : "head", speaker: who, at: secOf(m[2], m[3]), timed: !!m[2], text: m[4]! };
+  }
+  m = HEAD_NAME_TIME.exec(line);
+  if (m) {
+    const who = nameOf(m[1]!);
+    if (who) return { kind: "head", speaker: who, at: secOf(m[2], m[3]), timed: true, text: "" };
+  }
+  m = HEAD_TIME_NAME.exec(line);
+  if (m) {
+    const who = nameOf(m[3]!);
+    if (who) return { kind: "head", speaker: who, at: secOf(m[1], m[2]), timed: true, text: "" };
+  }
+  // A name alone, its time on the next line (as Teams' transcript pane copies).
+  if (next !== undefined && TIME_ONLY.test(next)) {
+    const who = nameOf(line);
+    if (who) return { kind: "head", speaker: who, at: null, timed: true, text: "" };
+  }
+  return { kind: "text", text: line };
+}
+
+/** What reading a pasted text gives: its lines, how many speakers, and the counts that decide which reading it is. */
+export type PasteRead = { as: PasteAs; lines: TranscriptLine[]; speakers: number; numbered: boolean; tooLong: boolean; tooShort: boolean; noNames: boolean };
+
+/**
+ * A pasted transcript's cues, as a file's would be: a pasted .vtt as the .vtt; otherwise each line is "Name: words",
+ * a name and a time with the words under it, a time then a name then words, or a numbered voice; a time alone sets the
+ * next speaker's; a line that fits no shape joins the line before it. Also how many lines carried a speaker (`marked`),
+ * how many of those are sure (their speaker comes back, or they have a time), and how many didn't (`loose`).
+ */
+function pastedCues(text: string): { cues: Cue[]; marked: number; sure: number; loose: number; vtt: boolean } {
+  const body = text.replace(/^﻿/, "").replace(/\r\n?/g, "\n");
+  if (/^WEBVTT/.test(body.trimStart())) {
+    const cues = vttCues(body);
+    return { cues, marked: cues.length, sure: cues.length, loose: 0, vtt: true };
+  }
+  const rows = body.split("\n").map(clean).filter(Boolean);
+  const cues: Cue[] = [];
+  let cur: Cue | null = null;
+  let underHead = false;
+  let pending: number | null = null;
+  let loose = 0;
+  const marks: { speaker: string; timed: boolean }[] = [];
+  for (let i = 0; i < rows.length; i++) {
+    // A cue's number on its own line before a time (an .srt or a .vtt without its header): skipped.
+    if (/^\d{1,5}$/.test(rows[i]!) && rows[i + 1] !== undefined && TIME_ONLY.test(rows[i + 1]!)) continue;
+    const r = rowOf(rows[i]!, rows[i + 1]);
+    if (r.kind === "time") {
+      // Right under a name with no words yet: that name's time (a name alone, its time on the next line).
+      if (cur && underHead && !cur.text && cur.at === null) cur.at = r.at;
+      else pending = r.at;
+      continue;
+    }
+    if (r.kind === "text") {
+      if (!underHead) loose++;
+      if (cur) cur.text = `${cur.text} ${r.text}`;
+      else cues.push((cur = { speaker: "Unknown", at: pending, text: r.text }));
+      continue;
+    }
+    const at = r.at ?? pending;
+    pending = null;
+    cues.push((cur = { speaker: r.speaker, at, text: r.text }));
+    underHead = r.kind === "head";
+    marks.push({ speaker: r.speaker.toLowerCase(), timed: r.timed || at !== null });
+  }
+  const seen = new Map<string, number>();
+  for (const x of marks) seen.set(x.speaker, (seen.get(x.speaker) ?? 0) + 1);
+  const sure = marks.filter((x) => x.timed || (seen.get(x.speaker) ?? 0) > 1).length;
+  return { cues, marked: marks.length, sure, loose, vtt: false };
+}
+
+/** Notes: each line the reviewer wrote, bullet and heading marks and blank lines dropped; no speaker, no time. */
+function noteLines(text: string, cap: number): TranscriptLine[] {
+  const out: TranscriptLine[] = [];
+  for (const row of text.replace(/^﻿/, "").replace(/\r\n?/g, "\n").split("\n")) {
+    let rest = clean(row.replace(/^\s*(?:[-*•‣◦▪●○·–—>#]+|\d{1,3}[.)]|[a-zA-Z][.)]|\[[ xX]?\])\s+/, ""));
+    while (rest.length > MAX_LINE_CHARS) {
+      const cut = rest.lastIndexOf(". ", MAX_LINE_CHARS);
+      const at = cut > MAX_LINE_CHARS / 2 ? cut + 1 : MAX_LINE_CHARS;
+      out.push({ n: 0, speaker: "", at: null, text: rest.slice(0, at).trim() });
+      rest = rest.slice(at).trim();
+    }
+    if (rest) out.push({ n: 0, speaker: "", at: null, text: rest });
+    if (out.length > cap) break;
+  }
+  return out.slice(0, cap).map((l, i) => ({ ...l, n: i + 1 }));
+}
+
+/**
+ * MC-7: a pasted text read as a transcript or as notes. Without `as`, it is taken for a transcript when most of its
+ * lines carry a speaker (a pasted .vtt always), at least two do, and most of those are sure (the speaker speaks again,
+ * or the line has a time); otherwise for notes. `tooLong`: over MAX_LINES lines (or the bytes a file may be);
+ * `tooShort`: fewer than a few words; `noNames`: read as a transcript, yet no line names a speaker. Speakers' names are kept as pasted; `numbered` when any is a numbered voice.
+ */
+export function readPaste(text: string, as?: PasteAs): PasteRead {
+  const words = (text.match(/[\p{L}\p{N}]+/gu) ?? []).length;
+  const bytes = new TextEncoder().encode(text).length;
+  const c = pastedCues(text);
+  const looks: PasteAs = c.vtt || (c.marked >= 2 && c.marked >= c.loose && c.sure * 2 >= c.marked) ? "transcript" : "notes";
+  const took = as ?? looks;
+  const lines = took === "transcript" ? linesOf(c.cues, MAX_LINES + 1) : noteLines(text, MAX_LINES + 1);
+  const speakers = took === "transcript" ? new Set(lines.map((l) => l.speaker).filter((s) => s !== "Unknown")) : new Set<string>();
+  return {
+    as: took,
+    lines: lines.slice(0, MAX_LINES),
+    speakers: speakers.size,
+    numbered: [...speakers].some(numberedSpeaker),
+    tooLong: lines.length > MAX_LINES || bytes > MAX_TRANSCRIPT_BYTES,
+    tooShort: words < PASTE_MIN_WORDS || !lines.length,
+    // Read as a transcript, it must name someone: notes switched to a transcript with no name in them would be one
+    // line nobody said.
+    noNames: took === "transcript" && speakers.size === 0,
+  };
 }

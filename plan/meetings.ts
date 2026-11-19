@@ -13,6 +13,7 @@
 // its attendees (a hand-added call has none). Every list of registered calls leaves these out (`isCall`).
 import type { IsoDate } from "../week/types.ts";
 import type { Answers } from "./three-questions.ts";
+import { numberedSpeaker } from "./transcript.ts";
 
 export const MEETING_ROLES = ["status", "planning"] as const;
 export type MeetingRole = (typeof MEETING_ROLES)[number];
@@ -23,10 +24,19 @@ export type TranscriptSource = (typeof TRANSCRIPT_SOURCES)[number];
 /** PK-1: a Teams transcript (.vtt, .docx, or Graph's) or a Pocket export (its PDF, or the zip holding it). */
 /** PK-1: "pocket" a Pocket export uploaded as a file; MC-2b: "pocket_api" a reviewer's own Pocket recording brought in from Pocket (speakers numbered, never named; its lines have times). */
 /** MC-2c: "teams_unnamed" a chat call's transcript Teams gave without speaker names (the organization's setting). */
-export type TranscriptKind = "teams" | "pocket" | "pocket_api" | "teams_unnamed";
-export const TRANSCRIPT_KINDS: readonly TranscriptKind[] = ["teams", "pocket", "pocket_api", "teams_unnamed"];
+/** MC-7: "pasted" a transcript a reviewer pasted (names kept as pasted), "pasted_notes" their own notes pasted (no speakers, no times). */
+export type TranscriptKind = "teams" | "pocket" | "pocket_api" | "teams_unnamed" | "pasted" | "pasted_notes";
+export const TRANSCRIPT_KINDS: readonly TranscriptKind[] = ["teams", "pocket", "pocket_api", "teams_unnamed", "pasted", "pasted_notes"];
 /** A transcript whose speakers aren't named (Pocket numbered them, or Teams left them out): the AI is told the labels aren't people. */
 export const unnamedSpeakers = (k: TranscriptKind | undefined) => k === "pocket" || k === "pocket_api" || k === "teams_unnamed";
+/** MC-7: what was pasted, if it was: a transcript or notes. */
+export const pastedAs = (k: TranscriptKind | undefined): "transcript" | "notes" | null => (k === "pasted" ? "transcript" : k === "pasted_notes" ? "notes" : null);
+/**
+ * MC-7: whether the AI may take the speakers as named people: not for Pocket's or Teams' unnamed ones, not for notes
+ * (no speakers), and not for a pasted transcript whose speakers include a numbered voice ("Speaker 1"), as Pocket's.
+ */
+export const speakersNamed = (k: TranscriptKind | undefined, speakers: readonly string[]) =>
+  !unnamedSpeakers(k) && k !== "pasted_notes" && !(k === "pasted" && speakers.some(numberedSpeaker));
 /** PK-1, MC-2b: a transcript from Pocket. */
 export const fromPocket = (k: TranscriptKind | undefined) => k === "pocket" || k === "pocket_api";
 
@@ -405,7 +415,7 @@ export function lastReadLine(s: Pick<MeetingSeries, "source" | "registrantId" | 
     return `Transcript read ${at(o.transcriptAt)}${n ? ` through ${n}'s sign-in` : ""}`;
   }
   // PK-1: a Pocket export says so, wherever a call's source is shown.
-  if (o.transcriptAt && o.transcriptFrom === "upload") return `${o.transcriptKind === "pocket" ? "Pocket export uploaded by a reviewer" : o.transcriptKind === "pocket_api" ? "Pocket recording brought in by a reviewer" : "Transcript uploaded"} ${at(o.transcriptAt)}`;
+  if (o.transcriptAt && o.transcriptFrom === "upload") return `${o.transcriptKind === "pocket" ? "Pocket export uploaded by a reviewer" : o.transcriptKind === "pocket_api" ? "Pocket recording brought in by a reviewer" : o.transcriptKind === "pasted" ? "Transcript pasted by a reviewer" : o.transcriptKind === "pasted_notes" ? "Notes pasted by a reviewer" : "Transcript uploaded"} ${at(o.transcriptAt)}`;
   if (o.state === "no_transcript") return `${day}: no transcript this week`;
   // Why nobody's sign-in could read it, for the first person tried; someone no longer in FocusTime can't fix it.
   const tried = r && (r.kind === "no_token" || r.kind === "consent" || r.kind === "missing") ? r : null;
