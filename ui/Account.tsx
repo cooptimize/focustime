@@ -2,6 +2,7 @@
 // sign-out, the person in the top bar, the VM chip (top bar) with Start and its preview, the auto-shutdown time shown
 // read only (D475), Today's morning prompt, Settings > You (sign out, find and confirm my VM) and the Azure write log
 // in Settings > Data.
+import { HelpLine } from "./settings/help.tsx";
 import { SaveMark, type FieldStatus } from "./settings/autosave.tsx";
 import { useDeveloperLoop } from "./appenv.ts";
 import { CloseButton, useReturnFocus } from "./CloseButton.tsx";
@@ -578,7 +579,7 @@ export function YouAccount({ part }: { part: "vm" }) {
           <span className="set-value">
             {vm.status?.vm ? <>{vm.status.vm.name} <span className="muted">{vm.status.vm.resourceGroup} · {vm.status.vm.location}</span></> : <span className="muted">None chosen yet</span>}
           </span>
-          <span className="set-hint">FocusTime reads this VM's status, starts it, and stops it only when you press Stop and confirm. It never changes its auto-shutdown.</span>
+          <HelpLine as="span" className="set-hint" text="FocusTime reads this VM's status, starts it, and stops it only when you press Stop and confirm. It never changes its auto-shutdown." />
           <span className="set-actions">
             <button type="button" className="mini" disabled={busy} onClick={() => void run(async () => setFound(await call<Found>("vm.find", {})))}>Find my VM</button>
             {vm.status?.vm && <button type="button" className="mini quiet" disabled={busy} onClick={() => void choose(null)}>Forget</button>}
@@ -810,7 +811,7 @@ export function useTeamsAccess(): { text: string; allow: (() => void) | null; bu
   useEffect(check, [check]);
   if (!v) return { text: "Checking Teams…", allow: null, busy, message };
   const words: Record<string, string> = {
-    ok: "Teams is connected: focus can set your status, and teammates' presence shows next to their names.",
+    ok: "Teams is connected for your status and teammates' presence.",
     consent: "FocusTime needs your OK to use Teams status and presence. One more sign-in; no admin approval is needed.",
     signed_out: "Sign in with Microsoft (Settings › Profile) to use Teams status.",
     unavailable: "Teams can't be reached right now.",

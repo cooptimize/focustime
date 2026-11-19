@@ -4,6 +4,7 @@
 // to be checked and kept; it never comes back. Loading the section reads only what FocusTime kept (pocket.status):
 // Pocket is asked only when a button here is pressed. PK-4: the last list Calls asked for, in numbers only (held in
 // memory with that list, 5 minutes), and my Pocket addresses, each with Remove.
+import { HelpLine } from "./parts.tsx";
 import { useEffect, useId, useRef, useState } from "react";
 import type { PocketView } from "../../actions/pocket-types.ts";
 import { checkedAgo, POCKET_CALL_WORDS as PW, POCKET_COUNT_WORDS as CW, POCKET_KEYS_DOC, POCKET_WORDS as W, recordingsLine } from "../../plan/pocket-words.ts";
@@ -66,7 +67,7 @@ export function PocketRecorder({ timeZone }: { timeZone: string }) {
     <div className="pocket">
       {!v.connected ? (
         <>
-          <p className="muted set-intro">{W.intro}</p>
+          <HelpLine className="muted set-intro" text={W.intro} />
           <Guide />
           <KeyForm busy={busy} label={W.checkAndSave} onSubmit={(key) => run("save", "pocket.connect", { key }, null)} />
         </>
@@ -76,7 +77,7 @@ export function PocketRecorder({ timeZone }: { timeZone: string }) {
             <span className="state live">{W.connected}</span>
             <span className="muted">{[v.checkedAt ? checkedAgo(v.checkedAt, clock, timeZone) : W.notChecked, v.recordings === null ? null : recordingsLine(v.recordings)].filter(Boolean).join(" · ")}</span>
           </p>
-          <p className="muted set-intro">{W.kept}</p>
+          <HelpLine className="muted set-intro" text={W.kept} />
           <LastList v={v} timeZone={timeZone} />
           <Addresses
             list={v.addresses ?? []}
@@ -185,7 +186,7 @@ function Guide() {
           <li key={s}>{s}</li>
         ))}
       </ol>
-      <p className="muted">{W.trust}</p>
+      <HelpLine text={W.trust} />
       <p className="muted">
         <a href={POCKET_KEYS_DOC} target="_blank" rel="noopener noreferrer">
           {W.docsLink}

@@ -66,13 +66,12 @@ function WhatWeKeep({ go }: { go: BodyProps["go"] }) {
 
 /** SA-3: Activity's five logs as tabs; a link to one log opens its tab. */
 function ChangedElsewhere(p: BodyProps) {
-  const fromHash = (): LogTab => LOG_TABS.find((t) => decodeURIComponent(location.hash).endsWith(`/${t.id}`))?.id ?? "write-log";
-  const [tab, setTab] = useState<LogTab>(fromHash);
+  // SA-5: the setting Settings opened at (its address's last part) picks the tab, also when the section opens with it.
+  const asked = LOG_TABS.find((t) => t.id === p.setting)?.id ?? null;
+  const [tab, setTab] = useState<LogTab>(asked ?? "write-log");
   useEffect(() => {
-    const on = () => setTab((t) => (LOG_TABS.some((x) => decodeURIComponent(location.hash).endsWith(`/${x.id}`)) ? fromHash() : t));
-    window.addEventListener("hashchange", on);
-    return () => window.removeEventListener("hashchange", on);
-  }, []);
+    if (asked) setTab(asked);
+  }, [asked]);
   return (
     <Group title="What FocusTime changed in other apps" intro="Every change FocusTime made for you, with Undo where it can.">
       <Choice label="Which log" options={LOG_TABS.map((t) => ({ value: t.id, label: t.label }))} value={tab} onChange={setTab} />
