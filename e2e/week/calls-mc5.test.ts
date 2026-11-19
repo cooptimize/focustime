@@ -111,12 +111,15 @@ describe.skipIf(!CHROMIUM)("MC-5: Calls made scannable (browser, demo mode)", ()
 
     // Skip all shows on a row with focus, skips with Undo, and writes nothing to DevOps.
     const row = needs(page).filter({ has: page.locator("[data-call-left]") }).first();
-    const skipAll = row.locator("[data-call-act='skip-all']");
     await page.mouse.move(5, 890);
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     const rowClass = await row.getAttribute("class");
-    if (!/\bopen\b/.test(rowClass ?? "")) await expect(skipAll.isVisible(), rowClass ?? "").resolves.toBe(false);
+    // MC-6: the call open beside the list has its Skip all in its own header only; another row shows its own on focus.
+    const isOpen = /\bopen\b/.test(rowClass ?? "");
+    const skipAll = isOpen ? page.locator(".calls-beside [data-call-act='skip-all']") : row.locator("[data-call-act='skip-all']");
+    if (!isOpen) await expect(skipAll.isVisible(), rowClass ?? "").resolves.toBe(false);
     await row.locator("[data-call-row]").focus();
+    if (isOpen) await expect(row.locator("[data-call-act='skip-all']").isVisible()).resolves.toBe(false);
     await expect.poll(() => skipAll.isVisible()).toBe(true);
     sent.length = 0;
     await skipAll.click();
@@ -376,7 +379,7 @@ describe.skipIf(!CHROMIUM)("MC-5: Calls made scannable (browser, demo mode)", ()
     await page.close();
   }, T);
 
-  it("sizes at 390 by 844: rows keep two lines, the Show row scrolls sideways in one line, every control 44 px, the stuck header smaller", async () => {
+  it("sizes at 390 by 844: rows keep two lines, the Show chips scroll sideways in one line, every control 44 px, the stuck header smaller", async () => {
     const page = await phonePage(h, 390);
     await page.setViewportSize({ width: 390, height: 844 });
     expect((await call(page, "pocket.connect", { key: "pk_demo_fine" })).ok).toBe(true);
@@ -393,7 +396,8 @@ describe.skipIf(!CHROMIUM)("MC-5: Calls made scannable (browser, demo mode)", ()
     }
     await needs(page).filter({ hasText: "Northwind weekly status call" }).locator("[data-call-row]").click();
     await page.getByRole("heading", { level: 2, name: "Northwind weekly status call" }).waitFor({ timeout: W });
-    const show = await page.locator(".mtg-show").evaluate((el) => ({ sw: el.scrollWidth, cw: el.clientWidth, h: el.getBoundingClientRect().height, chip: el.querySelector(".ib4-chip")!.getBoundingClientRect().height, x: getComputedStyle(el).overflowX }));
+    // MC-6: the chips scroll sideways in one line; "N of M decided" is its own line under them.
+    const show = await page.locator(".mtg-show-chips").evaluate((el) => ({ h: el.getBoundingClientRect().height, chip: el.querySelector(".ib4-chip")!.getBoundingClientRect().height, x: getComputedStyle(el).overflowX }));
     expect(show.x).toBe("auto");
     expect(show.h).toBeLessThan(show.chip * 2);
     for (const b of await page.locator("[data-call-head] button, .mtg-show button, .mtg-prop:not(.is-open) .mtg-p1 button, .mtg-prop:not(.is-open) .mtg-tick").all()) {
