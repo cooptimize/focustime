@@ -297,4 +297,17 @@ describe.skipIf(!CHROMIUM)("MC-6: Calls polish (browser, demo mode)", () => {
     await expect(row.locator("[data-call-act='upload']").textContent()).resolves.toBe("Add transcript");
     expect((await row.locator("[data-call-refused]").textContent())!.split(/\s+/).length).toBeLessThanOrEqual(4);
   }, T);
+
+  it("18: Add a call's Day and Starts are the app's own date and time fields, as Ask to collaborate's When", async () => {
+    const { page } = await open();
+    await calls(page);
+    await page.getByRole("button", { name: "Add a call" }).first().click();
+    const add = page.locator("[data-add-call]");
+    await add.locator("[data-choice='file']").click();
+    await expect(add.locator("input[type=date], input[type=time]").count()).resolves.toBe(0);
+    await expect(add.locator("button.date-field:not(.time-field)").count()).resolves.toBe(1);
+    await expect(add.locator("button.time-field").count()).resolves.toBe(1);
+    await expect(add.getByRole("button", { name: /^Day: / }).count()).resolves.toBe(1);
+    await expect(add.getByRole("button", { name: /^Starts: / }).count()).resolves.toBe(1);
+  }, T);
 });

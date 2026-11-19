@@ -24,6 +24,8 @@ import { rememberCallsList as remember, rememberedCallsList as remembered, reque
 import { useMenu } from "../Menus.tsx";
 import type { MenuItem, MenuStep } from "../menu.ts";
 import { secondsOf } from "../../plan/transcript.ts";
+import { DateField } from "../DatePicker.tsx";
+import { TimeField } from "../TimeField.tsx";
 import { CALL_ACTIONS, CALL_BAR, CALL_FILTERS, CALL_LIST, CALL_ROW, CALL_STATE, CALLS_TEXT, ADD_TEXT, CHAT_NO_SPEAKERS, CLOSE_TEXT, FETCH_WORDS, LIST_TEXT, PAGE_TEXT, POCKET_TEXT, rerunLine, SECTION_HEAD, TRANSCRIPT_TEXT, type CallFilter, type FetchOutcome, type ProposalCheck } from "../../plan/call-words.ts";
 import { callClientChoices, callRows, chipClients, closedAtOf, closedLine, closedList, outcomeOfCall, weekOf, filterCounts, firstToOpen, hiddenList, hiddenMissing, LIST_FILTERS, openList, otherRowKey, hideKeyOf, type CallHides, type CallRow, type CheckState, type Entry, type ListedRecording, type ListFilter, type SeriesEntry } from "../../plan/call-list.ts";
 import { ClosedRow, HiddenRow, NeedsRow, SeriesRow, TickBar, WeekRow, whenOf, type RowStatus } from "./CallsList.tsx";
@@ -1015,8 +1017,9 @@ function AddCall({ clients, today, nowMs, zone, pocketOn, recs, onCancel, onAdde
       {/* MC-6: a chosen recording's time is said once, on its own line in the list above. */}
       {mode === "pocket" ? null : (
         <>
-          <label>{ADD_TEXT.day}<input type="date" value={date} min={min} max={today} required onChange={(e) => setDate(e.target.value)} /></label>
-          <label>{ADD_TEXT.starts}<input type="time" value={start} required onChange={(e) => setStart(e.target.value)} data-add-start="" /></label>
+          {/* MC-6: the app's own date and time fields, as Ask to collaborate's When. A day outside the last 14 comes back inside them. */}
+          <span className="mtg-add-field" data-add-day={date}><span className="mtg-add-label" aria-hidden="true">{ADD_TEXT.day}</span><DateField value={date} onChange={(d) => d && setDate(d < min ? min : d > today ? today : d)} label={ADD_TEXT.day} today={today} clearable={false} /></span>
+          <span className="mtg-add-field" data-add-start={start}><span className="mtg-add-label" aria-hidden="true">{ADD_TEXT.starts}</span><TimeField value={start} onChange={(t) => t && setStart(t)} label={ADD_TEXT.starts} /></span>
           <label>{ADD_TEXT.length}
             <select value={minutes} onChange={(e) => setMinutes(Number(e.target.value))}>
               {[15, 30, 45, 60, 90, 120].map((m) => <option key={m} value={m}>{lengthLabel(m)}</option>)}

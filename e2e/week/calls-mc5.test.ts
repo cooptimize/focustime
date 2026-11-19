@@ -303,7 +303,8 @@ describe.skipIf(!CHROMIUM)("MC-5: Calls made scannable (browser, demo mode)", ()
     await add.locator("[data-choice='file']").click();
     await expect(add.locator(".mtg-dropzone").count()).resolves.toBe(1);
     await expect(add.locator(".mtg-drop-words").textContent()).resolves.toBe("Drop a Teams transcript or a Pocket export, or choose a file");
-    await expect(add.locator("[data-add-start]").inputValue()).resolves.toBe("16:30");
+    // MC-6: the app's own time field.
+    await expect(add.locator("[data-add-start]").getAttribute("data-add-start")).resolves.toBe("16:30");
     await expect(add.getByRole("button", { name: "Add and review" }).count()).resolves.toBe(1);
     // Later: Add; it lands on its page with the choices, and in Needs you with Add transcript.
     await add.locator("[data-choice='later']").click();
