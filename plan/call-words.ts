@@ -505,6 +505,8 @@ export const LIST_TEXT = {
   noClient: "No client",
   /** Needs you's one button by state. */
   addTranscript: "Add transcript",
+  /** MC-6: a chat call's row, after Teams refused its transcript (the call's page says the whole of it). */
+  teamsRefused: "Teams refused it",
   usePocket: "Use Pocket recording",
   tryAgain: "Try again",
   left: (n: number) => `${n} left`,

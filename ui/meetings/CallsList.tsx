@@ -86,7 +86,7 @@ const Square = ({ color }: { color: string | null }) => <span className={`swatch
  * once something is decided or the short amber note; Skip all is a quiet button there on the selected, hovered or focused
  * row (not on the phone: there it is only in the call's header). A click anywhere on the row or Enter opens the call.
  */
-export function NeedsRow({ r, open, zone, today, colors, selecting, ticked, onTick, onOpen, onAction, onSkipAll, phone = false }: RowActs & { r: CallRow; onAction: (kind: "upload" | "pocket" | "retry") => void; onSkipAll: () => void; phone?: boolean }) {
+export function NeedsRow({ r, open, zone, today, colors, selecting, ticked, onTick, onOpen, onAction, onSkipAll, phone = false, refused = false }: RowActs & { r: CallRow; onAction: (kind: "upload" | "pocket" | "retry") => void; onSkipAll: () => void; phone?: boolean; /** MC-6: Teams refused this call's transcript. */ refused?: boolean }) {
   const color = r.clientKey ? clientColor(r.clientKey, colors) : null;
   const act = needsAction(r);
   const note = needsNote(r, today);
@@ -103,6 +103,7 @@ export function NeedsRow({ r, open, zone, today, colors, selecting, ticked, onTi
       <span className="calls-meta">{shortWhen(r.startAt, r.day, today, zone)} · {r.clientName ?? CALL_LIST.noClient}{!act && !r.state.needsMe ? <span data-call-state=""> · {r.state.label}</span> : null}</span>
       <span className="calls-row-end two">
         {r.left?.open && !phone ? <button type="button" className="mini quiet calls-skip" onClick={onSkipAll} data-call-act="skip-all">{r.left.open === r.left.all ? LIST_TEXT.skipAll : LIST_TEXT.skipLast(r.left.open)}</button> : null}
+        {refused && act?.kind === "upload" ? <span className="calls-amber" data-call-refused="">{LIST_TEXT.teamsRefused}</span> : null}
         {note && "amber" in note ? <span className="calls-amber" data-call-note="">{note.amber}</span> : note ? <Bar done={note.done} /> : null}
       </span>
     </li>

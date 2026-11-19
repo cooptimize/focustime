@@ -115,6 +115,8 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
   const [chosen, setChosen] = useState<Record<string, string>>({});
   // MC-5: tick boxes show only once Select calls is chosen in the header's menu.
   const [selecting, setSelecting] = useState(false);
+  // MC-6: the calls Teams refused a transcript for while this page is open (held here only, never stored).
+  const [refusedOcc, setRefusedOcc] = useState<ReadonlySet<number>>(new Set());
   // MC-5: a recording chosen in Add a call for a listed call it fits (Review that call): chosen there to start.
   const [startRec, setStartRec] = useState<{ key: string; id: string } | null>(null);
   const getPocket = useCallback(async () => {
@@ -407,6 +409,7 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
       occ = (await call<{ occurrenceId: number }>("meeting.call_start", { key: c.key, startAt: c.startAt, endAt: c.endAt, clientKey: key })).occurrenceId;
       const f = await call<{ outcome: string; message: string }>("meeting.call_fetch", { occurrenceId: occ });
       changed();
+      if (f.outcome === "chat_refused") setRefusedOcc((s) => new Set(s).add(occ!));
       if (f.outcome !== "found") {
         setRowStatus((x) => ({ ...x, [r.key]: { busy: null, error: FETCH_WORDS[f.outcome as Exclude<FetchOutcome, "found">] ?? f.message, occurrenceId: occ } }));
         await loadMine();
@@ -568,7 +571,7 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
           <section className="calls-day calls-needs" aria-labelledby="calls-needs" data-section="needs">
             <h2 id="calls-needs" className="calls-day-head">{CLOSE_TEXT.needs} <span className="calls-head-count">{open.needs.length}</span></h2>
             <ul className="calls-rows calls-cards">
-              {open.needs.map((r) => <NeedsRow key={r.key} r={r} open={openKey === r.key} zone={zone} today={today} colors={colors} selecting={selecting} phone={phone} ticked={ticked.has(r.key)} onTick={(on) => tickRow(r.key, on)} onOpen={() => openRow(r)} onAction={(k) => rowAction(r, k)} onSkipAll={() => void skipAllCalls([r.occurrenceId!])} />)}
+              {open.needs.map((r) => <NeedsRow key={r.key} r={r} refused={r.occurrenceId !== null && refusedOcc.has(r.occurrenceId)} open={openKey === r.key} zone={zone} today={today} colors={colors} selecting={selecting} phone={phone} ticked={ticked.has(r.key)} onTick={(on) => tickRow(r.key, on)} onOpen={() => openRow(r)} onAction={(k) => rowAction(r, k)} onSkipAll={() => void skipAllCalls([r.occurrenceId!])} />)}
             </ul>
           </section>
         )}
@@ -646,7 +649,7 @@ export function CallsPage({ at, onGo, onChanged, colors, today, zone, phone = fa
       </div>
     );
   else if (at.occurrence)
-    beside = <ReviewScreen key={`${at.occurrence}:${closedStamp}`} pocketRecs={rows.find((x) => x.occurrenceId === at.occurrence)?.pocket ?? []} anyRecs={recChoices.map((x) => x.rec)} phone={phone} startRec={startRec?.key === `o${at.occurrence}` ? startRec.id : null} pocketOn={pocketOn} people={rows.find((x) => x.occurrenceId === at.occurrence)?.people ?? null} zone={zone} quiet={openedByItself.current === at.occurrence} id={at.occurrence} view={at.view ?? null} line={at.line ?? null} filter={at.filter ?? null} focus={at.proposal ?? null} colors={colors} today={today} undoable={undoable} {...(twoStep ? { onBack: backToList } : {})} onPlace={(p) => go({ occurrence: at.occurrence, ...p })} onChanged={changed} />;
+    beside = <ReviewScreen key={`${at.occurrence}:${closedStamp}`} onTeamsRefused={(id) => setRefusedOcc((s) => new Set(s).add(id))} pocketRecs={rows.find((x) => x.occurrenceId === at.occurrence)?.pocket ?? []} anyRecs={recChoices.map((x) => x.rec)} phone={phone} startRec={startRec?.key === `o${at.occurrence}` ? startRec.id : null} pocketOn={pocketOn} people={rows.find((x) => x.occurrenceId === at.occurrence)?.people ?? null} zone={zone} quiet={openedByItself.current === at.occurrence} id={at.occurrence} view={at.view ?? null} line={at.line ?? null} filter={at.filter ?? null} focus={at.proposal ?? null} colors={colors} today={today} undoable={undoable} {...(twoStep ? { onBack: backToList } : {})} onPlace={(p) => go({ occurrence: at.occurrence, ...p })} onChanged={changed} />;
   else if (setupRow?.other)
     beside = (
       <div className="calls-beside-pad">
@@ -1082,7 +1085,7 @@ function AddCall({ clients, today, nowMs, zone, pocketOn, recs, onCancel, onAdde
   );
 }
 
-type ReviewProps = { id: number; /** MC-5: on the phone Skip all's words are short (its full words are its label). */ phone?: boolean; /** MC-5: every recording of mine not yet a call's transcript: a hand-added call may take any. */ anyRecs?: readonly ListedRecording[]; /** MC-5: the recording chosen in Add a call. */ startRec?: string | null; /** MC-5: everyone on the call, where my calendar said. */ people?: number | null; /** MC-5: whether my Pocket is connected (null: not known yet). */ pocketOn?: boolean | null; /** MC-2b: my Pocket recordings that go with this call (from my last press). */ pocketRecs?: readonly ListedRecording[]; zone: string; /** MC-3: opened by Calls itself, not by the person: the focus stays where it was. */ quiet?: boolean; view: CallView | null; line: number | null; filter: Exclude<CallFilter, "all"> | null; focus: number | null; colors: Record<string, string>; today: string; undoable?: ((text: string, undo: () => Promise<unknown>) => void) | undefined; /** MC-3: only when the list and the call are two steps: Back to the list. */ onBack?: () => void; onPlace: (at?: CallPlace) => void; onChanged?: (() => void) | undefined };
+type ReviewProps = { id: number; /** MC-6: Teams refused this chat call's transcript (its row says so). */ onTeamsRefused?: (occurrenceId: number) => void; /** MC-5: on the phone Skip all's words are short (its full words are its label). */ phone?: boolean; /** MC-5: every recording of mine not yet a call's transcript: a hand-added call may take any. */ anyRecs?: readonly ListedRecording[]; /** MC-5: the recording chosen in Add a call. */ startRec?: string | null; /** MC-5: everyone on the call, where my calendar said. */ people?: number | null; /** MC-5: whether my Pocket is connected (null: not known yet). */ pocketOn?: boolean | null; /** MC-2b: my Pocket recordings that go with this call (from my last press). */ pocketRecs?: readonly ListedRecording[]; zone: string; /** MC-3: opened by Calls itself, not by the person: the focus stays where it was. */ quiet?: boolean; view: CallView | null; line: number | null; filter: Exclude<CallFilter, "all"> | null; focus: number | null; colors: Record<string, string>; today: string; undoable?: ((text: string, undo: () => Promise<unknown>) => void) | undefined; /** MC-3: only when the list and the call are two steps: Back to the list. */ onBack?: () => void; onPlace: (at?: CallPlace) => void; onChanged?: (() => void) | undefined };
 function ReviewScreen(props: ReviewProps) {
   const { id, pocketRecs = [], anyRecs = [], startRec = null, pocketOn = null, zone, quiet = false, view, line, filter, focus, colors, today, undoable, onBack, onPlace, onChanged } = props;
   const w = useDevOpsWrite();
@@ -1160,7 +1163,7 @@ function ReviewScreen(props: ReviewProps) {
     if (auto.some((x) => !openProps.has(x))) setOpenProps((s) => new Set([...s, ...auto]));
   }, [r, rowErr]); // eslint-disable-line react-hooks/exhaustive-deps
   // MC-5: Propose again and Get it from Teams (the menu, the failed pass's Try again, the transcript choices), and one upload.
-  const run = useCallRun(r?.occurrence ?? null, load);
+  const run = useCallRun(r?.occurrence ?? null, load, props.onTeamsRefused);
   const up = useTranscriptUpload(r ? { seriesId: r.meeting.id, date: r.occurrence.date, hasTranscript: r.occurrence.hasTranscript } : null, load);
   const fileRef = useRef<HTMLInputElement | null>(null);
   // MC-5: a file chosen in Add a call is uploaded here once the call is read (a date question is asked here).
@@ -1681,7 +1684,7 @@ function DateAsk({ text, onAnswer }: { text: string; onAnswer: (yes: boolean) =>
  * for this call only). MC-5: they live in the call's menu, the failed pass's Try again and the transcript choices; one
  * line says what came of them. Asked for from a meeting's menu (or Needs you's Try again), each runs here once.
  */
-function useCallRun(occ: OccurrenceView | null, onDone: () => Promise<void>) {
+function useCallRun(occ: OccurrenceView | null, onDone: () => Promise<void>, onRefused?: (occurrenceId: number) => void) {
   const [busy, setBusy] = useState<"rerun" | "teams" | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   /** After a refusal the file is the way on: Teams is no longer the main button. */
@@ -1694,6 +1697,7 @@ function useCallRun(occ: OccurrenceView | null, onDone: () => Promise<void>) {
       const r = await call<{ outcome: string; message: string }>("meeting.call_fetch", { occurrenceId: occ.id });
       setMsg(r.message);
       setRefused(r.outcome !== "found");
+      if (r.outcome === "chat_refused") onRefused?.(occ.id);
       await onDone();
     } catch (e) {
       setRefused(true);

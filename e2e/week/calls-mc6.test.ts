@@ -272,4 +272,29 @@ describe.skipIf(!CHROMIUM)("MC-6: Calls polish (browser, demo mode)", () => {
     const outside = await page.locator("[data-calls-list] li[data-row]").evaluateAll((ls) => ls.filter((l) => !l.closest("[data-calls-fold]")).length);
     expect(openN).toBe(outside);
   }, T);
+
+  it("16: after Teams refuses a chat call's transcript, its row says so in a few words beside Add transcript", async () => {
+    const { page } = await open();
+    await calls(page);
+    // Review each chat call from its row until the one Teams refuses.
+    let refusedName: string | null = null;
+    for (let n = 0; n < 4 && !refusedName; n++) {
+      const rows = chatRows(page).filter({ hasNot: page.locator("[data-call-act='upload']") });
+      if (!(await rows.count())) break;
+      const r = rows.first();
+      const name = await r.locator(".calls-time").textContent();
+      await r.locator("[data-call-row]").click();
+      await page.waitForTimeout(1500);
+      if (await page.getByText(/didn't let your sign-in read this call's transcript/).count()) refusedName = name;
+      else await calls(page);
+    }
+    expect(refusedName).not.toBeNull();
+    // In Needs you: Add transcript, and on the line under it the short words.
+    await calls(page);
+    const row = page.locator("[data-section='needs'] li[data-row]").filter({ has: page.locator("[data-call-refused]") });
+    await expect.poll(() => row.count(), { timeout: W }).toBe(1);
+    await expect(row.locator("[data-call-refused]").textContent()).resolves.toBe("Teams refused it");
+    await expect(row.locator("[data-call-act='upload']").textContent()).resolves.toBe("Add transcript");
+    expect((await row.locator("[data-call-refused]").textContent())!.split(/\s+/).length).toBeLessThanOrEqual(4);
+  }, T);
 });
