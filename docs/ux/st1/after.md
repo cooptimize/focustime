@@ -6,9 +6,9 @@ Measured on the demo (a fictional person and fictional features, Thursday Nov 5,
 
 | | Before (main) | After (ST-1) |
 |---|---|---|
-| Words on screen as Status opens | 470 (all five features) | 273 (it opens on Needs an update: three of the five features; "with the three lines in" below is all five) |
-| Words with the three lines in | 492 | 473 |
-| Words in Preview with the lines in | 262 (lines not pushed drawn in italics) | 163 (only what is On the report) |
+| Words on screen as Status opens | 470 (all five features) | 275 (it opens on Needs an update: three of the five features; "with the three lines in" below is all five) |
+| Words with the three lines in | 492 | 474 |
+| Words in Preview with the lines in | 262 (lines not pushed drawn in italics) | 138 (only what is On the report) |
 | Sentences of help or explanation as it opens | 5: the two under the header ("What Monday's report will show…", "Add your own lines here; Kat sends the email, not FocusTime."), and "You worked on this since Kat's last send and haven't added a line yet." under each of three clients | 0 (the key is three names with a few words each). Kept because something is wrong or a choice needs it: the read-only line and AI-off's line, as before |
 | Facts said more than once as it opens | "Kat last sent <client>'s report Mon, Nov 2, 7:0x AM" on each of four clients; "N features need your update" in the count and again as each client's label | Kat's time once per client, on the name's hover; the count once, on the Needs an update chip |
 | Times a feature says it has no update (visible, as it opens) | 3 ("No update yet" chips), plus a "You worked on this" chip beside each | 2 ("· nothing yet" in On Monday's report, on the features shown); one tag, "Needs an update", where it needs mine |

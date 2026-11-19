@@ -524,7 +524,7 @@ function StatusBody({ tz, switcher, colors, readOnly, version, onChanged, group,
       <strong className="st-pending-count">{ST_WORDS.ready(ready.length)}</strong>
       <span className="muted st-foot-clients">{ST_WORDS.forClients(byClient)}</span>
       {partsSaid && <span className="muted st-parts">{partsSaid}</span>}
-      <button type="button" className="commit st-push-btn" data-tour="st-push" disabled={push || !writes} onClick={startPush}>{ST_WORDS.push}</button>
+      <button type="button" className="mini primary st-push-btn" data-tour="st-push" disabled={push || !writes} onClick={startPush}>{ST_WORDS.push}</button>
     </div>
   );
   // F: Preview's one line while lines are Ready to push: how many, Show them, Push.
@@ -532,7 +532,7 @@ function StatusBody({ tz, switcher, colors, readOnly, version, onChanged, group,
     <p className="st-preview-top" role="status" data-preview-top="">
       <span>{ST_WORDS.notOnYet(ready.length)}</span>
       <button type="button" className="link-btn" aria-pressed={showReady} onClick={() => setShowReady(!showReady)}>{showReady ? ST_WORDS.hideThem : ST_WORDS.showThem}</button>
-      <button type="button" className="commit" disabled={push || !writes} onClick={startPush}>{ST_WORDS.push}</button>
+      <button type="button" className="mini primary" disabled={push || !writes} onClick={startPush}>{ST_WORDS.push}</button>
     </p>
   );
   const pushedList = pushed.length > 0 && <PushedList pushed={pushed} data={known} onRetry={(p) => void retry(p)} onUndo={startUndo} onClear={() => setPushed([])} />;
