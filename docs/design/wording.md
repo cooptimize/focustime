@@ -664,3 +664,14 @@ From `plan/call-words.ts` (`CALL_LIST`, `FETCH_WORDS`, `CHAT_WAY_ON`, `CHAT_NO_S
 - Not in the chat, or not following its client: **"FocusTime shows a chat's calls to the Cooptimizers in that chat who follow its client. Upload the transcript with Add a call instead."**
 - Settings › Connections: **"CallTranscripts.Read.All"**, **"Calls started in a client's chat: the transcript of one such call, only when you press Review on it, while you're in that chat and follow its client; read only, kept 30 days"**, and while missing **"Calls: asked the first time you press Review on a call started in a client's chat, once Cooptimize's Microsoft setup allows it"**.
 - The Guide: **"Which calls show in Calls?"**
+## VM-6 words (Nov 18)
+
+Azure's reason for a refused read, from its code (`READ_PROBLEM` in `plan/vm.ts`). The chip's face stays short; the menu says the sentence under the state, then when the state was last read.
+
+- **"Azure refused"** (`AuthorizationFailed`): "Azure says your sign-in isn't allowed to read this VM right now. If your access is switched on for a time, switch it on again in Azure."
+- **"VM not found"**: "Azure can't find this VM. It may have been moved or deleted."
+- **"Sign in to Azure again"** (a 401, or a 403 asking for the sign-in again): VM-4's sentence and its item, **"Sign in to Azure again…"**.
+- Any other no, or none given: VM-4's **"Azure refused"** sentence.
+- Under the reason: **"Last read 2:14 PM"**, or **"Last read Tue 2:14 PM"** for another day: the last good read, never a failed one.
+- The state read and the auto-shutdown not: the state on the chip, and in the menu and the chip's title **"FocusTime couldn't read your VM's auto-shutdown time."**
+

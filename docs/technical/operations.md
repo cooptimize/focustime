@@ -173,7 +173,8 @@ The bot itself deploys with the Bicep (`infra/modules/bot.bicep`). The Teams app
 
 - **A state** (Running, Stopped (deallocated), Starting… and the rest): the last read worked.
 - **The state with a hollow mark**: the last read failed; FocusTime keeps the last state it read, says how long ago in the chip's title and menu ("Read 1 minute ago"), and asks again in about 10 seconds.
-- **The state and a reason** (Can't reach Azure, Azure is busy, Sign in to Azure again, Azure refused, Can't reach FocusTime): reads have failed for 2 minutes; asked again every 30 seconds. The menu's first line has the same words and what to do.
+- **The state and a reason** (Can't reach Azure, Azure is busy, Sign in to Azure again, Azure refused, VM not found, Can't reach FocusTime): reads have failed for 2 minutes; asked again every 30 seconds. VM-6: under the state the menu says Azure's reason from its code (`AuthorizationFailed`: not allowed right now; not found; a 403 asking for the sign-in again is Sign in to Azure again) and "Last read 2:14 PM", the last good read.
+- **The state, and the auto-shutdown time unread** (VM-6): the state was read and the schedule wasn't; the menu says so.
 - **Checking…** alone: FocusTime restarted and hasn't read the VM yet.
 - **Unknown**: Azure answered without a state.
 - Start and Stop always read Azure afresh before they act (the preview and the confirm each read it), so nothing is started or stopped on an old reading.
@@ -213,6 +214,30 @@ AppTraces | where TimeGenerated > ago(2d) | where Message startswith 'scheduler'
 AppExceptions | where TimeGenerated > ago(2d) | summarize count() by where=tostring(Properties['where']), ExceptionType, bin(TimeGenerated, 1h)
 ```
 
+## The VM-6 queries
+
+How VM-6 read production (read only, `ft-prod-log`; `docs/ux/vm6/what-happened.md`). The console log names the revision, which App Insights doesn't.
+
+```kusto
+// Every Azure call by call and day: yes and no
+AppDependencies | where TimeGenerated > ago(3d) | where Name startswith 'azure'
+| summarize yes=countif(Success), no=countif(not(Success)) by Name, bin(TimeGenerated, 1d)
+// Each no: status, Azure's code word, first and last, median time
+AppDependencies | where TimeGenerated > ago(3d) | where Name startswith 'azure' and Success == false
+| summarize n=count(), first_=min(TimeGenerated), last_=max(TimeGenerated), p50=percentile(DurationMs, 50) by Name, ResultCode, code=tostring(Properties['kind'])
+// State reads by revision (the console log), status and code
+ContainerAppConsoleLogs_CL | where TimeGenerated > ago(3d) | where Log_s has 'azure instanceView'
+| extend st=extract('status=([0-9]+)', 1, Log_s), k=extract('kind=([A-Za-z]+)', 1, Log_s)
+| summarize n=count(), first_=min(TimeGenerated), last_=max(TimeGenerated) by RevisionName_s, st, k
+// Reads and token renewals side by side around a burst
+AppDependencies | where TimeGenerated between (datetime(2026-11-18T15:25Z) .. datetime(2026-11-18T15:40Z))
+| where Name startswith 'azure' or Name has 'token' | project TimeGenerated, Name, ResultCode, DurationMs, OperationName
+// Container events: starts, restarts, probes
+ContainerAppSystemLogs_CL | where TimeGenerated > ago(3d) | project TimeGenerated, RevisionName_s, ReplicaName_s, Reason_s
+// The automatic start's lines
+AppTraces | where TimeGenerated > ago(3d) | where Message == 'azure vm_autostart' | project TimeGenerated, k=tostring(Properties['kind'])
+```
+
 ## Troubleshooting
 
 | What you see | Why | Fix |
@@ -227,7 +252,7 @@ AppExceptions | where TimeGenerated > ago(2d) | summarize count() by where=tostr
 | "AI isn't set up" | No `ft-openai-key` in that environment's vault | `infra/scripts/openai-key.sh` (used within a minute, no restart) |
 | A call says the AI step failed | The pass for that call didn't finish: the page names why (the AI service, a timeout, AI not allowed for the client, the budget, FocusTime couldn't read the client's items) and, for a call sent in parts, which part. In production FocusTime tries it again by itself 3 times, 15 minutes apart, unless a retry can't fix it | Fix what the page names (Admin › Team defaults › AI for AI, or the client's page in Admin › Clients for Allow AI, the budget), then a reviewer presses Propose again. Last 20 requests (Settings, AI and assistant) shows the provider's HTTP status for a failed request ("Failed · HTTP 400"); App Insights has the same as `status` on `op: "request"`, with the tier in `kind`. On dev nothing retries by itself |
 | Push notifications aren't set up | No `ft-vapid-key` | `infra/scripts/vapid-key.sh` |
-| The VM chip shows a reason (Azure refused, Can't reach Azure, …) | Reads of the VM's state have failed for 2 minutes. The chip keeps the last state it read and keeps asking | Ask what the chip's menu says. In the log, `azure instanceView` lines with a failed status: `kind` is Azure's error code. Azure refused (403): check the person can still see the VM in the Azure portal, and the subscription's activity log for role assignment changes |
+| The VM chip shows a reason (Azure refused, Can't reach Azure, …) | Reads of the VM's state have failed for 2 minutes. The chip keeps the last state it read and keeps asking | Ask what the chip's menu says. In the log, `azure instanceView` lines with a failed status: `kind` is Azure's error code. `AuthorizationFailed`: the person's access (a role, or one switched on for a time); check the subscription's activity log for role assignment changes. `none` on every read from one revision (VM-6, Nov 18): not the person; it ended by itself or with the next revision. Compare by revision with the VM-6 queries |
 | Someone was told "That didn't work … (reference ABC123)" | An action failed in a way the server didn't expect | Find the reference ([above](#find-an-unexpected-failure-by-its-reference)): the action, the error's type and the exception |
 | My VM didn't start before my day | The person's chip, its menu and Settings say why (PTO, a holiday, PTO unreadable, the Azure sign-in, no VM, Azure refused, or FocusTime wasn't running). Nothing at all: it wasn't production, or auto-start is off, or it was their own choice (a day not chosen, skipped, paused). VM-5: a skip says how it was made (Skip this one, Not today on Day, or a Stop: at or after the planned time, or before it with "Skip today's start too"); a Stop before the planned time no longer skips. VM-4: a state that couldn't be read at the planned time isn't the day's try; FocusTime reads again on later passes until the late limit, then says "couldn't read your VM's state" | Ask what the chip's menu says. In the log, `azure vm_autostart` lines that day (one per reason). Admin › Health › Background passes: a warning means a pass is stuck; the log names the work (`tick_part`, `scheduler … over_limit`). It doesn't try again that day: Start in the chip's menu |
 
