@@ -176,8 +176,8 @@ export function callRows(x: CallListInput): CallRow[] {
   x.addPocket?.(all, takes, hides);
   for (const r of all) {
     r.mark = r.recording ? "pocket" : markOf(r.check === "yes", r.pocket.length > 0);
-    // A call that closed with no transcript opens again when my Pocket recording goes with it: it can be reviewed now.
-    if (r.bucket === "closed" && r.closed?.noTranscript && r.pocket.length) (r.bucket = "open"), (r.closed = null);
+    // MC-5: a call that closed with no transcript stays closed when my Pocket recording later goes with it: it gains the
+    // mark and can be reviewed from Closed (it opens again only once its transcript brings proposals).
     // An open calendar call with nothing to read goes in the fold; one being checked or not checked stays in its week.
     if (r.bucket === "open" && r.other && !r.mark && (r.check === "no" || r.check === "off")) r.place = "fold";
   }

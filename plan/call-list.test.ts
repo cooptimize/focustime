@@ -4,7 +4,8 @@
 import { describe, expect, it } from "vitest";
 import { anOccurrenceView, anOtherCall, aSeriesView, ZONE } from "../test/builders/index.ts";
 import { pocketRows } from "./call-list-pocket.ts";
-import { callRows, chipClients, closedAtOf, closedLine, closedList, dayHeading, filterCounts, firstToOpen, hiddenList, hiddenMissing, hideKeyOf, openList, outcomeOfCall, weekOf } from "./call-list.ts";
+import { callRows, chipClients, closedAtOf, closedLine, closedList, dayHeading, filterCounts, firstToOpen, hiddenList, hiddenMissing, hideKeyOf, markShort, needsAction, needsNote, openList, outcomeOfCall, shortWhen, weekOf } from "./call-list.ts";
+import { CALL_STATE } from "./call-words.ts";
 
 // Thursday Nov 5: This week is Nov 2 to 8, Last week Oct 26 to Nov 1.
 const TODAY = "2026-11-05";
@@ -177,12 +178,16 @@ describe("MC-2b: my Pocket recordings in the list", () => {
     expect(filterCounts(rows, null, 0, new Set(["standup"])).hidden).toBe(1);
   });
 
-  it("MC-4: a call that closed with no transcript opens again when my recording goes with it", () => {
+  it("MC-5: a call that closed with no transcript stays closed when my recording later goes with it, with the mark, reviewable from Closed", () => {
     const gone = anOccurrenceView({ id: 30, seriesId: 4, startAt: "2026-10-27T15:00:00Z", endAt: "2026-10-27T16:00:00Z", state: "no_transcript", open: 0, hasTranscript: false });
     const plain = callRows({ meetings: [waiting], occurrences: [gone], others: [], today: TODAY, zone: ZONE });
     expect(plain[0]!.bucket).toBe("closed");
     const withRec = callRows({ meetings: [waiting], occurrences: [gone], others: [], today: TODAY, zone: ZONE, addPocket: pocketRows([rec("r", "2026-10-27T15:00:00Z", 60)], ZONE) });
-    expect([withRec[0]!.bucket, withRec[0]!.mark, withRec[0]!.closed]).toEqual(["open", "pocket", null]);
+    expect([withRec[0]!.bucket, withRec[0]!.mark, withRec[0]!.closed?.noTranscript]).toEqual(["closed", "pocket", true]);
+    // Its recording goes with it (the call's page offers it there), and it is listed under Closed, not Open.
+    expect(withRec[0]!.pocket.map((r) => r.id)).toEqual(["r"]);
+    expect(closedList(withRec, null).map((r) => r.key)).toEqual(["o30"]);
+    expect(openList(withRec, null, TODAY).weeks.flatMap((w) => w.rows)).toEqual([]);
   });
 
   it("PK-4: a recording with no call has its mark and hides by its id alone; Put back brings it back", () => {
@@ -202,5 +207,32 @@ describe("MC-2b: my Pocket recordings in the list", () => {
   it("without a press, nothing changes", () => {
     const plain = callRows({ meetings: [weekly, waiting], occurrences: occs, others, today: TODAY, zone: ZONE });
     expect(plain.every((r) => !r.pocket.length && !r.recording)).toBe(true);
+  });
+});
+
+describe("MC-5: a row's one button, its short note, its when and its mark", () => {
+  const row = (x: Partial<Parameters<typeof needsAction>[0]>) => ({ left: null, state: { label: CALL_STATE.upload, needsMe: true }, pocket: [], ...x }) as Parameters<typeof needsAction>[0];
+  it("Needs you: what is left (no button), else Try again, Use Pocket recording or Add transcript; nothing while waiting on someone else", () => {
+    expect(needsAction(row({ left: { open: 3, all: 11 } }))).toEqual({ kind: "left", text: "3 left" });
+    expect(needsAction(row({ state: { label: CALL_STATE.aiFailed, needsMe: true } }))?.text).toBe("Try again");
+    expect(needsAction(row({ pocket: [{ id: "r", startAt: "", endAt: "", minutes: 30, title: "" }] }))?.text).toBe("Use Pocket recording");
+    expect(needsAction(row({}))?.text).toBe("Add transcript");
+    expect(needsAction(row({ state: { label: CALL_STATE.readFailed, needsMe: true } }))?.text).toBe("Add transcript");
+    expect(needsAction(row({ state: { label: CALL_STATE.waiting, needsMe: false } }))).toBeNull();
+  });
+  it("line 2's note: the transcript's last day for a call before this week, else a bar once something is decided; nothing with none decided", () => {
+    expect(needsNote({ day: "2026-10-27", left: { open: 2, all: 4 }, occurrenceId: 1 }, "2026-11-05")).toEqual({ amber: "Transcript goes Nov 26" });
+    expect(needsNote({ day: "2026-11-03", left: { open: 1, all: 4 }, occurrenceId: 1 }, "2026-11-05")).toEqual({ done: 0.75 });
+    expect(needsNote({ day: "2026-11-03", left: { open: 4, all: 4 }, occurrenceId: 1 }, "2026-11-05")).toBeNull();
+  });
+  it("when: the weekday this week and last, the date before that", () => {
+    expect(shortWhen("2026-11-03T18:00:00Z", "2026-11-03", "2026-11-05", "America/New_York")).toBe("Tue 1:00 PM");
+    expect(shortWhen("2026-10-27T18:00:00Z", "2026-10-27", "2026-11-05", "America/New_York")).toBe("Tue 2:00 PM");
+    expect(shortWhen("2026-10-20T18:00:00Z", "2026-10-20", "2026-11-05", "America/New_York")).toBe("Oct 20, 2:00 PM");
+  });
+  it("the mark, short, with its full words", () => {
+    expect(markShort("both")).toEqual({ short: "Teams · Pocket", full: "Transcript in Teams and your Pocket recording" });
+    expect(markShort("teams")?.short).toBe("Teams");
+    expect(markShort(null)).toBeNull();
   });
 });
