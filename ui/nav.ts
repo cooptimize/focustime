@@ -19,8 +19,16 @@ import { isBranchName } from "../plan/branch-name.ts";
  */
 export const TABS = ["today", "week", "ahead", "inbox", "calls", "status", "code"] as const;
 export type Tab = (typeof TABS)[number];
-/** TB-1: where the top bar draws a divider: before each of these tabs, never at either end. */
+/** TB-1: the first tab of each group after the first. The groups have no names, on screen or here. */
 export const GROUP_STARTS: readonly Tab[] = ["inbox", "status"];
+const groupOf = (t: Tab): number => GROUP_STARTS.filter((s) => TABS.indexOf(s) <= TABS.indexOf(t)).length;
+/**
+ * TB-1: the shown tabs with a divider wherever the group changes between two of them, so never at either end and
+ * never two side by side, whichever tabs a person has (six tabs: Status alone after the second).
+ */
+export function withDividers(shown: readonly Tab[]): ({ tab: Tab } | { divider: string })[] {
+  return shown.flatMap((t, i) => (i > 0 && groupOf(t) !== groupOf(shown[i - 1]!) ? [{ divider: `before-${t}` }, { tab: t }] : [{ tab: t }]));
+}
 /** A tab's number key: its place in TABS (1 Day … 7 Code). Code is last, so a person without it keeps 1 to 6. */
 export const tabKey = (t: Tab): string => String(TABS.indexOf(t) + 1);
 /** WD-1: Today is called Day (the date word "today" stays), and Status is a tab of its own. */

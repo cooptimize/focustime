@@ -97,7 +97,8 @@ describe("command menu (built from the action registry)", () => {
     const runs = groups.filter((g, i) => i === 0 || g !== groups[i - 1]);
     expect(runs[0]).toBe("Views");
     expect(runs.filter((g) => g === "Views")).toHaveLength(1);
-    const registry = list.filter((c) => (ACTION_NAMES as readonly string[]).includes(c.id));
+    // TB-1: the tabs' registry commands (Calls, Code) sit in Views with the other tabs; the rest keep their order last.
+    const registry = list.filter((c) => (ACTION_NAMES as readonly string[]).includes(c.id) && c.group !== "Views");
     expect(registry.map((c) => c.id)).toEqual(list.slice(list.length - registry.length).map((c) => c.id));
     // A search's first result is what it was before grouping (review 2: "history" must find the history first).
     expect(filterCommands(list, "history")[0]!.label).not.toMatch(/^Clear/);
@@ -108,7 +109,7 @@ describe("command menu (built from the action registry)", () => {
     // RB-1: Code is one entry ("Code") plus "Code: <client>" per client; its reads never show, and no repo or file does.
     expect(listed.filter((n) => n.startsWith("code."))).toEqual(["code.clients"]);
     const withCode = commandList({ ...env().e, showCode: () => {}, codeClients: [{ clientKey: "Northwind", name: "Northwind" }] });
-    expect(withCode.filter((c) => c.action?.startsWith("code.")).map((c) => c.label)).toEqual(["Code: Northwind", "Code"]);
+    expect(withCode.filter((c) => c.action?.startsWith("code.")).map((c) => c.label)).toEqual(["Code", "Code: Northwind"]); // TB-1: Code is in Views
     // RM-1: DevOps patterns is gone; nothing of it is offered to anyone.
     expect(listed.filter((n) => n.startsWith("patterns."))).toEqual([]);
     // RM-1: the removed features' actions are gone from the registry, so nothing can list them.

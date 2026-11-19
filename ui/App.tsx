@@ -51,7 +51,7 @@ import { causeLines, sourceActions, sourceLabel, stateOf } from "./status.ts";
 import { WeekGrid, type PanelFocus, type Selection } from "./WeekGrid.tsx";
 import { TopTimer } from "./NowStrip.tsx";
 import { PersonChip, useAccountMenu, VM_MENU_EVENT, VmChip, VmProvider } from "./Account.tsx";
-import { stepWeekday, weekendStops, afterDone, addOf, weekOfAdd, defaultNav, hashOf, HOME, isPlanning, modeNav, navOf, parseHash, placeToKeep, arriveAt, locScreens, routeLoc, sameLoc, TAB_NAMES, tabForKey, tabKey, TABS, toggleP, viewName, viewNav, type Loc, type ModeName, type Nav, type Tab } from "./nav.ts";
+import { stepWeekday, weekendStops, afterDone, addOf, weekOfAdd, defaultNav, hashOf, HOME, isPlanning, modeNav, navOf, parseHash, placeToKeep, arriveAt, locScreens, routeLoc, sameLoc, TAB_NAMES, tabForKey, tabKey, TABS, withDividers, toggleP, viewName, viewNav, type Loc, type ModeName, type Nav, type Tab } from "./nav.ts";
 import { ModeArea, ModeSwitch, CardsTimelineSwitch, MeetingsSwitch, rememberedMeetingsAll, rememberMeetingsAll } from "./ModeSwitch.tsx";
 import { hasWorkOn, momentCard } from "../plan/modes.ts";
 import { sound } from "./sound.ts";
@@ -2133,7 +2133,12 @@ export function App() {
           )}
         </div>
         {!phone && <nav className="views" aria-label="Tabs">
-          {TABS.filter(tabShown).map((t) => (
+          {/* TB-1: three groups with a faint divider between them; a divider is decoration only (hidden from screen
+              readers, never focused), and gives way first when the bar is tight (styles.css, TB-1). */}
+          {withDividers(TABS.filter(tabShown)).map((x) => {
+            if ("divider" in x) return <span key={x.divider} className="tab-divider" aria-hidden="true"><i /></span>;
+            const t = x.tab;
+            return (
             <button key={t} type="button" className="view-tab" aria-current={nav.tab === t && !loc.overlay ? "page" : undefined} onClick={() => openTab(t)} onPointerEnter={() => aheadOf(t)} onFocus={() => aheadOf(t)} title={tabTip(TAB_TITLES[t], tabKey(t), t === "status" && statusTone !== "none" ? statusText : "")} data-tour={t === "status" ? "tab-status" : undefined}>
               <Icon name={TAB_ICONS[t]} />
               {TAB_NAMES[t]}
@@ -2142,7 +2147,8 @@ export function App() {
               {t === "calls" && callsNeed > 0 && <span className="count" aria-label={`${callsNeed} ${callsNeed === 1 ? "needs" : "need"} you`}>{callsNeed}</span>}
               {t === "status" && <StatusMark tone={statusTone} text={statusText} />}
             </button>
-          ))}
+            );
+          })}
         </nav>}
         <ScreenLine />
         <div className="top-actions">

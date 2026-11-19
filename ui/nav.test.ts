@@ -3,7 +3,7 @@
 // its date, block, week or id, P, keys 1–6, entry points, and notification and command routes.
 import { describe, expect, it } from "vitest";
 import { notices, parseRoute, type Notice } from "../plan/notify.ts";
-import { addOf, addWorkNav, afterDone, hashOf, HOME, isPlanning, MODES, modeNav, navOf, parseHash, routeLoc, TAB_NAMES, tabForKey, TABS, toggleP, viewName, viewNav, weekOfAdd, type Loc, type Nav, type ViewName, queryOf, setAheadQuery, arriveAt } from "./nav.ts";
+import { addOf, addWorkNav, afterDone, hashOf, HOME, isPlanning, MODES, modeNav, navOf, parseHash, routeLoc, TAB_NAMES, tabForKey, TABS, withDividers, toggleP, viewName, viewNav, weekOfAdd, type Loc, type Nav, type Tab, type ViewName, queryOf, setAheadQuery, arriveAt } from "./nav.ts";
 
 const loc = (nav: Nav): Loc => ({ nav, overlay: null });
 
@@ -357,5 +357,15 @@ describe("AH-6: Backlog's address carries its view", () => {
     } finally {
       setAheadQuery("");
     }
+  });
+
+  it("TB-1: a divider wherever the group changes, never at either end or two together, with seven tabs or six", () => {
+    const show = (tabs: readonly Tab[]) => withDividers(tabs).map((x) => ("divider" in x ? "|" : TAB_NAMES[x.tab])).join(" ");
+    expect(show(TABS)).toBe("Day Week Backlog | Inbox Calls | Status Code");
+    expect(show(TABS.filter((t) => t !== "code"))).toBe("Day Week Backlog | Inbox Calls | Status");
+    expect(show(["today", "status"])).toBe("Day | Status");
+    expect(show(["today", "week"])).toBe("Day Week");
+    expect(show(["status"])).toBe("Status");
+    expect(show([])).toBe("");
   });
 });
