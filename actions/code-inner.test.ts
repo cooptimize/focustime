@@ -120,7 +120,7 @@ describe("a report's pages in today's format", () => {
     const r = await list(c, "pages", "/rpt/Weekly ops.Report/definition/report.json");
     expect(data(r)).toEqual({ list: "pages", pages: [{ name: "Summary", hidden: false }, { name: "Detail", hidden: false }, { name: "Drill: one site", hidden: true }], unreadable: 0 });
     expect(f.opened.sort()).toEqual(["/rpt/Weekly ops.Report/definition/pages/a1/page.json", "/rpt/Weekly ops.Report/definition/pages/b2/page.json", "/rpt/Weekly ops.Report/definition/pages/c3/page.json", "/rpt/Weekly ops.Report/definition/pages/pages.json"]);
-    expect(views).toEqual([{ actorId: ME.id, actorName: ME.name, clientKey: "Contoso", repoId: REPO, repoName: "ops-reporting", path: "/rpt/Weekly ops.Report/definition/report.json", event: "pages_listed" }]);
+    expect(views).toEqual([{ actorId: ME.id, actorName: ME.name, clientKey: "Contoso", repoId: REPO, repoName: "ops-reporting on main", path: "/rpt/Weekly ops.Report/definition/report.json", event: "pages_listed" }]);
   });
   it("one page, with no pages.json", async () => {
     const f = fake();

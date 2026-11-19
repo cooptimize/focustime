@@ -94,3 +94,21 @@ export const BRANCH_TEXT = {
   /** Search inside files, on a branch DevOps doesn't search for that repo. */
   notSearched: (shown: string) => `DevOps doesn't search this branch. These are from ${shown}.`,
 } as const;
+
+/**
+ * RB-7: what the admins' log says in the place it says the repo (Code views' repo column): the repo and its branch,
+ * "sales-analytics on dev". A row for all of a client's repos says the branch each was read on: one branch for all,
+ * or each repo by name. Branch and repo names only, never a word typed or a line of code.
+ */
+export const LOG_MAX = 200;
+export const logRepo = (repo: string, branch: string) => `${repo} on ${branch}`.slice(0, LOG_MAX);
+export function logAll(read: readonly { repo: string; branch: string }[]): string {
+  const names = new Set(read.map((r) => r.branch));
+  if (names.size <= 1) return `All its repos${read.length ? ` on ${read[0]!.branch}` : ""}`.slice(0, LOG_MAX);
+  return `All its repos: ${read.map((r) => logRepo(r.repo, r.branch)).join(", ")}`.slice(0, LOG_MAX);
+}
+/** A search inside files is logged before anything is read: the branch each repo is read on, as far as is known then. */
+export function logAllBefore(opening: string | null, chosen: string | null): string {
+  const usual = opening ? `${opening} where they have it` : "their default branches";
+  return `All its repos on ${usual}${chosen ? `, the one on screen on ${chosen}` : ""}`.slice(0, LOG_MAX);
+}

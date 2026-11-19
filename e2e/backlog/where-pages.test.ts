@@ -125,9 +125,9 @@ describe.skipIf(!CHROMIUM)("RB-3b: pages in today's report format and a one-file
     expect(seen.filter((s) => s.action === "code.file")).toEqual([]);
     const log = (await views(page)).slice(0, (await views(page)).length - before);
     expect(log.filter((v) => v.event !== "where_new_form").map((v) => `${v.event} ${v.repoName} ${v.path}`).sort()).toEqual([
-      "fields_listed store-portal /report/Store visits.SemanticModel/definition/tables/Store.tmdl",
-      "pages_listed store-portal /report/Region review.Report/definition/report.json",
-      "tables_listed store-portal /report/Returns.SemanticModel/model.bim",
+      "fields_listed store-portal on main /report/Store visits.SemanticModel/definition/tables/Store.tmdl",
+      "pages_listed store-portal on main /report/Region review.Report/definition/report.json",
+      "tables_listed store-portal on main /report/Returns.SemanticModel/model.bim",
     ]);
     expect(JSON.stringify(log)).not.toMatch(/regio|The Store|Return Rate/);
 
@@ -138,9 +138,9 @@ describe.skipIf(!CHROMIUM)("RB-3b: pages in today's report format and a one-file
     await table.waitFor({ timeout: 30_000 });
     const rows = await table.locator("tbody tr").evaluateAll((trs) => trs.slice(0, 4).map((tr) => [...tr.querySelectorAll("td")].slice(3).map((td) => td.textContent)));
     expect(rows.slice(0, 3)).toEqual([
-      ["store-portal", "Measures and columns listed", "/report/Store visits.SemanticModel/definition/tables/Store.tmdl"],
-      ["store-portal", "Tables listed", "/report/Returns.SemanticModel/model.bim"],
-      ["store-portal", "Pages listed", "/report/Region review.Report/definition/report.json"],
+      ["store-portal on main", "Measures and columns listed", "/report/Store visits.SemanticModel/definition/tables/Store.tmdl"],
+      ["store-portal on main", "Tables listed", "/report/Returns.SemanticModel/model.bim"],
+      ["store-portal on main", "Pages listed", "/report/Region review.Report/definition/report.json"],
     ]);
     await page.locator('[data-setting="code-views"]').scrollIntoViewIfNeeded();
     await shot(page, "rb3b-code-log");

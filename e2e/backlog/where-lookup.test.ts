@@ -218,7 +218,7 @@ describe.skipIf(!CHROMIUM)("RB-3: Where is it?, picked from the client's code (b
 
     // The log: one names row naming the New form, never the words; a file row per file read.
     const log = (await views(page)).slice(0, (await views(page)).length - logBefore);
-    expect(log.filter((v) => v.event === "where_new_form")).toEqual([expect.objectContaining({ clientKey: "Northwind", repoName: "", path: "" })]);
+    expect(log.filter((v) => v.event === "where_new_form")).toEqual([expect.objectContaining({ clientKey: "Northwind", repoName: "All its repos on main", path: "" })]);
     expect(log.filter((v) => v.event === "pages_listed" || v.event === "fields_listed").map((v) => `${v.event} ${v.path}`).sort()).toEqual(["fields_listed /model/Sales.SemanticModel/definition/tables/Sales.tmdl", "pages_listed /report/Sales.Report/report.json"]);
     expect(log.filter((v) => v.event === "file_opened")).toEqual([]);
     expect(JSON.stringify(log)).not.toMatch(/fact\.sal|the sale|On fact/i);

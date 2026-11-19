@@ -41,7 +41,7 @@ import { CodeFailure, type CodeFailureReason, type CodeGit } from "./code-git.ts
 import type { GitRepo } from "../sources/devops/git.ts";
 import type { CodeViewInput } from "../store/code-views-store.ts";
 import { cleanPath, FIND_MAX, INSIDE_MAX, INSIDE_WORDS_MAX, isBranchName, NAMES_REPOS_AT_ONCE, REPO_ID, sizeWords, TEXT_MAX_BYTES, type CodeAccess, type CodeFileView, type CodeRepoView } from "../plan/code.ts";
-import { branchOrder, needsBranchList, openingOf, openingRule, pickBranch, type BranchPick } from "../plan/code-branch.ts";
+import { branchOrder, logAll, logAllBefore, logRepo, needsBranchList, openingOf, openingRule, pickBranch, type BranchPick } from "../plan/code-branch.ts";
 import { whereOnly, WHERE_FROM, type WhereFrom } from "../plan/where-lookup.ts";
 import { bimFile, bimTables, legacyPages, partFiles, pbirPages, reportFiles, tmdlTableFields, tmdlTableName, WHERE_INNER_AT_ONCE, WHERE_LISTS, WHERE_PAGES_MAX, WHERE_PARTS_MAX, type InnerAnswer, type InnerField, type WhereList } from "../plan/where-inner.ts";
 import { fileLabels, KIND_EXT, KINDS, sortRepo, type InsideAnswer, type InsideFile, type InsideNotSearched, type Kind, type RepoThings } from "../plan/code-kinds.ts";
@@ -264,7 +264,8 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
     if (i.kind !== undefined && i.kind !== null && !(KINDS as readonly unknown[]).includes(i.kind)) return bad("kind is one of the kinds", 400, "bad_kind");
     try {
       if (!ctx.views) throw new Error("no view log");
-      await ctx.views.add({ actorId: me.id, actorName: me.name, clientKey: client.clientKey, repoId: "", repoName: "", path: "", event: "inside_searched" });
+      // RB-7: the branches it reads, as known before anything is asked (the repo on screen isn't named: its list isn't read yet).
+      await ctx.views.add({ actorId: me.id, actorName: me.name, clientKey: client.clientKey, repoId: "", repoName: logAllBefore(opening, onScreen ? chosen : null), path: "", event: "inside_searched" });
     } catch {
       return bad(CODE_TEXT.insideNotLogged, 503, "not_logged");
     }
@@ -284,6 +285,8 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
   if (action === "code.kinds" || action === "code.search") {
     const git = ctx.git;
     const out: CodeRepoThings[] = new Array(repos.length);
+    /** RB-7: the branch each repo's names were read on, for the log. */
+    const readOn: { repo: string; branch: string }[] = new Array(repos.length);
     let read = false;
     let next = 0;
     const worker = async () => {
@@ -297,6 +300,7 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
         try {
           const { pick, value: f } = await onBranch(git, client.clientKey, r, opening, chosenFor(r), (b) => git.files(client.clientKey, r, b));
           read = true;
+          readOn[n] = { repo: r.name, branch: pick.name };
           const sorted = sortRepo(f.paths);
           // RB-3: for Where is it?, only what the box offers, and no file inside an item.
           out[n] = { repo: v, ...(from ? whereOnly(sorted) : sorted), cut: f.cut, problem: null, ...(pick.why === "chosen" ? { branch: pick.name } : {}) };
@@ -311,7 +315,7 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
     if (read) {
       try {
         if (!ctx.views) throw new Error("no view log");
-        await ctx.views.add({ actorId: me.id, actorName: me.name, clientKey: client.clientKey, repoId: "", repoName: "", path: "", event: from ? `where_${from}` : action === "code.kinds" ? "kinds_listed" : "names_searched" });
+        await ctx.views.add({ actorId: me.id, actorName: me.name, clientKey: client.clientKey, repoId: "", repoName: logAll(readOn.filter(Boolean)), path: "", event: from ? `where_${from}` : action === "code.kinds" ? "kinds_listed" : "names_searched" });
       } catch {
         return bad(CODE_TEXT.namesNotLogged, 503, "not_logged");
       }
@@ -397,9 +401,10 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
   const repo = repos.find((r) => r.id === (i.repoId as string).toLowerCase());
   if (!repo) return bad(CODE_TEXT.noRepo, 404, "no_repo");
   const view = repoView(repo);
-  const log = async (event: CodeViewInput["event"], path: string) => {
+  /** RB-7: the row names the repo with the branch it was read on ("sales-analytics on dev"). */
+  const log = async (event: CodeViewInput["event"], path: string, branch: string) => {
     if (!ctx.views) throw new Error("no view log");
-    await ctx.views.add({ actorId: me.id, actorName: me.name, clientKey: client.clientKey, repoId: repo.id, repoName: repo.name, path, event });
+    await ctx.views.add({ actorId: me.id, actorName: me.name, clientKey: client.clientKey, repoId: repo.id, repoName: logRepo(repo.name, branch), path, event });
   };
 
   const git = ctx.git;
@@ -434,7 +439,7 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
       if (view.state !== "ok") return { ok: true, data: { repo: view, paths: [], cut: false, max: FIND_MAX } };
       const { pick, value: f } = await onBranch(git, client.clientKey, repo, opening, chosen, (b) => git.files(client.clientKey, repo, b));
       try {
-        await log("find_used", "/");
+        await log("find_used", "/", pick.name);
       } catch {
         return bad(CODE_TEXT.notLogged, 503, "not_logged");
       }
@@ -448,7 +453,7 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
       // The repo's top folder is "Repo opened"; other folders aren't logged.
       if (path === "/") {
         try {
-          await log("repo_opened", "/");
+          await log("repo_opened", "/", pick.name);
         } catch {
           return bad(CODE_TEXT.notLogged, 503, "not_logged");
         }
@@ -460,7 +465,7 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
     const { pick, value: f } = await onBranch(git, client.clientKey, repo, opening, chosen, (b) => git.file(client.clientKey, repo, path, b));
     // C2: the row first; without it, no text.
     try {
-      await log("file_opened", path);
+      await log("file_opened", path, pick.name);
     } catch {
       return bad(CODE_TEXT.notLogged, 503, "not_logged");
     }
@@ -480,7 +485,8 @@ export async function codeAction(ctx: CodeContext, action: CodeAction, input: un
  * is written once anything was read, with the repo and that file, and without it nothing is returned. Only names go
  * back; the files' text stays here (and in the 5-minute memory every read uses).
  */
-async function inner(git: CodeGit, client: CodeClientRef, repo: GitRepo, view: CodeRepoView, i: Record<string, unknown>, log: (event: CodeViewInput["event"], path: string) => Promise<void>, branch: string): Promise<ActionResponse> {
+async function inner(git: CodeGit, client: CodeClientRef, repo: GitRepo, view: CodeRepoView, i: Record<string, unknown>, logOn: (event: CodeViewInput["event"], path: string, branch: string) => Promise<void>, branch: string): Promise<ActionResponse> {
+  const log = (event: CodeViewInput["event"], path: string) => logOn(event, path, branch);
   const list = i.list as WhereList;
   if (!(WHERE_LISTS as readonly unknown[]).includes(list)) return bad("list is pages, fields or tables", 400, "bad_list");
   const path = cleanPath(i.path);

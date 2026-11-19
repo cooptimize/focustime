@@ -129,7 +129,7 @@ describe("who may read names", () => {
 });
 
 describe("the view log", () => {
-  it("one row per client read, with no repo, no path and no words, written before the names are returned", async () => {
+  it("one row per client read, with no repo id, no path and no words (RB-7: the branch where the repo goes), written before the names are returned", async () => {
     const d = devops();
     const order: string[] = [];
     const { c, views } = ctx(d.git, { order });
@@ -139,8 +139,8 @@ describe("the view log", () => {
     expect(r.ok).toBe(true);
     expect(order.slice(0, 2)).toEqual(["row", "returned"]);
     expect(views).toEqual([
-      { actorId: ME.id, actorName: ME.name, clientKey: "Contoso", repoId: "", repoName: "", path: "", event: "kinds_listed" },
-      { actorId: ME.id, actorName: ME.name, clientKey: "Adatum", repoId: "", repoName: "", path: "", event: "names_searched" },
+      { actorId: ME.id, actorName: ME.name, clientKey: "Contoso", repoId: "", repoName: "All its repos on main", path: "", event: "kinds_listed" },
+      { actorId: ME.id, actorName: ME.name, clientKey: "Adatum", repoId: "", repoName: "All its repos on main", path: "", event: "names_searched" },
     ]);
     expect(JSON.stringify(views)).not.toMatch(/Orders|pl_load|Stock|tmdl/);
   });
@@ -234,7 +234,7 @@ describe("RB-3: names for Where is it?", () => {
     const r = (await codeAction(c, "code.kinds", { clientKey: "Contoso", from })) as Names;
     expect(r.ok).toBe(true);
     expect([...d.ops].sort()).toEqual(["files Contoso", "files Contoso", "files Contoso", "files Contoso", "repos Contoso"]);
-    expect(views).toEqual([{ actorId: ME.id, actorName: ME.name, clientKey: "Contoso", repoId: "", repoName: "", path: "", event }]);
+    expect(views).toEqual([{ actorId: ME.id, actorName: ME.name, clientKey: "Contoso", repoId: "", repoName: "All its repos on main", path: "", event }]);
     // A factory dataset (Other) isn't offered, and no file inside an item is sent.
     expect(r.data.repos[0]!.things.map((t) => [t.kind, t.name])).toEqual([["report", "Orders 11"], ["model", "Orders 11"], ["pipeline", "pl_load_11"], ["script", "Stock11"]]);
     expect(r.data.repos.every((x) => x.files.length === 0)).toBe(true);

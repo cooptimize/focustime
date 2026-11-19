@@ -111,7 +111,7 @@ describe("the view log", () => {
     const { c, views } = ctx();
     const r = await run(c, "code.file", { clientKey: "Contoso", repoId: REPO.id, path: "/a.sql" });
     expect(r).toMatchObject({ ok: true, data: { file: { text: "SELECT 1;", kind: "text", devopsUrl: "https://dev.azure.com/contoso/Data/_git/warehouse?path=%2Fa.sql&version=GBmain" } } });
-    expect(views).toEqual([{ actorId: ME.id, actorName: ME.name, clientKey: "Contoso", repoId: REPO.id, repoName: "warehouse", path: "/a.sql", event: "file_opened" }]);
+    expect(views).toEqual([{ actorId: ME.id, actorName: ME.name, clientKey: "Contoso", repoId: REPO.id, repoName: "warehouse on main", path: "/a.sql", event: "file_opened" }]);
     expect(JSON.stringify(views)).not.toContain("SELECT");
   });
   it("no row, no text", async () => {

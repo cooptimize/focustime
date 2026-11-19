@@ -269,3 +269,42 @@ describe("Admin's Code tab: each repo's opening branch (codeOpenings)", () => {
     expect([...views, ...team.views]).toEqual([]);
   });
 });
+
+describe("the admins' log says the branch, in the place it says the repo, and nothing else new", () => {
+  const KEYS = ["actorId", "actorName", "clientKey", "event", "path", "repoId", "repoName"];
+  it("an open, a file, a find: the repo on the branch it was read on", async () => {
+    const { c, views } = ctx(demo().git, { opening: "dev" });
+    await ok(run(c, "code.folder", { repoId: SALES, path: "/" }));
+    await ok(run(c, "code.file", { repoId: SALES, path: ONLY_FEATURE, branch: "feature/returns-model" }));
+    await ok(run(c, "code.find", { repoId: PORTAL }));
+    expect(views.map((v) => [v.event, v.repoName, v.path])).toEqual([
+      ["repo_opened", "sales-analytics on dev", "/"],
+      ["file_opened", "sales-analytics on feature/returns-model", ONLY_FEATURE],
+      ["find_used", "store-portal on main", "/"],
+    ]);
+    for (const v of views) expect(Object.keys(v).sort()).toEqual(KEYS);
+  });
+  it("a listing of all its repos: one branch for all, or each repo by name", async () => {
+    const { c, views } = ctx(demo().git);
+    await ok(run(c, "code.kinds", {}));
+    await ok(run(c, "code.search", { repoId: SALES, branch: "dev" }));
+    await ok(run(c, "code.inside", { words: "Returns", repoId: SALES, branch: "dev" }));
+    expect(views.map((v) => [v.event, v.repoId, v.repoName, v.path])).toEqual([
+      ["kinds_listed", "", "All its repos on main", ""],
+      ["names_searched", "", "All its repos: sales-analytics on dev, store-portal on main", ""],
+      ["inside_searched", "", "All its repos on their default branches, the one on screen on dev", ""],
+    ]);
+    for (const v of views) expect(Object.keys(v).sort()).toEqual(KEYS);
+  });
+  it("Where is it? and a search inside files with an opening branch say it", async () => {
+    const { c, views } = ctx(demo().git, { opening: "dev" });
+    await ok(run(c, "code.kinds", { from: "new_form" }));
+    await ok(run(c, "code.inside", { words: "Returns" }));
+    expect(views.map((v) => v.repoName)).toEqual(["All its repos: sales-analytics on dev, store-portal on main", "All its repos on dev where they have it"]);
+  });
+  it("never the words typed", async () => {
+    const { c, views } = ctx(demo().git);
+    await ok(run(c, "code.inside", { words: "zzqx_planted", repoId: SALES, branch: "dev" }));
+    expect(JSON.stringify(views)).not.toContain("zzqx");
+  });
+});

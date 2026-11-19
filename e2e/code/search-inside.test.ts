@@ -312,8 +312,8 @@ describe.skipIf(!CHROMIUM)("Code's search finds what is inside items, and inside
     const table = page.locator('[data-setting="code-views"] table');
     await table.waitFor();
     const rows = await table.locator("tbody tr").evaluateAll((trs) => trs.map((tr) => [...tr.querySelectorAll("td")].slice(2).map((td) => td.textContent)));
-    expect(rows.filter((r) => r[0] === "Atlas" && r[2] === "Searched inside files")).toEqual([["Atlas", "All its repos", "Searched inside files", ""]]);
-    expect(rows.filter((r) => r[0] === "Atlas" && r[2] === "Opened a file")).toEqual([["Atlas", "freight-ingest", "Opened a file", "/sql/etl/StoredProcedures/usp_SetWatermark.sql"]]);
+    expect(rows.filter((r) => r[0] === "Atlas" && r[2] === "Searched inside files")).toEqual([["Atlas", "All its repos on their default branches", "Searched inside files", ""]]);
+    expect(rows.filter((r) => r[0] === "Atlas" && r[2] === "Opened a file")).toEqual([["Atlas", "freight-ingest on main", "Opened a file", "/sql/etl/StoredProcedures/usp_SetWatermark.sql"]]);
     expect(await table.textContent()).not.toContain("zzqx");
     expect(errors).toEqual([]);
   });

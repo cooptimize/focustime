@@ -291,7 +291,7 @@ describe.skipIf(!CHROMIUM)("Code by kind and Search names (RB-2)", () => {
     await table.waitFor();
     const rows = await table.locator("tbody tr").evaluateAll((trs) => trs.map((tr) => [...tr.querySelectorAll("td")].slice(2).map((td) => td.textContent)));
     expect(rows.filter((r) => r[2] === "Searched names").map((r) => r[0]).sort()).toEqual(["Atlas", "Cooptimize", "Northwind", "Tailspin"]);
-    expect(rows.filter((r) => r[2] === "Listed by kind")).toEqual([["Atlas", "All its repos", "Listed by kind", ""]]);
+    expect(rows.filter((r) => r[2] === "Listed by kind")).toEqual([["Atlas", "All its repos on main", "Listed by kind", ""]]);
     expect(await table.textContent()).not.toContain("zzzz");
     await shots(page, "07-code-views");
     expect(errors).toEqual([]);
