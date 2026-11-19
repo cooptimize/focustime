@@ -1,7 +1,7 @@
 // MC-4: the pieces of Calls' list: a call's mark, Needs you's two-line rows, a week's one-line rows (a meeting that
 // repeats as one row with its menu), the Closed and Hidden rows, and the bar for ticked rows. The state lives in
 // CallsPage (ui/meetings/Meetings.tsx); these only draw it and say what was pressed. Every word is plan/call-words.ts's.
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { clientColor } from "../labels.ts";
 import { Icon } from "../icons.tsx";
 import { lengthLabel } from "../../plan/calls.ts";
@@ -24,6 +24,31 @@ export function TranscriptMark({ mark, check }: { mark: CallMarkKind; check?: Ca
       {words}
     </span>
   );
+}
+
+/**
+ * MC-6: a week row whose title doesn't fit on its line beside the picker and the mark. The title is first laid out on one
+ * line and measured; when it is wider than its room the row is "long": the title takes the whole row (wrapping if it
+ * must) and the picker and the mark go under it. Measured again when the row's width or the title changes.
+ */
+function useLongTitle(title: string) {
+  const row = useRef<HTMLLIElement>(null);
+  const name = useRef<HTMLSpanElement>(null);
+  const [on, setOn] = useState(false);
+  const [width, setWidth] = useState(0);
+  useLayoutEffect(() => {
+    const li = row.current;
+    if (!li || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver((es) => setWidth(Math.round(es[0]!.contentRect.width)));
+    ro.observe(li);
+    return () => ro.disconnect();
+  }, []);
+  useLayoutEffect(() => setOn(false), [width, title]);
+  useLayoutEffect(() => {
+    const n = name.current;
+    if (!on && n && n.scrollWidth > n.clientWidth + 1) setOn(true);
+  });
+  return { row, name, on };
 }
 
 /** A tick for a row that can be done together with others (Hide, or Skip all and close); only while selecting. */
@@ -121,13 +146,14 @@ export function WeekRow({ r, open, zone, today, colors, selecting, ticked, onTic
   const canHide = (!!r.other && r.occurrenceId === null) || !!r.recording;
   const picks = (!!r.other && r.occurrenceId === null) || !!r.recording;
   const nameOf = (k: string) => clients.find((c) => c.clientKey === k)?.clientName ?? k;
+  const long = useLongTitle(r.name);
   return (
-    <li className={`calls-row one${open ? " open" : ""}${inSeries ? " in-series" : ""}${selecting ? " selecting" : ""}`} style={color ? ({ "--c": color } as CSSProperties) : undefined} data-row={r.key}>
+    <li ref={long.row} className={`calls-row one${open ? " open" : ""}${inSeries ? " in-series" : ""}${selecting ? " selecting" : ""}${long.on ? " long" : ""}`} style={color ? ({ "--c": color } as CSSProperties) : undefined} data-row={r.key}>
       {selecting && (canHide ? <Tick on={ticked} name={r.name} onTick={onTick} /> : <span className="calls-tick" aria-hidden="true" />)}
       <span className="calls-time">{inSeries ? dayOf(r.startAt, zone) : shortWhen(r.startAt, r.day, today, zone)}{r.other?.chat && r.other.endKnown ? ` to ${timeOf(r.endAt, zone)}` : ""}</span>
       <Square color={color} />
       <button type="button" className="calls-row-main" title={r.name} aria-current={open ? "true" : undefined} data-call-row={r.key} data-bucket={r.bucket} disabled={!!status?.busy} onClick={onOpen}>
-        <span className="calls-name">{inSeries ? timeOf(r.startAt, zone) : r.name}</span>
+        <span className="calls-name" ref={long.name}>{inSeries ? timeOf(r.startAt, zone) : r.name}</span>
       </button>
       <span className="calls-row-end">
         {picks ? (

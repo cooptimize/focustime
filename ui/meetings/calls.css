@@ -56,6 +56,13 @@
 .calls-row.one { grid-template-columns: [tick] auto [time] auto [sq] auto [main] minmax(0, 1fr) [end] auto; padding: 3px 8px; border-left: 1px solid transparent; }
 .calls-row.one .calls-sq, .calls-row.one .calls-time, .calls-row.one .calls-row-main, .calls-row.one .calls-row-end { grid-row: 1; }
 .calls-row.one .calls-row-main { grid-column: main; }
+/* MC-6: a week row's title is never cut: it takes the row's free space (the picker and the mark take only what they
+   need, the end column being auto) and goes to a second line when it still doesn't fit. */
+.calls-row.one .calls-name { text-overflow: clip; }
+.calls-row.one.long { grid-template-rows: auto auto; align-items: baseline; }
+.calls-row.one.long .calls-row-main { grid-column: main / -1; }
+.calls-row.one.long .calls-name { white-space: normal; overflow: visible; overflow-wrap: anywhere; }
+.calls-row.one.long .calls-row-end { grid-column: main / -1; grid-row: 2; justify-content: flex-start; margin-left: 0; }
 .calls-row.one:hover { background: var(--wash-1); }
 .calls-row.one.open { background: color-mix(in oklab, var(--c, var(--accent)) 10%, transparent); }
 .calls-row.in-series { border-left-style: none; }
