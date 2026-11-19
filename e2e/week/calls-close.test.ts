@@ -90,9 +90,12 @@ describe.skipIf(!CHROMIUM)("MC-4: Calls you can scan, hide and close (browser, d
     const needs = page.locator("[data-section='needs'] li").first();
     await expect(needs.textContent()).resolves.toMatch(/\d+ left/);
     // MC-5: Skip all is a quiet button on the hovered row. No question first: Undo is the way back.
+    // MC-6: the call open beside the list has its Skip all in its own header only.
     await needs.hover();
-    await expect(needs.locator("[data-call-act='skip-all']").textContent()).resolves.toBe("Skip all");
-    await needs.locator("[data-call-act='skip-all']").click();
+    const opened = /\bopen\b/.test((await needs.getAttribute("class")) ?? "");
+    const skipAll = opened ? page.locator(".calls-beside [data-call-act='skip-all']") : needs.locator("[data-call-act='skip-all']");
+    await expect(skipAll.textContent()).resolves.toMatch(/^Skip all( and close)?$/);
+    await skipAll.click();
     await expect.poll(() => page.locator("[data-section='needs']").count(), { timeout: 30_000 }).toBe(0);
     await expect.poll(() => page.locator(".topbar .view-tab").filter({ hasText: /^Calls/ }).locator(".count").count(), { timeout: 30_000 }).toBe(0);
     // Its closed page is what shows beside the list, not the next call.

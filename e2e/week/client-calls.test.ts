@@ -76,7 +76,8 @@ describe.skipIf(!CHROMIUM)("meeting capture (browser, demo mode)", () => {
     const mine = page.locator(".mtg-prop:not(.confirmed)[aria-label='Send the date range filter for review']");
     await mine.getByRole("button", { name: "Keep", exact: true }).click();
     const toast = page.locator(".undo-toast");
-    await expect.poll(() => toast.textContent()).toContain("Promises");
+    // MC-6: the Undo message says what it undoes.
+    await expect.poll(() => toast.textContent()).toContain("Kept: Send the date range filter for review");
     await expect.poll(() => mine.count()).toBe(0);
     await toast.getByRole("button", { name: "Undo" }).click();
     await expect.poll(() => mine.count()).toBe(1);
