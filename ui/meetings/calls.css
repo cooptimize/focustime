@@ -119,9 +119,12 @@
 .mtg-run-line { margin: 0; font-size: var(--fs-2); }
 .mtg-look { margin: 0; font-size: var(--fs-2); }
 /* A group: its name as a section label, its count and a quiet Select all. */
-.mtg-sec-head { padding: 2px 12px; min-height: 0; font-size: var(--fs-1); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
+/* MC-6: the size of the page's other section labels (What was said, Client), over the older .mtg-group h3 rule. */
+.mtg-group .mtg-sec-head, .mtg-sec-head { padding: 2px 12px; min-height: 0; font-size: var(--fs-1); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
 .mtg-sec-head .mini { text-transform: none; letter-spacing: 0; font-weight: 500; min-height: 24px; }
 .mtg-sec-count { margin-left: 6px; font-variant-numeric: tabular-nums; }
+/* MC-6: a group's card has no colored left stripe (style guide section 11). */
+.calls-page .mtg-group { border-left: 1px solid var(--border); }
 
 /* A proposal folded: three lines. */
 .mtg-prop.mc5 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; padding: 6px 0; position: relative; }
