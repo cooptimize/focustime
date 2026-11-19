@@ -6,7 +6,7 @@ from before ST-1; only where and how it is shown moved. The before and after map
 ## The pieces
 
 - **`ui/settings/registry.ts`** is the one list: the groups (SA-3: You, Your work, Connected, Yours; Admin for admins),
-  the eleven sections in (id, label, a one-line description, old labels, `phoneReadOnly`, `parent` for a sub-page) and every setting a
+  the eleven sections in (id, label, a one-line description, old labels, `keywords`, `parent` for a sub-page) and every setting a
   person looks for (id, section, label, old labels, keywords, `devOnly`, `demoOnly`). The rail, search, deep links, the
   command menu and the Guide read it. `OLD_SECTIONS` maps section ids from before ST-1 and SA-3 to where they open now,
   and a setting addressed under the section it had before opens in the section it is in now (`resolveSettings`).
@@ -37,6 +37,16 @@ inline styles, no raw elements (`ui/settings/sections.guard.test.ts` fails on on
    `unit`, time, text, list, action or status), its `help` (what it does first, one line) and `more` (the rest, behind
    More about this), `keywords` people might type, and `old` if it replaces an older label. `devOnly` shows it only in
    the developer loop, `demoOnly` only in a demo; `part` marks a setting's own rows (a weekday, one notice kind).
+   **Its words (SA-5).** `keywords` are the words people use for it, not its label again: "dark mode" for Theme,
+   "vacation" and "holiday" for days off, "log out" for Sign out, "rename client" for Shown as. There is no second list
+   anywhere: Settings' box, the command menu's Settings results and, for Admin's settings, Search Admin all read these
+   (`ui/settings/search.ts`). A section can carry `keywords` too. Admin's settings take theirs as `words` in
+   `ui/settings/admin/settings-list.ts`. Something people look for that isn't a setting gets a line in `NOT_SETTINGS`
+   (registry.ts) with where it is, or that FocusTime doesn't have it. When the label already says a word, leave it out:
+   a whole word in the label ranks above the same word among the keywords. Add the searches people would type to
+   `ui/settings/search-cases.ts` (the 100 searches): each must find its place first.
+   **A team value.** A row that shows a team value Admin sets carries `team: { scope, key }`: its name is Admin's,
+   read through `settingLabel` from Admin's list, so both sides say the same, and the old name moves to `old`.
 3. **Draw it.** In its section file, inside a `Group`, a `Row id="<id>"` with the control its kind takes: `Switch`,
    `Choice`, `Select`, `Num` (or `NumRow` and `SwitchRow` in `sections/fields.tsx`), `Time`, `Text`, a `List` of
    `ListItem`s with one Add at its foot, or a `Button` with its result said on the row. Pass `mark={markOf(a, key)}`
@@ -46,12 +56,16 @@ inline styles, no raw elements (`ui/settings/sections.guard.test.ts` fails on on
    (`ui/menu.ts`), or `GoLink` inside Settings. Don't write `#/settings/...` strings by hand.
 5. **Check it.** `e2e/settings/panel-shell.test.ts` fails when a registry setting has no `data-setting` on its page;
    `e2e/settings/sa2.test.ts` that a row's label isn't the registry's or its kind's control is missing;
-   `ui/settings/registry.test.ts` checks the ids, the names and search.
+   `ui/settings/registry.test.ts` checks the ids, the names and search; `ui/settings/search.test.ts` that the 100
+   searches land first and that every setting is found by its own label; `e2e/settings/sa5-phone.test.ts` that its
+   page fits a phone (44 px controls 8 px apart, two-line help, nothing wider than the screen) at both Text sizes.
 
 A **new section**: add it to `SECTIONS` with its group and a one-line description (no em dashes), a `case` in
 `SectionBody`, and, when it replaces an old one, its old id in `OLD_SECTIONS` so bookmarks and notifications still land.
-A section laid out for a big screen gets `phoneReadOnly`: on a phone it shows read-only with "Changing these works best
-on a bigger screen".
+Every section works on a phone (SA-5): no section is read-only there. A table becomes rows, a wide row stacks, a list
+adds and removes with full-width buttons, and every control is at least 44 px high with 8 px between two of them.
+The parts do this; a section that draws its own pieces keeps to it (`e2e/settings/sa5-phone.test.ts` measures every
+section at 390 by 844 at both Text sizes).
 
 **Never** put a secret in Settings: no field shows or takes an app secret (they go in only through `infra/scripts/` and
 the keyring), and a person's PAT is a masked box that is cleared after Check and save; status rows say only whether one
