@@ -113,6 +113,32 @@ describe("errors say what's wrong, never Azure's message", () => {
   });
 });
 
+// VM-6, lead 3: Azure asking for the sign-in again must read as the sign-in, never as "Azure refused". A 401 always
+// did; a 403 with a Bearer challenge naming the token (invalid_token, insufficient_claims) or one of Azure's token codes
+// was read as refused. Production's 403s carried neither (docs/ux/vm6/what-happened.md): those stay refused.
+describe("VM-6: a sign-in asked for again is a sign-in, not refused", () => {
+  const challenge = (error: string) => new Response(null, { status: 403, headers: { "www-authenticate": `Bearer authorization_uri="https://login.microsoftonline.com/common/oauth2/authorize", error="${error}", error_description="secret principal 9999"` } });
+  for (const error of ["invalid_token", "insufficient_claims"])
+    it(`a 403 with a challenge naming the token (${error}) is not_signed_in`, async () => {
+      const { client, logs } = fake(() => challenge(error));
+      const e = (await client.power(ref).catch((x: unknown) => x)) as AzureError;
+      expect(e).toMatchObject({ kind: "not_signed_in", status: 403 });
+      // Nothing of the header is kept or logged; the log keeps its one code word.
+      expect(JSON.stringify(logs) + e.message).not.toMatch(/principal|login\.microsoftonline/);
+      expect(logs.at(-1)).toMatchObject({ op: "instanceView", status: 403, kind: "none" });
+    });
+  for (const code of ["InvalidAuthenticationToken", "InvalidAuthenticationTokenTenant", "ExpiredAuthenticationToken"])
+    it(`a 403 with Azure's token code ${code} is not_signed_in`, async () => {
+      await expect(fake(() => json(403, { error: { code, message: "x" } })).client.power(ref)).rejects.toMatchObject({ kind: "not_signed_in" });
+    });
+  it("production's 403 (no body, no code) and AuthorizationFailed stay refusals, each with Azure's code on the error", async () => {
+    await expect(fake(() => new Response(null, { status: 403 })).client.power(ref)).rejects.toMatchObject({ kind: "forbidden", code: "" });
+    await expect(fake(() => json(403, { error: { code: "AuthorizationFailed", message: "x" } })).client.power(ref)).rejects.toMatchObject({ kind: "forbidden", code: "AuthorizationFailed" });
+    // A challenge that names no token (insufficient_scope) is a no, not a sign-in.
+    await expect(fake(() => challenge("insufficient_scope")).client.power(ref)).rejects.toMatchObject({ kind: "forbidden" });
+  });
+});
+
 describe("auto-shutdown schedule", () => {
   const sched = { id: "x", name: "shutdown-computevm-vm-pat-01", location: "eastus", tags: { a: "b" }, properties: { status: "Enabled", taskType: "ComputeVmShutdownTask", dailyRecurrence: { time: "1900" }, timeZoneId: "Eastern Standard Time", notificationSettings: { status: "Disabled", timeInMinutes: 30 }, targetResourceId: ID, provisioningState: "Succeeded", uniqueIdentifier: "u" } };
   it("reads shutdown-computevm-<vm> in the VM's resource group; none is null", async () => {

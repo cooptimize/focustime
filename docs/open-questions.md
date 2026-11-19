@@ -2,7 +2,6 @@
 
 Mirrors section 16 of spec.md. Update both when one is resolved.
 
-
 Blocking this slice:
 - Q1. ~~Dataverse schema~~ Resolved, see 0b. Verified Oct 31 (step 2): all 9 of my rows have an Account Worker with user and account, while only 2 have `coop_systemuser` filled in, so the Account Worker link is the right source.
 - Q1b. ~~Open vs Internal~~ Open.
@@ -107,13 +106,11 @@ Raised in step 11 (not blocking):
 - Q65. A must counts as done in DevOps only when its state category is Completed; Resolved (for example "Resolved" or "Ready for test") still counts as open. Count Resolved as done for the week?
 - Q66. Q53 is partly met: typed intentions not in DevOps become draft stories with no feature from DevOps health. Draft stories with no feature still aren't listed in Plan the week. List them per client?
 
-
 Raised in step 12 (not blocking):
 - Q67. (Done Nov 1, D216.) Live verification needs you to click "Reconnect Outlook with calendar changes" (Settings > Connections) and consent to Calendars.ReadWrite once. If your tenant blocks user consent for that scope, add the delegated permission to the Coopilot Desktop app registration and grant it. Then I run the create, move and undo check on a free slot next week.
 - Q68. Undo is a stack per event (newest change not undone first, so undoing a move and then the create works). Enough, or do you want to undo any entry out of order?
 - Q69. (Done Nov 1, D219: rebuilt from the marker with the write token.) If the local record of an event is lost (store replaced, not Reset), reads can't recognize it (no marker without Calendars.Read), so it would show as a meeting. Use the write token to look up marked events in the week when write access exists?
 - Q70. (Done Nov 1, D218: two-way sync, conflicts ask.) Timeboxes don't yet sync from Outlook back to FocusTime: an event moved in Outlook keeps its FocusTime time, and the next move puts FocusTime's time back after a preview. Keep (FocusTime is the source), or adopt Outlook's time?
-
 
 Raised in step 13 (not blocking):
 - Q71. (Answered Nov 1, D236: keep them treated like meetings.) Repeating and all-day events I organize alone are not editable (series edits could move every occurrence). Allow moving one occurrence of a series?
@@ -335,7 +332,6 @@ What DS-1 learned, and what is still open:
 - Q-IN1-3: Outlook on the web's compose deep link (`/mail/deeplink/compose`) isn't a documented, versioned API; it works today. If Microsoft changes it, "Use my mail app instead" still works. Switch the main button to `mailto:` if it breaks?
 - Q-IN1-4: the brief's tests list was cut off after "Non-admins get 403 from the People and". IN-1 checks 403 on the People section, Who's set up and recording an invite. Anything else meant?
 
-
 ## Send invites from FocusTime (IN-2, Nov 7)
 
 - Q-IN2-1: a Teams post that gets no answer at all (a timeout after Graph may have taken it) counts as not sent, so Retry posts again and could post twice. LP-1 has the same edge. Reading the chat's last few messages before a retry would need `Chat.Read` on a chat FocusTime didn't register; worth it?
@@ -392,7 +388,6 @@ What DS-1 learned, and what is still open:
 - Q-AH6-7: the level is now one for every mode with Stories as the default, so the Gantt opens fully expanded. Would people rather the Gantt open at Features while Grid and Backlog open at Stories (one level per mode, but kept across switches)?
 - Q-AH6-8: Stale sits in the Readiness group. Is it better as its own group, or should it count as a fifth readiness kind ("Untouched")?
 - Q-AH6-9: Backlog's level picks which backlog is listed rather than folding a tree. Should Backlog instead show the chosen level's items with their children folded under them, like the other modes?
-
 
 ## Readiness you can finish (AH-7, Nov 7)
 
@@ -880,7 +875,6 @@ Open points on the [Coop comment contract](technical/coop-contract.md), for Coop
 - The lucide-react version is pinned (1.66.0). Its icons are drawn on a 24 unit grid with a 2 unit stroke; FocusTime draws them at 16 px with a 1.5 px stroke that doesn't scale (`nonScalingStroke`), so at the largest text size (21 px icons) the stroke stays 1.5.
 - From review 1, seen and left: Status keeps its nested boxes (a client's card, Needs your update, a feature's box): they are cards, not rows, and were out of this step; should Status be flattened next? With no lines between the Backlog's rows, tracing a title across to its status takes the hover band; is that enough on a wide screen? Mine, Contributing and Everyone with nothing chosen reads as one grey slab. The Today pill is the accent wash now and anchors Week's header less than the filled pill did.
 - From review 2, seen and left: the stepper's − and + and its value keep their own small shapes (one compound control); the date picker's days and the timeline's placeholder buttons are drawn at their own sizes; two CSS marks with no element left in the app (`.dp-calls .lc-start`, a "☎") were not touched; "›" between steps and in a story card's path is a separator in a sentence.
-
 
 ## TD-1
 
@@ -1894,3 +1888,13 @@ Readings taken where the brief left room (the one that changes less), for the pr
   - On the phone a switch sits under its label and help, a line or two below its name; the whole row takes the press.
   - The Teams messages switch's help is its off meaning ("Off: FocusTime only answers…") in either state, SA-2's pattern for switches (the label says what on means).
   - Outside SA-5: the top bar's VM chip cut to "VM S" (and overlapping at Larger); DevOps write access not saying where to make a PAT, "Atlas Freight" and "Atlas" on one page, what Turn off does to the token; Reminders and notices' length; Undo toasts following onto the next page; Most used's time picker's Save over the bottom bar; Export in the demo.
+
+## VM-6: Azure refusing the VM's state (Nov 18)
+
+- **What refused one copy of the app.** The logs show a 403 with no Azure code, tied to the revision and not to a token, a sign-in or a process. What is per copy and isn't logged: its outbound address and its connections to Azure. The exact things to look at next, while a refusal is happening: the refused answer's `x-ms-failure-cause` and `WWW-Authenticate` headers, and whether its body is Azure's JSON at all (FocusTime logs `none` both for JSON without a code and for no JSON); the revision's outbound address against any network rule or Conditional Access location on the subscription; Azure's own support with the time and the region if it comes back. Logging either header or the body's shape would be something new in the log, so it waits for the product owner's OK.
+- **Whether the product owner's access is switched on for a time** (Privileged Identity Management or a group with an end date). The logs don't say: `AuthorizationFailed` would, and none came. If it is, the chip now says "not allowed right now" with what to do when the access runs out. The subscription's activity log isn't in `ft-prod-log`, so role changes can't be checked from FocusTime's logs.
+- **More than one person.** The Azure lines carry no person, so it can't be counted. The refused reads came at one page's pace, and on revision 34 no read was answered at all.
+- **The refused auto-shutdown read was never seen on production.** It waits on the state read, which was the one refused. The line for it is built from the brief, not from an event.
+- **Words for a refusal with no code.** The brief keeps VM-4's sentence, which points at checking access in the portal; production's refusals weren't access. Left as the brief has it.
+- **The 403 with a challenge as a sign-in for the automatic start.** It now claims the day as VM-2's sign_in, as a 401 does, rather than being read again until the late limit. Taken as the reading that matches the existing rule for a sign-in.
+

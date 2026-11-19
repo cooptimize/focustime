@@ -994,7 +994,6 @@ D871 to D876 (numbered after merge, in TD-1). Counts-only diagnostics for QF-1's
 | D875 | Done | DX-1: This is work now marks its place (`reason` "is_work", `IS_WORK_PLACE`) so Diagnostics counts it apart from Move and Split. Places made by This is work before DX-1 count as "moved or split" (they can't be told apart). Nothing else reads a work place's reason |
 | D876 | Done | DX-1: Copy as text copies counts only: no conversation titles, chat names or client names (chats are numbered with their kind). The panel itself shows my own conversations' titles and my chats' names. On the phone the rest of Settings › Data stays read only (P1); Diagnostics only reads, so it runs there too |
 
-
 ## PK-1
 
 D877 to D887 (numbered after merge, in TD-1). Checking off a to-do offers the DevOps update (decisions by the product owner, Nov 6).
@@ -1385,7 +1384,6 @@ Numbered D1103 to D1116 in HK-7. Built on the Gantt layout above (a second sessi
 | D1115 | Done | AH-6: Gaps reads Readiness (labels only): the mode switch reads Grid · Gantt · Readiness · Backlog, the header "Ahead · N not ready yet", and the command menu finds it by readiness, gaps, get ready and fix next. The code name `fix`, `#/ahead/fix` and `#/ahead/gaps`, the `view.gaps` command id, the tour id and the stored values are unchanged. Admin › AI's "Gaps looks at the top N" reads "Readiness looks at the top N". |
 | D1116 | Done | AH-6: Stale's helpers moved to `plan/stale.ts` (re-exported from `plan/backlog.ts`) so the model can filter by Stale without importing Backlog. |
 
-
 ## AH-7: Readiness you can finish (Nov 7)
 
 Numbered D1117 to D1126 in HK-7.
@@ -1680,7 +1678,6 @@ Unnumbered until the next numbering pass. Tanner, Nov 8: "Let's start by just fe
 - KB-1: Ask. A new `standards` topic in the intent round and one task, `assistant.standards`, with no client (no client data goes). No matching article is "Not in the standards" without an AI call. The answer must name an article that was sent and quote it word for word (markup and spacing aside), checked in code, or it is also "Not in the standards". A failed AI is said plainly, never guessed. With no sync yet, it says the standards haven't been read.
 - KB-1: Export. `draft_stories.ai_standards` is a new user column (schema 36); `standards_articles` and `standards_sync` are app tables, never exported.
 - KB-1: logs carry outcomes and counts only (`sync` `updated`, `unchanged`, `failed`).
-
 
 ## GD-3: re-check held messages under GD-2, show why each is held (Nov 8)
 
@@ -1986,7 +1983,6 @@ Unnumbered until merge.
 | - | Done | RF-1 review: the assistant's glossary, `docs/demo.md` and `docs/architecture.md` name the tabs in the new order. |
 | - | Done | RF-1 review: someone who stepped through setup before RF-1 has no mark, but Calendars recorded done or skipped means they reached the end, so they count as through too (no backfill write). Esc skips a step, so Esc through every screen is stepping through; closing with × is not. |
 
-
 ## MC-1c: Meeting registration fixes (Nov 11)
 
 Unnumbered until merge.
@@ -2059,7 +2055,6 @@ Unnumbered until merge.
 | - | Done | DV-2 review: a tab left visible with nobody using it (no input for the Rule's idle minutes, HK-3) asks for versions every 5 minutes, not 30 seconds, as the old quiet refresh did, so it never keeps the database awake. |
 | - | Done | DV-2 review: Refresh says only what it checked. Within 30 seconds of another check it says "DevOps was checked 20s ago", never an earlier count as new; a client DevOps slowed keeps its slower pace (no forced checks while slowed) and says so; a Retry-After hold says "DevOps asked FocusTime to wait". |
 | - | Done | DV-2 review: Ahead's quiet reread that overlaps my own stage, unstage or skip keeps my changes and skips (a counter, `local`); "Changed in DevOps just now" goes once the item isn't staged any more. |
-
 
 ## WD-2: One panel, one Day (Nov 11)
 
@@ -3797,3 +3792,22 @@ Unnumbered until merge.
 | - | Done | The overhaul measured against SA-0 in `docs/ux/sa5/after.md`, with what is still open. |
 | - | Done | From the review: Settings' tables drew sideways on the phone (now rows); Most used's today's hours offered Save on a PTO day (now says why); a section opened from the phone's list kept the list's scroll (now opens at its top); Admin's results now sit under all of the person's own, except an Admin part named by the words; "not signed in", "who opened" and "who changed" find their Admin tabs; the box clears when the address moves to another section. |
 | - | Open | The readings taken where the brief left room are in `docs/open-questions.md` under SA-5. |
+
+## VM-6: Why Azure refuses the VM's state now and then (Nov 18)
+
+Unnumbered until merge.
+
+| # | Status | Decision |
+|---|---|---|
+| - | Done | The cause, from production's logs (`docs/ux/vm6/what-happened.md`): Azure refused the VM's state to one copy of the app at a time, every read from revision 34 (Nov 18, 15:29 to 19:17, 466 of 466) and about one in five from revision 29 (Nov 17, 21:11 to Nov 18, 01:11, 33 of 175), with a 403; every other revision since Nov 17 was never refused. Not a token (one token got both answers; five tokens were all refused on revision 34), not a sign-in, not a process (revision 34's container started again and was still refused), and not FocusTime's code (revision 29 answered and refused on the same code). Revision 34's 403s carried no Azure code, so not a missing role (`AuthorizationFailed`); revision 29's code wasn't logged yet. What on Azure's side refused that copy isn't in the logs. |
+| - | Done | The morning start: at risk only on a day a refusing copy runs at someone's planned time. A refused read isn't the day's try (VM-4), so FocusTime reads again until the late limit and then leaves the VM off and says so. No start or stop was ever refused, and the Nov 17 and 18 starts weren't touched. |
+| - | Done | No fix at the cause: it isn't FocusTime's. Nothing changes in Azure, a role or the app registration. |
+| - | Done | Lead 3 was wrong in FocusTime; whether it played a part on Nov 18 the logs can't show (the challenge header wasn't logged, and new tokens and sign-ins didn't help): a 403 that asks for the sign-in again (a Bearer challenge naming the token, `invalid_token` or `insufficient_claims`, or one of Azure's token codes, `InvalidAuthenticationToken…`, `ExpiredAuthenticationToken`, `AuthenticationFailed…`) is now the sign-in problem with its button (`sources/azure/client.ts`). Only that one word of the header is read; nothing of it is kept or logged. |
+| - | Done | For the automatic start, such a 403 is VM-2's sign_in, as a 401 always was: the day is claimed at once and the person told to sign in, rather than read again until the late limit. Chosen as the reading that changes less (one rule for every sign-in ask). If a refusing copy's 403s ever carry such a challenge while a sign-in doesn't help, that morning's start gives up at the first pass; the log's `kind` and Azure's code would show it. |
+| - | Done | Azure's reason in plain words (`READ_PROBLEM` in `plan/vm.ts`, from its code): `AuthorizationFailed` (and `LinkedAuthorizationFailed`) is "not allowed right now", with switching a timed access on again; not found says the VM may have moved or been deleted; any other no, or none given, keeps VM-4's sentence. The chip's face stays short ("Azure refused", "VM not found"). |
+| - | Done | The chip's menu says, under the state, the reason in those words and "Last read 2:14 PM" (the last good read in my zone, "Tue 2:14 PM" another day; never a failed read's time). A menu takes plain lines under its title for this (`note` on a menu step, `ui/menu.ts`). |
+| - | Done | One part failing doesn't hide the rest: the state read and the auto-shutdown read refused, the chip shows the state, and the menu and its title say "FocusTime couldn't read your VM's auto-shutdown time." Before, only a 403 there said anything. |
+| - | Done | Nothing new is logged. `AzureError` carries Azure's code word for the chip's reason; the log keeps its one `kind` as before. |
+| - | Done | Unchanged: the Azure client's allowed calls (`ALLOWED`, its test), the Azure hard rule, VM-4's retry and 2 minutes, VM-5's rules, the background policy and its test. No migration, dependency or new background work. `demo.vm_fail` takes the new failures for verification runs only. |
+| - | Open | What on Azure's side refused one copy, and whether the product owner's access is switched on for a time, are in `docs/open-questions.md` under VM-6. |
+

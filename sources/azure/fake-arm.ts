@@ -3,6 +3,7 @@
 // Azure calls). Every call is recorded in `calls`, so tests can check no schedule write was ever sent.
 // Fictional IDs only.
 import { ARM } from "./client.ts";
+import type { VmReadFail } from "../../plan/vm.ts";
 
 export type FakeVm = { id: string; name: string; resourceGroup: string; subscriptionId: string; location: string; tags: Record<string, string>; power: string };
 export type FakeArmOptions = {
@@ -19,8 +20,9 @@ export type FakeArmOptions = {
    * VM-4: how reads of the power state (instanceView) fail while set: no network, Azure busy (429), the sign-in not
    * accepted (401), Azure refused (403), or Azure answering with no power state. Null: they work.
    */
-  readFails?: { kind: "network" | "busy" | "sign_in" | "refused" | "no_state" | null };
+  readFails?: { kind: VmReadFail | null };
 };
+export type { VmReadFail as ReadFail } from "../../plan/vm.ts";
 
 const json = (status: number, body: unknown, headers: Record<string, string> = {}) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
 const denied = () => json(403, { error: { code: "AuthorizationFailed", message: "The client 'fake' with object id 'fake' does not have authorization" } });
@@ -90,6 +92,9 @@ export function fakeArm(o: FakeArmOptions) {
         if (f === "busy") return json(429, { error: { code: "TooManyRequests", message: "x" } }, { "retry-after": "17" });
         if (f === "sign_in") return json(401, { error: { code: "ExpiredAuthenticationToken", message: "x" } });
         if (f === "refused" || o.forbid?.has("instanceView")) return denied();
+        if (f === "no_code") return new Response(null, { status: 403 });
+        if (f === "challenge") return new Response(null, { status: 403, headers: { "www-authenticate": 'Bearer authorization_uri="https://login.microsoftonline.com/common/oauth2/authorize", error="invalid_token", error_description="The access token is not valid"' } });
+        if (f === "not_found") return notFound();
         if (f === "no_state") return json(200, { statuses: [{ code: "ProvisioningState/succeeded" }] });
         return json(200, { statuses: [{ code: "ProvisioningState/succeeded" }, { code: `PowerState/${vm.power}`, displayStatus: `VM ${vm.power}` }] });
       }
@@ -107,7 +112,7 @@ export function fakeArm(o: FakeArmOptions) {
       const vm = [...vms.values()].find((v) => v.subscriptionId === sMatch[1] && v.resourceGroup.toLowerCase() === decodeURIComponent(sMatch[2]!).toLowerCase() && v.name.toLowerCase() === decodeURIComponent(sMatch[3]!).toLowerCase());
       const key = vm?.id.toLowerCase() ?? "";
       if (method === "GET") {
-        if (o.forbid?.has("scheduleRead")) return denied();
+        if (o.forbid?.has("scheduleRead") || o.readFails?.kind === "schedule") return denied();
         const s = schedules.get(key);
         return s ? json(200, s) : notFound();
       }
