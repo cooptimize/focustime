@@ -38,16 +38,16 @@ describe.skipIf(!CHROMIUM)("Calls is a tab (MC-3, browser, demo mode)", () => {
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
     await go(page, "#/week");
     await page.locator(".topbar .view-tab").first().waitFor({ timeout: 30_000 });
-    await expect(tabNames(page)).resolves.toEqual(["Day", "Week", "Backlog", "Status", "Inbox", "Calls", "Code"]);
-    await expect(callsTab(page).getAttribute("title")).resolves.toMatch(/\. Press 6$/);
+    await expect(tabNames(page)).resolves.toEqual(["Day", "Week", "Backlog", "Inbox", "Calls", "Status", "Code"]);
+    await expect(callsTab(page).getAttribute("title")).resolves.toMatch(/\. Press 5$/);
     // The count: the calls that need me (MC-2's count), the same as To review; never the Inbox's.
     const inboxBefore = await page.locator(".topbar .view-tab").filter({ hasText: /^Inbox/ }).locator(".count").textContent();
     await expect.poll(() => callsTab(page).locator(".count").textContent(), { timeout: 30_000 }).toBe("1");
     await expect(callsTab(page).locator(".count").getAttribute("aria-label")).resolves.toBe("1 needs you");
-    // Keys: 6 is Calls, 7 is Code.
+    // Keys (TB-1): 5 is Calls, 7 is Code.
     await page.locator("body").click({ position: { x: 700, y: 600 } }).catch(() => undefined);
     await go(page, "#/week");
-    await page.keyboard.press("6");
+    await page.keyboard.press("5");
     await expect.poll(() => hash(page)).toMatch(/^#\/calls/);
     await expect(callsTab(page).getAttribute("aria-current")).resolves.toBe("page");
     await page.locator("[data-call-row]").first().waitFor({ timeout: 30_000 });
@@ -144,7 +144,7 @@ describe.skipIf(!CHROMIUM)("Calls is a tab (MC-3, browser, demo mode)", () => {
             expect(m.wraps, at).toBe(false);
             expect(m.cut, at).toBe(0);
             expect(m.hidden, at).toBe(0);
-            expect(m.names.slice(0, 6), at).toEqual(["Day", "Week", "Backlog", "Status", "Inbox", "Calls"]);
+            expect(m.names.slice(0, 6), at).toEqual(["Day", "Week", "Backlog", "Inbox", "Calls", "Status"]);
           }
           await page.reload();
           await page.locator(".topbar .view-tab").first().waitFor({ timeout: 30_000 });

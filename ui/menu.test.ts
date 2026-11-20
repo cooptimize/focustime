@@ -8,6 +8,8 @@ import { config } from "../week/test-helpers.ts";
 import type { ClientWork, WorkItem } from "../week/types.ts";
 import type { CoworkData } from "../plan/cowork.ts";
 import { callItems, eventMenu, timeboxMenu, timerStep, timeboxStep, timeStep, commandList, dayMenu, HOLLOW, filterCommands, itemMenu, pickMenu, planDateStep, slotMenu, type MenuEnv, type MenuStep, flexForm, hoursForm, deployForm } from "./menu.ts";
+import { TABS, tabKey, type Tab } from "./nav.ts";
+import { KEYS } from "./keys.ts";
 
 const week = buildWeek({ weekStart: "2026-11-02", patterns: [], events: [], config, pto: { "2026-11-05": { date: "2026-11-05", minutes: 480, full: true, titles: ["Watch Kids"] } } });
 const item = (id: number, level: WorkItem["level"] = "story"): WorkItem => ({ id, title: `Item ${id}`, type: level === "story" ? "User Story" : "Feature", state: "New", stateCategory: "Proposed", level, order: id, parentId: null, changedAt: "", url: `https://dev.azure.com/org/P/_workitems/edit/${id}` });
@@ -95,7 +97,8 @@ describe("command menu (built from the action registry)", () => {
     const runs = groups.filter((g, i) => i === 0 || g !== groups[i - 1]);
     expect(runs[0]).toBe("Views");
     expect(runs.filter((g) => g === "Views")).toHaveLength(1);
-    const registry = list.filter((c) => (ACTION_NAMES as readonly string[]).includes(c.id));
+    // TB-1: the tabs' registry commands (Calls, Code) sit in Views with the other tabs; the rest keep their order last.
+    const registry = list.filter((c) => (ACTION_NAMES as readonly string[]).includes(c.id) && c.group !== "Views");
     expect(registry.map((c) => c.id)).toEqual(list.slice(list.length - registry.length).map((c) => c.id));
     // A search's first result is what it was before grouping (review 2: "history" must find the history first).
     expect(filterCommands(list, "history")[0]!.label).not.toMatch(/^Clear/);
@@ -106,7 +109,7 @@ describe("command menu (built from the action registry)", () => {
     // RB-1: Code is one entry ("Code") plus "Code: <client>" per client; its reads never show, and no repo or file does.
     expect(listed.filter((n) => n.startsWith("code."))).toEqual(["code.clients"]);
     const withCode = commandList({ ...env().e, showCode: () => {}, codeClients: [{ clientKey: "Northwind", name: "Northwind" }] });
-    expect(withCode.filter((c) => c.action?.startsWith("code.")).map((c) => c.label)).toEqual(["Code: Northwind", "Code"]);
+    expect(withCode.filter((c) => c.action?.startsWith("code.")).map((c) => c.label)).toEqual(["Code", "Code: Northwind"]); // TB-1: Code is in Views
     // RM-1: DevOps patterns is gone; nothing of it is offered to anyone.
     expect(listed.filter((n) => n.startsWith("patterns."))).toEqual([]);
     // RM-1: the removed features' actions are gone from the registry, so nothing can list them.
@@ -669,5 +672,21 @@ describe("CO-1: every door into Ask to collaborate opens it with what it passed 
     const step = list.find((x) => x.action === "collab.check")!.next!() as MenuStep;
     await items(step)[0]!.run!();
     expect(helps().at(-1)).toEqual({ clientKey: "internal", title: "Item 1", url: pick.itemUrl, itemId: 1, pickId: 7, pinned: "2026-11-03" });
+  });
+
+  it("TB-1: the tabs' commands say each tab's number key, the same as the legend, in the tabs' order", () => {
+    const list = commandList({ ...env().e, showCode: () => {}, codeClients: [{ clientKey: "Northwind", name: "Northwind" }] });
+    const cmd: Record<Tab, string> = { today: "view.today", week: "view.week", ahead: "roadmap.load", inbox: "view.inbox", calls: "meeting.mine", status: "view.status", code: "code.clients" };
+    for (const t of TABS) {
+      expect(list.find((c) => c.id === cmd[t])?.hint, t).toBe(tabKey(t));
+      expect(KEYS.find((k) => k.command === cmd[t])?.keys[0], t).toBe(tabKey(t));
+    }
+    expect(TABS.map(tabKey)).toEqual(["1", "2", "3", "4", "5", "6", "7"]);
+    // The legend and the Views group list the tabs in the bar's order.
+    expect(KEYS.filter((k) => Object.values(cmd).includes(k.command ?? "")).map((k) => k.command)).toEqual(TABS.map((t) => cmd[t]));
+    const views = list.filter((c) => c.group === "Views" && ["view.today", "view.week", "view.roadmap", "view.inbox", "view.status"].includes(c.action ?? "")).map((c) => c.action);
+    expect(views).toEqual(["view.today", "view.week", "view.roadmap", "view.inbox", "view.status"]);
+    // Since the tabs come first, Enter on a tab's word opens that tab (deliberately: "code" ran Code: search names).
+    for (const [q, id] of [["code", "code.clients"], ["calls", "meeting.mine"], ["status", "view.status"], ["inbox", "view.inbox"]] as const) expect(filterCommands(list, q)[0]!.id, q).toBe(id);
   });
 });

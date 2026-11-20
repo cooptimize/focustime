@@ -42,9 +42,9 @@ const SCREENS: { name: string; shown: string; ways: Way[]; focus: Record<string,
   { name: "Week", shown: "main.grid", ways: [key("2"), click(tab("Week")), address("#/week")], focus: { key: "div.half.focus[Mon Nov 2 AM, Cooptimize, at risk]", click: "div.half.focus[Mon Nov 2 AM, Cooptimize, at risk]", address: "div.half.focus[Mon Nov 2 AM, Cooptimize, at risk]" } },
   { name: "Backlog", shown: "main.ahead", ways: [key("3"), click(tab("Backlog")), address("#/backlog")], focus: { key: "h2", click: "h2", address: "h2" } },
   { name: "Backlog's Gantt", shown: "main.ahead-gantt", ways: [address("#/backlog/gantt")], focus: { address: "h2" } },
-  { name: "Status", shown: "main.status-view", ways: [key("4"), click(tab("Status")), address("#/status")], focus: { key: "body", click: "button.view-tab", address: "body" } },
-  { name: "Inbox", shown: "main.ib4", ways: [key("5"), click(tab("Inbox")), address("#/inbox")], focus: { key: "body", click: "button.view-tab", address: "body" } },
-  { name: "Calls", shown: "main.calls-page", ways: [key("6"), click(tab("Calls")), address("#/calls")], focus: { key: "body", click: "button.view-tab", address: "body" } },
+  { name: "Status", shown: "main.status-view", ways: [key("6"), click(tab("Status")), address("#/status")], focus: { key: "body", click: "button.view-tab", address: "body" } },
+  { name: "Inbox", shown: "main.ib4", ways: [key("4"), click(tab("Inbox")), address("#/inbox")], focus: { key: "body", click: "button.view-tab", address: "body" } },
+  { name: "Calls", shown: "main.calls-page", ways: [key("5"), click(tab("Calls")), address("#/calls")], focus: { key: "body", click: "button.view-tab", address: "body" } },
   { name: "Code", shown: "main.code-page", ways: [key("7"), click(tab("Code")), address("#/code")], focus: { key: "body", click: "button.view-tab", address: "body" } },
   { name: "Settings", shown: "main.panel-shell.settings", ways: [key(","), click(".demo-tag"), address("#/settings")], focus: { key: "h2", click: "button.sp-btn.main", address: "h2" } },
   { name: "Admin", shown: "main.panel-shell.settings", ways: [address("#/admin")], focus: { address: "h2" } },
@@ -250,15 +250,15 @@ describe.skipIf(!CHROMIUM)("PF-1: the first download, split by screen (browser, 
 
     // A fast file never shows the line: Status (not held) drawn inside the delay means no line; drawn later (a busy
     // machine), the line may show, but only past the delay.
-    await page.keyboard.press("4");
+    await page.keyboard.press("6");
     await page.waitForSelector("main.status-view");
     // Read once the page's own clock is past the delay with Status drawn: no line can come after that.
     await page.waitForFunction(() => {
       const log = (window as unknown as { __lineLog: LineLog }).__lineLog;
-      const key = log.keys.filter((k) => k.key === "4").at(-1);
+      const key = log.keys.filter((k) => k.key === "6").at(-1);
       return !!key && log.status !== null && performance.now() - key.t >= 320;
     }, null, { polling: "raf" });
-    const fast = await lineAfter("4");
+    const fast = await lineAfter("6");
     expect(fast.status).not.toBeNull();
     if (fast.status! < 300) expect(fast.line, `Status drawn after ${Math.round(fast.status!)} ms`).toBeNull();
     else if (fast.line !== null) {
@@ -360,7 +360,7 @@ describe.skipIf(!CHROMIUM)("PF-1: the first download, split by screen (browser, 
 
     // Truly missing: one reload, never a second, then the line with Retry over a screen that works.
     await coldWith("#/day", { file: "Status", answer: asMissing, oldPageOnly: false });
-    await page.keyboard.press("4");
+    await page.keyboard.press("6");
     const failed = page.locator(".screen-line.failed");
     await failed.waitFor({ timeout: 30_000 });
     expect(await reloads()).toBe(1);
@@ -375,7 +375,7 @@ describe.skipIf(!CHROMIUM)("PF-1: the first download, split by screen (browser, 
     await page.waitForSelector("main.grid");
     expect(await page.locator(".screen-line").count()).toBe(0);
     // Asked again while still missing: the line, with no reload this time.
-    await page.keyboard.press("4");
+    await page.keyboard.press("6");
     await failed.waitFor({ timeout: 30_000 });
     expect(await reloads()).toBe(1);
     // Retry while it is still missing: one more reload for that press, then the line again, and no loop.
@@ -394,7 +394,7 @@ describe.skipIf(!CHROMIUM)("PF-1: the first download, split by screen (browser, 
 
     // The screen's own code throws: no reload, no "didn't load" line; the error is reported as any other is.
     await coldWith("#/day", { file: "InboxPage", answer: { status: 200, contentType: "text/javascript", body: 'throw new Error("pf1 boom");' }, oldPageOnly: false });
-    await page.keyboard.press("5");
+    await page.keyboard.press("4");
     await expect.poll(() => errors.some((e) => e.includes("pf1 boom")), { timeout: 15_000 }).toBe(true);
     await page.waitForTimeout(800);
     expect(await reloads()).toBe(0);
@@ -436,7 +436,7 @@ describe.skipIf(!CHROMIUM)("PF-1: the first download, split by screen (browser, 
     // In a browser tab with no worker, on a data-saving connection (so nothing was fetched ahead).
     const a = await session(h, { metered: true });
     await cold(a.page, h, "#/day");
-    await a.page.keyboard.press("5");
+    await a.page.keyboard.press("4");
     await a.page.waitForSelector("main.ib4");
     await a.page.keyboard.press("1");
     await a.page.waitForSelector("main.today-view");
@@ -445,9 +445,9 @@ describe.skipIf(!CHROMIUM)("PF-1: the first download, split by screen (browser, 
     await a.page.waitForSelector("main.grid");
     await a.page.keyboard.press("1");
     await a.page.waitForSelector("main.today-view");
-    await a.page.keyboard.press("5");
-    await a.page.waitForSelector("main.ib4");
     await a.page.keyboard.press("4");
+    await a.page.waitForSelector("main.ib4");
+    await a.page.keyboard.press("6");
     const failed = a.page.locator(".screen-line.failed");
     await failed.waitFor({ timeout: 30_000 });
     expect(await failed.textContent()).toBe("This screen needs a connection the first time it opens. Retry");
@@ -492,7 +492,7 @@ describe.skipIf(!CHROMIUM)("PF-1: the first download, split by screen (browser, 
     await b.ctx.setOffline(true);
     await b.page.keyboard.press("2");
     await b.page.waitForSelector("main.grid");
-    await b.page.keyboard.press("4");
+    await b.page.keyboard.press("6");
     await b.page.waitForSelector("main.status-view", { timeout: 30_000 });
     expect(await b.page.locator(".screen-line.failed").count()).toBe(0);
     await b.ctx.close();
@@ -511,7 +511,7 @@ describe.skipIf(!CHROMIUM)("PF-1: the first download, split by screen (browser, 
     const { ctx, page } = await session(h);
     const broken: string[] = [];
     page.on("console", (m) => /Content Security Policy/i.test(m.text()) && broken.push(m.text()));
-    for (const k of ["3", "5", "6", ",", "Escape", "?"]) (await page.keyboard.press(k), await page.waitForTimeout(400));
+    for (const k of ["3", "4", "5", ",", "Escape", "?"]) (await page.keyboard.press(k), await page.waitForTimeout(400));
     expect(broken).toEqual([]);
     await ctx.close();
     expect(existsSync(join(DIST, "index.html"))).toBe(true);

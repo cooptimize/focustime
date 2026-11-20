@@ -24,7 +24,7 @@ describe.skipIf(!CHROMIUM)("UC-3: a tab's tooltip says Press and its key (browse
       expect(t, t).toMatch(new RegExp(`^[^()]+\\. Press ${i + 1}$`));
       expect(t).not.toMatch(/\.\./);
     });
-    expect(tips[5]).toBe("Calls: review the calls you were on. Press 6");
+    expect(tips[4]).toBe("Calls: review the calls you were on. Press 5"); // TB-1: Calls is fifth
     expect(errors).toEqual([]);
     await page.close();
   }, T);

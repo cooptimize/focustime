@@ -61,10 +61,10 @@ describe.skipIf(!CHROMIUM)("RF-1: tab order, Status's dot, the top of Day", () =
       expect(await mark(page).getAttribute("title")).toBe(why);
       // The tab's name for a screen reader carries the reason.
       expect(await page.getByRole("button", { name: /^Status .*no update/ }).count()).toBe(1);
-      // The command menu keeps 4 as Status's hint.
+      // The command menu says 6 as Status's hint (TB-1: Status after Calls).
       await page.keyboard.press("Control+k");
       await page.keyboard.type("Status: this week");
-      await expect.poll(() => page.getByRole("menuitem", { name: /^Status: this week/ }).first().innerText()).toMatch(/4\s*$/);
+      await expect.poll(() => page.getByRole("menuitem", { name: /^Status: this week/ }).first().innerText()).toMatch(/6\s*$/);
       await page.keyboard.press("Escape");
       expect(errors).toEqual([]);
       await page.close();

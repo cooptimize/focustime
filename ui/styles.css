@@ -7743,6 +7743,21 @@ body.ah-dragging * { cursor: grabbing !important; }
   :root[data-text-size="larger"] .topbar.seven-tabs .vm-chip:not(.vm-dot-only) .vm-short { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
 
+/* ---- TB-1: the tabs in three groups (Day Week Backlog | Inbox Calls | Status Code) -------------------------------- */
+/* A divider is a small space with a thin upright line in its middle, about as tall as a tab's word, in the dividers'
+   color (--border-strong, the control outlines' line: --border all but vanished in the light theme), so the gap between groups is plainly wider than between two tabs. It is decoration: aria-hidden,
+   never focused. When the bar is tight it gives way first, by the bar's own room rather than the screen's width: the
+   tabs and the right side never shrink for it (it adds nothing to the bar's smallest width), so it is the first thing
+   to shrink, and once it has shrunk at all its line goes and only plain spacing is left
+   (docs/design/style-guide.md, The top bar). */
+.tab-divider { flex: 0 1 1.5em; min-width: 0; container-type: inline-size; display: flex; align-items: center; justify-content: center; font-size: var(--fs-3); pointer-events: none; }
+.tab-divider > i { display: block; width: 1px; height: 1.25em; background: var(--border-strong); }
+/* The tab list grows into the bar's free room (it has no fill or border), so that room is the dividers' to take and the
+   first to give back; it never shrinks below its tabs, as on main. */
+.app > .topbar > .views { flex: 1 0 auto; justify-self: stretch; }
+.views > .view-tab { flex-shrink: 0; }
+@container (width < 1.45em) { .tab-divider > i { display: none; } }
+
 /* The Calls tab: the list by day on the left, the open call beside it; each scrolls on its own. */
 .app > .calls-page { flex: 1; min-height: 0; }
 .calls-page { display: grid; grid-template-columns: clamp(340px, 30vw, 460px) minmax(0, 1fr); min-height: 0; min-width: 0; background: var(--bg); color: var(--text); }

@@ -39,7 +39,7 @@ describe.skipIf(!CHROMIUM)("Code is a tab with one search box; each thing is lis
   it("seven tabs, Code last (MC-3: Calls before it); 7 opens it; it is a page with no Close; Esc stays; the other keys work; not in More", { timeout: T }, async () => {
     const { page, errors } = await freshPage(h, { width: 1440, height: 900 });
     await page.locator(".topbar .view-tab").first().waitFor();
-    expect(await tabs(page)).toEqual(["Day", "Week", "Backlog", "Status", "Inbox", "Calls", "Code"]);
+    expect(await tabs(page)).toEqual(["Day", "Week", "Backlog", "Inbox", "Calls", "Status", "Code"]);
     await page.locator("body").click({ position: { x: 5, y: 300 } });
     await page.keyboard.press("7");
     await page$(page).waitFor();
@@ -78,7 +78,7 @@ describe.skipIf(!CHROMIUM)("Code is a tab with one search box; each thing is lis
     await page.evaluate(() => (location.hash = "#/week"));
     await page.locator(".topbar .view-tab").first().waitFor();
     await page.waitForFunction(() => document.querySelectorAll(".topbar .view-tab").length === 6, null, { timeout: 15_000 });
-    expect(await tabs(page)).toEqual(["Day", "Week", "Backlog", "Status", "Inbox", "Calls"]);
+    expect(await tabs(page)).toEqual(["Day", "Week", "Backlog", "Inbox", "Calls", "Status"]);
     await page.locator("body").click({ position: { x: 5, y: 300 } });
     await page.keyboard.press("7");
     await page.waitForTimeout(300);

@@ -1,6 +1,7 @@
 // Keyboard rules (step 6.1): F6 regions, O to open the focused work item, and the one list of keys that the
 // legend shows and the command menu mirrors. Pure apart from reading elements handed in; no React.
 import { isDevOpsUrl } from "./work.ts";
+import { tabKey } from "./nav.ts";
 
 /** Parts of the window F6 moves between, in order. */
 export type Region = "top" | "grid" | "panel" | "status";
@@ -108,13 +109,14 @@ export const KEYS: readonly KeyRow[] = [
   { keys: ["Shift F6"], does: "Previous region", command: "ui.region_prev" },
   { keys: ["O"], does: "Open the focused work item in your browser", command: "ui.open_focused" },
   { keys: ["Shift F10", "Menu"], does: "The More or Actions menu for what has focus" },
-  { keys: ["1", "T"], does: "Day: what's next, what's urgent and the day's blocks", command: "view.today" },
-  { keys: ["2"], does: "Week: the week's blocks, with a block's panel beside them", command: "view.week" },
-  { keys: ["3"], does: "Backlog: every client's DevOps on one screen, Grid, Gantt and Needs attention", command: "roadmap.load" },
-  { keys: ["4"], does: "Status: this week's feature updates for Monday's status report", command: "view.status" },
-  { keys: ["5", "L"], does: "Inbox: what needs you, in three lists: From chats, Promises and Captures", command: "view.inbox" },
-  { keys: ["6"], does: "Calls: the calls you were on, by day, with the one you choose beside the list", command: "meeting.mine" },
-  { keys: ["7"], does: "Code: any client's repos, read only, with one search box (for people who may read code)", command: "code.clients" },
+  // TB-1: the tabs in their order, each with its number key (nav.ts tabKey).
+  { keys: [tabKey("today"), "T"], does: "Day: what's next, what's urgent and the day's blocks", command: "view.today" },
+  { keys: [tabKey("week")], does: "Week: the week's blocks, with a block's panel beside them", command: "view.week" },
+  { keys: [tabKey("ahead")], does: "Backlog: every client's DevOps on one screen, Grid, Gantt and Needs attention", command: "roadmap.load" },
+  { keys: [tabKey("inbox"), "L"], does: "Inbox: what needs you, in three lists: From chats, Promises and Captures", command: "view.inbox" },
+  { keys: [tabKey("calls")], does: "Calls: the calls you were on, by day, with the one you choose beside the list", command: "meeting.mine" },
+  { keys: [tabKey("status")], does: "Status: this week's feature updates for Monday's status report", command: "view.status" },
+  { keys: [tabKey("code")], does: "Code: any client's repos, read only, with one search box (for people who may read code)", command: "code.clients" },
   { keys: ["P"], does: "Week with the block's panel open (again: closed); on Backlog, Grid and Gantt (I also works)", command: "view.plan" },
   { keys: ["N", "C"], does: "Quick capture from anywhere: one line, saved at once; then sort it into a promise, a draft story or a draft feature", command: "capture.add" },
   { keys: ["Shift N"], does: "New work item in DevOps: a story, feature, epic or any level the client's process has, from one form (Enter in the title opens the preview). On a Backlog row: new under that row", command: "ui.new_item" },

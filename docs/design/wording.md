@@ -350,7 +350,7 @@ All in one place in code: `PICKS_TEXT` in `plan/where-picks.ts` (a client change
 - "a" or "an" before a type's name goes by sound: **"a User Story"**, **"an Epic"**, **"an MVP"**, **"a UAT task"**, **"an hour block"**.
 - The New form's parent rule: **"In Logistics's process, Epic isn't the level above User Story. Under Epic go: Feature"** (see QC-1 above).
 - The Inbox's group headings: **"2 need you"**, **"1 needs you · 3"** (what needs me, then the rows when they differ), **"none need you · 3"**; Captures' headings show only their rows (**"3"**). The phone's chips include **"No client"**, without a number like its others.
-- Every tab's tooltip ends with **"Press 1"** to **"Press 7"**: **"Calls: review the calls you were on. Press 6"**. Status's reason, when it has one, comes before it.
+- Every tab's tooltip ends with **"Press 1"** to **"Press 7"**: **"Calls: review the calls you were on. Press 5"** (TB-1). Status's reason, when it has one, comes before it.
 - After a client change, Undo: **"Undo: put back the 2 names and the client"**, then **"Put back 2 names and the client, Northwind."**
 
 ## VM-3 words (Nov 17)
@@ -391,7 +391,7 @@ From `plan/call-words.ts` (`CALLS_TEXT`, `FETCH_WORDS`).
 
 From `plan/call-words.ts` (`CALL_LIST`). A row's state keeps MC-1d's and MC-2's words (`CALL_STATE`, `CALLS_TEXT.notReviewed`); nothing was reworded.
 
-- The tab: **"Calls"**, between Inbox and Code, its title **"Calls: review the calls you were on. Press 6"** (UC-3; was "(6)"), its count read as **"1 needs you"** / **"3 need you"**. The command menu says **"Calls"** (still found by "my calls" and "client calls"). Key 6 is **"Calls: the calls you were on, by day, with the one you choose beside the list"**; 7 is Code.
+- The tab: **"Calls"**, between Inbox and Status (TB-1), its title **"Calls: review the calls you were on. Press 5"** (UC-3; was "(6)"; TB-1 made it 5), its count read as **"1 needs you"** / **"3 need you"**. The command menu says **"Calls"** (still found by "my calls" and "client calls"). Key 5 is **"Calls: the calls you were on, by day, with the one you choose beside the list"**; 6 is Status and 7 is Code.
 - The list's head: **"Calls"**, **"The calls you were on, newest first"**, **"Add a call"**, **"Hide the list"** (and **"Show the list"** beside the call when it is hidden).
 - Filters: **"All"**, **"To review"**, **"Not reviewed"**, **"Done"**, each with its count; their titles **"Every call in the list"**, **"Calls waiting for you: proposals to review, a transcript to upload or a step that failed"**, **"Calls nobody has reviewed yet, or that wait for a transcript or for their reviewer"**, **"Calls that were reviewed, had nothing to propose or had no transcript"**. Client chips: **"All clients"**, each client, **"No client yet"**.
 - Day headings: **"Today"**, **"Yesterday"**, then **"Mon, Nov 2"**.

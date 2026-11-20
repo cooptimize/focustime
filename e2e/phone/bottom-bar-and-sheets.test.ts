@@ -61,7 +61,7 @@ describe.skipIf(!CHROMIUM)("MB-1: the phone overhaul", () => {
 
     const { page: desk } = await freshPage(h);
     await at(desk, "#/today");
-    expect((await desk.locator(".topbar nav.views").textContent())!.replace(/\d+/g, "")).toMatch(/Day.*Week.*Backlog.*Status.*Inbox/);
+    expect((await desk.locator(".topbar nav.views").textContent())!.replace(/\d+/g, "")).toMatch(/Day.*Week.*Backlog.*Inbox.*Calls.*Status/); // TB-1: the computer's order (the phone's is unchanged)
     expect(await desk.locator(".bottom-bar, .status-dot-btn").count()).toBe(0);
     expect(await desk.locator("footer.statusbar").count()).toBe(1);
     await desk.close();

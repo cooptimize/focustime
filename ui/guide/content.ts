@@ -87,7 +87,7 @@ export const SHORTCUTS = {
   sub: "Everything works with the mouse. These save you a few clicks a day. {key:Ctrl K} lists every action with its key.",
   // In the app's own order: the tabs, then what you do on them.
   cards: [
-    { label: "Day, Week, Backlog, Status, Inbox, Calls, Code", keys: [{ command: "view.today" }, { command: "view.week" }, { command: "roadmap.load" }, { command: "view.status" }, { command: "view.inbox" }, { command: "meeting.mine" }, { command: "code.clients" }] },
+    { label: "Day, Week, Backlog, Inbox, Calls, Status, Code", keys: [{ command: "view.today" }, { command: "view.week" }, { command: "roadmap.load" }, { command: "view.inbox" }, { command: "meeting.mine" }, { command: "view.status" }, { command: "code.clients" }] },
     { label: "Open a block (A puts the cursor in Add)", keys: [{ command: "ui.block" }, { command: "view.planweek" }] },
     { label: "Add work (on Backlog, Grid or Gantt)", keys: [{ command: "view.plan" }] },
     { label: "Midday check-in", keys: [{ command: "view.checkin" }] },

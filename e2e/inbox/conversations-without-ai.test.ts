@@ -224,7 +224,7 @@ describe.skipIf(!CHROMIUM)("CV-3 follow-ups", () => {
       graph.say(DELIVERY, EVAN, "<p>The filter bug needs tracking somewhere.</p>", 12);
       graph.say(DELIVERY, ME, "<p>I'll log a ticket for the unassigned feature.</p>", 13);
 
-      await page.keyboard.press("5");
+      await page.keyboard.press("4");
       // IB-4: Refresh on From chats reads them. Grouped by rules (no AI), nothing is judged to need an item, so From chats
       // stays empty; the grouping itself is in the store.
       const main = await openInboxView(page, "chats");
